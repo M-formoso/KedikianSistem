@@ -2,6 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
+import { EntregaAridosService } from '../../../core/services/entrega-aridos.service';
+import { AridosDeliveryRequest } from '../../../core/services/entrega-aridos.service'; 
+
 
 interface AridosDelivery {
   id: number;
@@ -10,7 +13,6 @@ interface AridosDelivery {
   materialType: string;
   quantity: number;
   unit: string;
-  destination: string;
   vehicleId: string;
   operator: string;
   notes: string;
@@ -28,7 +30,7 @@ interface AridosDelivery {
         <h3 class="form-title">Registrar Entrega de Material</h3>
         
         <form [formGroup]="aridosDeliveryForm" (ngSubmit)="onSubmit()">
-          <div class="form-row">
+          <div class="form-compact">
             <div class="form-group">
               <label for="date">Fecha</label>
               <input type="date" id="date" formControlName="date" class="form-control">
@@ -49,9 +51,7 @@ interface AridosDelivery {
                 <div *ngIf="f['project'].errors['required']">El proyecto es requerido</div>
               </div>
             </div>
-          </div>
           
-          <div class="form-row">
             <div class="form-group">
               <label for="materialType">Tipo de Material</label>
               <select id="materialType" formControlName="materialType" class="form-control">
@@ -65,29 +65,21 @@ interface AridosDelivery {
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="quantity">Cantidad</label>
-              <input type="number" id="quantity" formControlName="quantity" class="form-control" step="0.1">
-              <div *ngIf="submitted && f['quantity'].errors" class="error-message">
-                <div *ngIf="f['quantity'].errors['required']">La cantidad es requerida</div>
+            <div class="form-row">
+              <div class="form-group half-width">
+                <label for="quantity">Cantidad</label>
+                <input type="number" id="quantity" formControlName="quantity" class="form-control" step="0.1">
+                <div *ngIf="submitted && f['quantity'].errors" class="error-message">
+                  <div *ngIf="f['quantity'].errors['required']">La cantidad es requerida</div>
+                </div>
               </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="unit">Unidad</label>
-              <select id="unit" formControlName="unit" class="form-control">
-                <option value="m3">Metros cúbicos (m³)</option>
-                <option value="ton">Toneladas (ton)</option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="destination">Destino</label>
-              <input type="text" id="destination" formControlName="destination" class="form-control">
-              <div *ngIf="submitted && f['destination'].errors" class="error-message">
-                <div *ngIf="f['destination'].errors['required']">El destino es requerido</div>
+              
+              <div class="form-group half-width">
+                <label for="unit">Unidad</label>
+                <select id="unit" formControlName="unit" class="form-control">
+                  <option value="m3">Metros cúbicos (m³)</option>
+                  <option value="ton">Toneladas (ton)</option>
+                </select>
               </div>
             </div>
             
@@ -116,11 +108,11 @@ interface AridosDelivery {
                 <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
               </div>
             </div>
-          </div>
           
-          <div class="form-group">
-            <label for="notes">Observaciones</label>
-            <textarea id="notes" formControlName="notes" class="form-control" rows="3"></textarea>
+            <div class="form-group compact-notes">
+              <label for="notes">Observaciones</label>
+              <textarea id="notes" formControlName="notes" class="form-control" rows="2"></textarea>
+            </div>
           </div>
           
           <div class="form-actions">
@@ -149,7 +141,6 @@ interface AridosDelivery {
                 <th>Proyecto</th>
                 <th>Material</th>
                 <th>Cantidad</th>
-                <th>Destino</th>
                 <th>Vehículo</th>
                 <th>Operador</th>
                 <th>Acciones</th>
@@ -161,7 +152,6 @@ interface AridosDelivery {
                 <td>{{ getProjectName(record.project) }}</td>
                 <td>{{ getMaterialName(record.materialType) }}</td>
                 <td>{{ record.quantity }} {{ record.unit === 'm3' ? 'm³' : 'ton' }}</td>
-                <td>{{ record.destination }}</td>
                 <td>{{ getVehicleName(record.vehicleId) }}</td>
                 <td>{{ getOperatorName(record.operator) }}</td>
                 <td class="actions-cell">
@@ -170,7 +160,7 @@ interface AridosDelivery {
                 </td>
               </tr>
               <tr *ngIf="recentRecords.length === 0">
-                <td colspan="8" class="empty-table">No hay registros recientes</td>
+                <td colspan="7" class="empty-table">No hay registros recientes</td>
               </tr>
             </tbody>
           </table>
@@ -179,55 +169,81 @@ interface AridosDelivery {
     </div>
   `,
   styles: [`
+    /* Estilos base */
     .aridos-delivery-container {
-      max-width: 1200px;
+      width: 100%;
+      max-width: 100%; /* Ajustado para ocupar todo el ancho disponible */
       margin: 0 auto;
+      padding: 0 5px; /* Reducido el padding para móviles */
+      box-sizing: border-box;
+      overflow-x: hidden; /* Evita el desplazamiento horizontal */
     }
     
     .page-title {
-      margin-bottom: 1.5rem;
-      font-size: 1.75rem;
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
       color: #333;
+      text-align: center;
     }
     
     .form-card {
       background-color: white;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      padding: 1.5rem;
-      margin-bottom: 2rem;
+      padding: 1rem;
+      margin: 0 auto 1rem auto;
+      max-width: 100%; /* Ajustado para ocupar todo el ancho disponible */
+      overflow-x: hidden; /* Evita el desbordamiento horizontal */
     }
     
     .form-title {
       margin-top: 0;
-      margin-bottom: 1.5rem;
-      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
+    }
+    
+    .form-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      width: 100%; /* Asegura que ocupa todo el ancho disponible */
     }
     
     .form-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    
+    .half-width {
+      width: 50%;
     }
     
     .form-group {
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.5rem;
+      width: 100%; /* Asegura que ocupa todo el ancho disponible */
+    }
+    
+    .compact-notes {
+      margin-bottom: 0.25rem;
     }
     
     .form-group label {
       display: block;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
       font-weight: 500;
+      font-size: 0.9rem;
     }
     
     .form-control {
       width: 100%;
-      padding: 0.75rem;
+      padding: 0.5rem;
       border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 1rem;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
     
     textarea.form-control {
@@ -236,8 +252,9 @@ interface AridosDelivery {
     
     .form-actions {
       display: flex;
-      gap: 1rem;
-      margin-top: 1.5rem;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      width: 100%; /* Asegura que ocupa todo el ancho disponible */
     }
     
     .btn {
@@ -248,8 +265,8 @@ interface AridosDelivery {
       vertical-align: middle;
       user-select: none;
       border: 1px solid transparent;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
       line-height: 1.5;
       border-radius: 0.25rem;
       cursor: pointer;
@@ -259,6 +276,7 @@ interface AridosDelivery {
       color: #fff;
       background-color: #007bff;
       border-color: #007bff;
+      flex: 1;
     }
     
     .btn-primary:hover {
@@ -270,6 +288,7 @@ interface AridosDelivery {
       color: #333;
       background-color: #f8f9fa;
       border-color: #ddd;
+      flex: 1;
     }
     
     .btn-secondary:hover {
@@ -279,10 +298,11 @@ interface AridosDelivery {
     
     .alert {
       position: relative;
-      padding: 0.75rem 1.25rem;
-      margin-top: 1rem;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.75rem;
       border: 1px solid transparent;
       border-radius: 0.25rem;
+      font-size: 0.85rem;
     }
     
     .alert-success {
@@ -299,36 +319,48 @@ interface AridosDelivery {
     
     .error-message {
       color: #dc3545;
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      margin-top: 0.15rem;
     }
     
     .section-title {
-      margin: 2rem 0 1rem;
-      font-size: 1.25rem;
+      margin: 1rem 0 0.75rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
     }
     
     .table-responsive {
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 1rem;
+      width: 100%; /* Asegura que ocupa todo el ancho disponible */
     }
     
     .data-table {
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed; /* Mantiene las columnas con tamaño fijo */
     }
     
     .data-table th,
     .data-table td {
-      padding: 0.75rem;
+      padding: 0.5rem;
       text-align: left;
       border-bottom: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis; /* Añade puntos suspensivos a texto largo */
     }
     
     .data-table th {
       background-color: #f8f9fa;
       color: #495057;
       font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
     
     .data-table tbody tr:hover {
@@ -338,7 +370,7 @@ interface AridosDelivery {
     .empty-table {
       text-align: center;
       color: #6c757d;
-      padding: 2rem 0;
+      padding: 1rem 0;
     }
     
     .actions-cell {
@@ -349,13 +381,142 @@ interface AridosDelivery {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 1.25rem;
-      padding: 0.25rem;
-      margin-right: 0.5rem;
+      font-size: 1rem;
+      padding: 0.15rem;
+      margin-right: 0.25rem;
     }
     
     .action-btn:hover {
       opacity: 0.8;
+    }
+    
+    /* Media Queries mejorados para mejor responsividad */
+    @media screen and (max-width: 768px) {
+      .aridos-delivery-container {
+        padding: 0 5px;
+      }
+      
+      .form-card {
+        padding: 0.75rem;
+        max-width: 100%;
+      }
+      
+      .form-control {
+        padding: 0.45rem;
+        font-size: 0.85rem;
+      }
+      
+      .btn {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.85rem;
+      }
+      
+      /* Ajustes específicos para la tabla en tablets */
+      .data-table {
+        min-width: 100%;
+        table-layout: auto;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+    }
+    
+    @media screen and (max-width: 480px) {
+      .aridos-delivery-container {
+        padding: 0;
+      }
+      
+      .page-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      .form-card {
+        padding: 0.5rem;
+        max-width: 100%;
+        border-radius: 0; /* Quita bordes redondeados en móviles */
+      }
+      
+      .form-row {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      
+      .half-width {
+        width: 100%;
+      }
+      
+      .form-group label {
+        font-size: 0.85rem;
+        margin-bottom: 0.15rem;
+      }
+      
+      .form-control {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+      
+      textarea.form-control {
+        height: 50px;
+      }
+      
+      /* Ajustes específicos para la tabla en móviles */
+      .data-table {
+        /* Convertir tabla a formato de lista en móviles */
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table thead {
+        display: none; /* Ocultar encabezados en móviles */
+      }
+      
+      .data-table tbody {
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table tr {
+        display: block;
+        border-bottom: 2px solid #ddd;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem 0;
+      }
+      
+      .data-table td {
+        display: block;
+        text-align: right;
+        border-bottom: 1px solid #eee;
+        padding: 0.35rem 0.5rem;
+        position: relative;
+        overflow: visible;
+        white-space: normal;
+      }
+      
+      .data-table td:before {
+        content: attr(data-label);
+        float: left;
+        font-weight: 600;
+        color: #495057;
+      }
+      
+      /* Añade atributos data-label para móviles */
+      .data-table td:nth-of-type(1):before { content: "Fecha: "; }
+      .data-table td:nth-of-type(2):before { content: "Proyecto: "; }
+      .data-table td:nth-of-type(3):before { content: "Material: "; }
+      .data-table td:nth-of-type(4):before { content: "Cantidad: "; }
+      .data-table td:nth-of-type(5):before { content: "Vehículo: "; }
+      .data-table td:nth-of-type(6):before { content: "Operador: "; }
+      .data-table td:nth-of-type(7):before { content: "Acciones: "; }
+      
+      /* Forzar el ancho completo en dispositivos pequeños */
+      body, html {
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
     }
   `]
 })
@@ -398,14 +559,13 @@ export class EntregaAridosComponent implements OnInit {
   
   recentRecords: AridosDelivery[] = [];
   
-  constructor(private formBuilder: FormBuilder) {
+  constructor(private formBuilder: FormBuilder,private entregaAridosService: EntregaAridosService) {
     this.aridosDeliveryForm = this.formBuilder.group({
       date: [new Date().toISOString().split('T')[0], Validators.required],
       project: ['', Validators.required],
       materialType: ['', Validators.required],
       quantity: ['', Validators.required],
       unit: ['m3', Validators.required],
-      destination: ['', Validators.required],
       vehicleId: ['', Validators.required],
       operator: ['', Validators.required],
       notes: ['']
@@ -414,49 +574,54 @@ export class EntregaAridosComponent implements OnInit {
   
   ngOnInit(): void {
     this.loadRecentRecords();
+    // Añadimos clases especiales para la tabla en móviles
+    this.setupMobileTable();
+  }
+  
+  // Configuración para la tabla responsiva en móviles
+  setupMobileTable() {
+    // Esta función se ejecutaría después de que la vista es inicializada
+    // Pero como es un ejemplo, la mantenemos aquí
   }
   
   // Getter para acceder más fácilmente a los campos del formulario
   get f() { return this.aridosDeliveryForm.controls; }
   
-  onSubmit() {
-    this.submitted = true;
-    this.success = false;
-    this.error = '';
-    
-    // Detener si el formulario es inválido
-    if (this.aridosDeliveryForm.invalid) {
-      return;
-    }
-    
-    // Aquí enviaríamos los datos a un servicio
-    // Por ahora, simulamos un registro exitoso
-    setTimeout(() => {
-      this.success = true;
-      
-      // Agregar el nuevo registro a la lista de recientes (para demostración)
-      const formValues = this.aridosDeliveryForm.value;
-      
-      const quantity = parseFloat(formValues.quantity);
-      
-      const newRecord: AridosDelivery = {
-        id: Math.floor(Math.random() * 1000),
-        date: formValues.date,
-        project: formValues.project,
-        materialType: formValues.materialType,
-        quantity: quantity,
-        unit: formValues.unit,
-        destination: formValues.destination,
-        vehicleId: formValues.vehicleId,
-        operator: formValues.operator,
-        notes: formValues.notes
-      };
-      
-      this.recentRecords.unshift(newRecord);
-      this.resetForm();
-    }, 800);
-  }
+  // Reemplaza el método onSubmit():
+onSubmit() {
+  this.submitted = true;
+  this.success = false;
+  this.error = '';
   
+  if (this.aridosDeliveryForm.invalid) {
+    return;
+  }
+
+  const deliveryData: AridosDeliveryRequest = {
+    date: this.aridosDeliveryForm.value.date,
+    project: this.aridosDeliveryForm.value.project,
+    materialType: this.aridosDeliveryForm.value.materialType,
+    quantity: parseFloat(this.aridosDeliveryForm.value.quantity),
+    unit: this.aridosDeliveryForm.value.unit,
+    vehicleId: this.aridosDeliveryForm.value.vehicleId,
+    operator: this.aridosDeliveryForm.value.operator,
+    notes: this.aridosDeliveryForm.value.notes
+  };
+
+  this.entregaAridosService.createDelivery(deliveryData).subscribe({
+    next: (response) => {
+      if (response.success) {
+        this.success = true;
+        this.loadRecentRecords(); // Recargar la lista
+        this.resetForm();
+      }
+    },
+    error: (error) => {
+      this.error = error.message;
+    }
+  });
+}
+
   resetForm() {
     this.submitted = false;
     this.aridosDeliveryForm.reset({
@@ -465,7 +630,6 @@ export class EntregaAridosComponent implements OnInit {
       materialType: '',
       quantity: '',
       unit: 'm3',
-      destination: '',
       vehicleId: '',
       operator: '',
       notes: ''
@@ -482,7 +646,6 @@ export class EntregaAridosComponent implements OnInit {
         materialType: '2',
         quantity: 15.5,
         unit: 'm3',
-        destination: 'Sector Norte Ruta 68',
         vehicleId: 'V001',
         operator: '1',
         notes: 'Entregado para cimientos'
@@ -494,7 +657,6 @@ export class EntregaAridosComponent implements OnInit {
         materialType: '1',
         quantity: 8.0,
         unit: 'm3',
-        destination: 'Construcción Parque Este',
         vehicleId: 'V003',
         operator: '2',
         notes: 'Material para mezcla de concreto'
@@ -506,7 +668,6 @@ export class EntregaAridosComponent implements OnInit {
         materialType: '5',
         quantity: 12.5,
         unit: 'ton',
-        destination: 'Planta Mezcladora Oeste',
         vehicleId: 'V002',
         operator: '3',
         notes: 'Uso para preparación de asfalto'

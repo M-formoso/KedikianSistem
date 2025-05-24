@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
+import { Machine } from '../../../core/services/machine-hours.service';
 
 interface MachineHours {
   id: number;
@@ -29,7 +30,7 @@ interface MachineHours {
         <h3 class="form-title">Registrar Horas de Uso de Maquinaria</h3>
         
         <form [formGroup]="machineHoursForm" (ngSubmit)="onSubmit()">
-          <div class="form-row">
+          <div class="form-compact">
             <div class="form-group">
               <label for="date">Fecha</label>
               <input type="date" id="date" formControlName="date" class="form-control">
@@ -50,9 +51,7 @@ interface MachineHours {
                 <div *ngIf="f['project'].errors['required']">El proyecto es requerido</div>
               </div>
             </div>
-          </div>
           
-          <div class="form-row">
             <div class="form-group">
               <label for="machineType">Tipo de Máquina</label>
               <select id="machineType" formControlName="machineType" class="form-control">
@@ -78,9 +77,7 @@ interface MachineHours {
                 <div *ngIf="f['machineId'].errors['required']">La máquina es requerida</div>
               </div>
             </div>
-          </div>
-          
-          <div class="form-row">
+            
             <div class="form-group">
               <label for="operator">Operador</label>
               <select id="operator" formControlName="operator" class="form-control">
@@ -94,33 +91,33 @@ interface MachineHours {
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="startHour">Lectura Inicial (horas)</label>
-              <input type="number" id="startHour" formControlName="startHour" class="form-control">
-              <div *ngIf="submitted && f['startHour'].errors" class="error-message">
-                <div *ngIf="f['startHour'].errors['required']">La lectura inicial es requerida</div>
+            <div class="form-row">
+              <div class="form-group half-width">
+                <label for="startHour">Lectura Inicial (horas)</label>
+                <input type="number" id="startHour" formControlName="startHour" class="form-control">
+                <div *ngIf="submitted && f['startHour'].errors" class="error-message">
+                  <div *ngIf="f['startHour'].errors['required']">La lectura inicial es requerida</div>
+                </div>
+              </div>
+              
+              <div class="form-group half-width">
+                <label for="endHour">Lectura Final (horas)</label>
+                <input type="number" id="endHour" formControlName="endHour" class="form-control">
+                <div *ngIf="submitted && f['endHour'].errors" class="error-message">
+                  <div *ngIf="f['endHour'].errors['required']">La lectura final es requerida</div>
+                </div>
               </div>
             </div>
             
             <div class="form-group">
-              <label for="endHour">Lectura Final (horas)</label>
-              <input type="number" id="endHour" formControlName="endHour" class="form-control">
-              <div *ngIf="submitted && f['endHour'].errors" class="error-message">
-                <div *ngIf="f['endHour'].errors['required']">La lectura final es requerida</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
               <label for="fuelUsed">Combustible Utilizado (litros)</label>
               <input type="number" id="fuelUsed" formControlName="fuelUsed" class="form-control">
             </div>
-          </div>
           
-          <div class="form-group">
-            <label for="notes">Observaciones</label>
-            <textarea id="notes" formControlName="notes" class="form-control" rows="3"></textarea>
+            <div class="form-group compact-notes">
+              <label for="notes">Observaciones</label>
+              <textarea id="notes" formControlName="notes" class="form-control" rows="2"></textarea>
+            </div>
           </div>
           
           <div class="form-actions">
@@ -156,13 +153,13 @@ interface MachineHours {
             </thead>
             <tbody>
               <tr *ngFor="let record of recentRecords">
-                <td>{{ record.date | date:'dd/MM/yyyy' }}</td>
-                <td>{{ getMachineName(record.machineId) }}</td>
-                <td>{{ getProjectName(record.project) }}</td>
-                <td>{{ getOperatorName(record.operator) }}</td>
-                <td>{{ record.totalHours }} hrs</td>
-                <td>{{ record.fuelUsed }} L</td>
-                <td class="actions-cell">
+                <td [attr.data-label]="'Fecha'">{{ record.date | date:'dd/MM/yyyy' }}</td>
+                <td [attr.data-label]="'Máquina'">{{ getMachineName(record.machineId) }}</td>
+                <td [attr.data-label]="'Proyecto'">{{ getProjectName(record.project) }}</td>
+                <td [attr.data-label]="'Operador'">{{ getOperatorName(record.operator) }}</td>
+                <td [attr.data-label]="'Horas Trabajadas'">{{ record.totalHours }} hrs</td>
+                <td [attr.data-label]="'Combustible'">{{ record.fuelUsed }} L</td>
+                <td [attr.data-label]="'Acciones'" class="actions-cell">
                   <button class="action-btn edit-btn" title="Editar">✏️</button>
                   <button class="action-btn delete-btn" title="Eliminar">❌</button>
                 </td>
@@ -177,55 +174,81 @@ interface MachineHours {
     </div>
   `,
   styles: [`
+    /* Estilos base */
     .machine-hours-container {
-      max-width: 1200px;
+      width: 100%;
+      max-width: 100%;
       margin: 0 auto;
+      padding: 0 5px;
+      box-sizing: border-box;
+      overflow-x: hidden;
     }
     
     .page-title {
-      margin-bottom: 1.5rem;
-      font-size: 1.75rem;
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
       color: #333;
+      text-align: center;
     }
     
     .form-card {
       background-color: white;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      padding: 1.5rem;
-      margin-bottom: 2rem;
+      padding: 1rem;
+      margin: 0 auto 1rem auto;
+      max-width: 100%;
+      overflow-x: hidden;
     }
     
     .form-title {
       margin-top: 0;
-      margin-bottom: 1.5rem;
-      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
+    }
+    
+    .form-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      width: 100%;
     }
     
     .form-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    
+    .half-width {
+      width: 50%;
     }
     
     .form-group {
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.5rem;
+      width: 100%;
+    }
+    
+    .compact-notes {
+      margin-bottom: 0.25rem;
     }
     
     .form-group label {
       display: block;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
       font-weight: 500;
+      font-size: 0.9rem;
     }
     
     .form-control {
       width: 100%;
-      padding: 0.75rem;
+      padding: 0.5rem;
       border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 1rem;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
     
     textarea.form-control {
@@ -234,8 +257,9 @@ interface MachineHours {
     
     .form-actions {
       display: flex;
-      gap: 1rem;
-      margin-top: 1.5rem;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      width: 100%;
     }
     
     .btn {
@@ -246,8 +270,8 @@ interface MachineHours {
       vertical-align: middle;
       user-select: none;
       border: 1px solid transparent;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
       line-height: 1.5;
       border-radius: 0.25rem;
       cursor: pointer;
@@ -257,6 +281,7 @@ interface MachineHours {
       color: #fff;
       background-color: #007bff;
       border-color: #007bff;
+      flex: 1;
     }
     
     .btn-primary:hover {
@@ -268,6 +293,7 @@ interface MachineHours {
       color: #333;
       background-color: #f8f9fa;
       border-color: #ddd;
+      flex: 1;
     }
     
     .btn-secondary:hover {
@@ -277,10 +303,11 @@ interface MachineHours {
     
     .alert {
       position: relative;
-      padding: 0.75rem 1.25rem;
-      margin-top: 1rem;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.75rem;
       border: 1px solid transparent;
       border-radius: 0.25rem;
+      font-size: 0.85rem;
     }
     
     .alert-success {
@@ -297,36 +324,48 @@ interface MachineHours {
     
     .error-message {
       color: #dc3545;
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      margin-top: 0.15rem;
     }
     
     .section-title {
-      margin: 2rem 0 1rem;
-      font-size: 1.25rem;
+      margin: 1rem 0 0.75rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
     }
     
     .table-responsive {
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 1rem;
+      width: 100%;
     }
     
     .data-table {
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed;
     }
     
     .data-table th,
     .data-table td {
-      padding: 0.75rem;
+      padding: 0.5rem;
       text-align: left;
       border-bottom: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .data-table th {
       background-color: #f8f9fa;
       color: #495057;
       font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
     
     .data-table tbody tr:hover {
@@ -336,7 +375,7 @@ interface MachineHours {
     .empty-table {
       text-align: center;
       color: #6c757d;
-      padding: 2rem 0;
+      padding: 1rem 0;
     }
     
     .actions-cell {
@@ -347,13 +386,133 @@ interface MachineHours {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 1.25rem;
-      padding: 0.25rem;
-      margin-right: 0.5rem;
+      font-size: 1rem;
+      padding: 0.15rem;
+      margin-right: 0.25rem;
     }
     
     .action-btn:hover {
       opacity: 0.8;
+    }
+    
+    /* Media Queries para mejor responsividad */
+    @media screen and (max-width: 768px) {
+      .machine-hours-container {
+        padding: 0 5px;
+      }
+      
+      .form-card {
+        padding: 0.75rem;
+        max-width: 100%;
+      }
+      
+      .form-control {
+        padding: 0.45rem;
+        font-size: 0.85rem;
+      }
+      
+      .btn {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.85rem;
+      }
+      
+      /* Ajustes específicos para la tabla en tablets */
+      .data-table {
+        min-width: 100%;
+        table-layout: auto;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+    }
+    
+    @media screen and (max-width: 480px) {
+      .machine-hours-container {
+        padding: 0;
+      }
+      
+      .page-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      .form-card {
+        padding: 0.5rem;
+        max-width: 100%;
+        border-radius: 0; /* Quita bordes redondeados en móviles */
+      }
+      
+      .form-row {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      
+      .half-width {
+        width: 100%;
+      }
+      
+      .form-group label {
+        font-size: 0.85rem;
+        margin-bottom: 0.15rem;
+      }
+      
+      .form-control {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+      
+      textarea.form-control {
+        height: 50px;
+      }
+      
+      /* Ajustes específicos para la tabla en móviles */
+      .data-table {
+        /* Convertir tabla a formato de lista en móviles */
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table thead {
+        display: none; /* Ocultar encabezados en móviles */
+      }
+      
+      .data-table tbody {
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table tr {
+        display: block;
+        border-bottom: 2px solid #ddd;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem 0;
+      }
+      
+      .data-table td {
+        display: block;
+        text-align: right;
+        border-bottom: 1px solid #eee;
+        padding: 0.35rem 0.5rem;
+        position: relative;
+        overflow: visible;
+        white-space: normal;
+      }
+      
+      .data-table td:before {
+        content: attr(data-label);
+        float: left;
+        font-weight: 600;
+        color: #495057;
+      }
+      
+      /* Forzar el ancho completo en dispositivos pequeños */
+      body, html {
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
     }
   `]
 })
@@ -408,6 +567,14 @@ export class MachineHoursComponent implements OnInit {
   
   ngOnInit(): void {
     this.loadRecentRecords();
+    // Configuración para la tabla responsiva
+    this.setupMobileTable();
+  }
+  
+  // Configuración para la tabla responsiva en móviles
+  setupMobileTable() {
+    // Esta función se ejecutaría después de que la vista es inicializada
+    // Pero como es un ejemplo, la mantenemos aquí
   }
   
   // Getter para acceder más fácilmente a los campos del formulario

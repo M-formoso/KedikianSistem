@@ -1,1 +1,82 @@
 /* You can add global styles to this file, and also import other style files */
+/* Estilos globales para asegurar que la aplicación sea responsive */
+
+/* Reseteo básico */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  html, body {
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Variables CSS para consistencia */
+  :root {
+    --sidebar-width: 250px;
+    --header-height: 60px;
+    --primary-color: #007bff;
+    --dark-bg: #343a40;
+    --light-bg: #f8f9fa;
+    --text-dark: #333;
+    --text-light: #fff;
+    --mobile-breakpoint: 768px;
+  }
+  
+  /* Estilos responsivos generales */
+  @media (max-width: 768px) {
+    .dashboard-cards {
+      grid-template-columns: 1fr !important;
+    }
+    
+    .stats-summary {
+      grid-template-columns: 1fr !important;
+    }
+    
+    .stat-card {
+      padding: 1rem !important;
+    }
+    
+    .page-title, .section-title {
+      text-align: center;
+    }
+  }
+  
+  /* Ajustes para pantallas muy pequeñas */
+  @media (max-width: 480px) {
+    .card-link {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    
+    .card-icon {
+      margin-right: 0;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-card {
+      flex-direction: column;
+    }
+    
+    .stat-icon {
+      margin-right: 0;
+      margin-bottom: 0.5rem;
+    }
+  }
+  
+  /* Ajustes de accesibilidad y usabilidad para móviles */
+  @media (max-width: 768px) {
+    /* Aumentar tamaño de áreas táctiles para facilitar la interacción */
+    button, 
+    a, 
+    .sidebar-nav a,
+    .hamburger-button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }

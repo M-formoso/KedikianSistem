@@ -8,11 +8,9 @@ interface ExpenseRecord {
   date: string;
   expenseType: string;
   amount: number;
-  project: string;
   operator: string;
   paymentMethod: string;
   receiptNumber: string;
-  category: string;
   description: string;
   status: string;
 }
@@ -29,58 +27,30 @@ interface ExpenseRecord {
         <h3 class="form-title">Registrar Nuevo Gasto</h3>
         
         <form [formGroup]="expenseForm" (ngSubmit)="onSubmit()">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="date">Fecha</label>
-              <input type="date" id="date" formControlName="date" class="form-control">
-              <div *ngIf="submitted && f['date'].errors" class="error-message">
-                <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
+          <div class="form-compact">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="date">Fecha</label>
+                <input type="date" id="date" formControlName="date" class="form-control">
+                <div *ngIf="submitted && f['date'].errors" class="error-message">
+                  <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="expenseType">Tipo de Gasto</label>
+                <select id="expenseType" formControlName="expenseType" class="form-control">
+                  <option value="">Seleccione tipo de gasto</option>
+                  <option *ngFor="let type of expenseTypes" [value]="type.id">
+                    {{ type.name }}
+                  </option>
+                </select>
+                <div *ngIf="submitted && f['expenseType'].errors" class="error-message">
+                  <div *ngIf="f['expenseType'].errors['required']">El tipo de gasto es requerido</div>
+                </div>
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="project">Proyecto</label>
-              <select id="project" formControlName="project" class="form-control">
-                <option value="">Seleccione un proyecto</option>
-                <option *ngFor="let project of projects" [value]="project.id">
-                  {{ project.name }}
-                </option>
-              </select>
-              <div *ngIf="submitted && f['project'].errors" class="error-message">
-                <div *ngIf="f['project'].errors['required']">El proyecto es requerido</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="expenseType">Tipo de Gasto</label>
-              <select id="expenseType" formControlName="expenseType" class="form-control">
-                <option value="">Seleccione tipo de gasto</option>
-                <option *ngFor="let type of expenseTypes" [value]="type.id">
-                  {{ type.name }}
-                </option>
-              </select>
-              <div *ngIf="submitted && f['expenseType'].errors" class="error-message">
-                <div *ngIf="f['expenseType'].errors['required']">El tipo de gasto es requerido</div>
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="category">Categoría</label>
-              <select id="category" formControlName="category" class="form-control">
-                <option value="">Seleccione una categoría</option>
-                <option *ngFor="let cat of categories" [value]="cat.id">
-                  {{ cat.name }}
-                </option>
-              </select>
-              <div *ngIf="submitted && f['category'].errors" class="error-message">
-                <div *ngIf="f['category'].errors['required']">La categoría es requerida</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-row">
             <div class="form-group">
               <label for="amount">Monto ($)</label>
               <input type="number" id="amount" formControlName="amount" class="form-control">
@@ -88,24 +58,24 @@ interface ExpenseRecord {
                 <div *ngIf="f['amount'].errors['required']">El monto es requerido</div>
               </div>
             </div>
-            
-            <div class="form-group">
-              <label for="paymentMethod">Método de Pago</label>
-              <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
-                <option value="">Seleccione método de pago</option>
-                <option *ngFor="let method of paymentMethods" [value]="method.id">
-                  {{ method.name }}
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="receiptNumber">Número de Factura/Boleta</label>
-              <input type="text" id="receiptNumber" formControlName="receiptNumber" class="form-control">
-            </div>
-          </div>
           
-          <div class="form-row">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="paymentMethod">Método de Pago</label>
+                <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
+                  <option value="">Seleccione método de pago</option>
+                  <option *ngFor="let method of paymentMethods" [value]="method.id">
+                    {{ method.name }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="receiptNumber">Número de Factura/Boleta</label>
+                <input type="text" id="receiptNumber" formControlName="receiptNumber" class="form-control">
+              </div>
+            </div>
+            
             <div class="form-group">
               <label for="operator">Operador / Responsable</label>
               <select id="operator" formControlName="operator" class="form-control">
@@ -118,11 +88,11 @@ interface ExpenseRecord {
                 <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
               </div>
             </div>
-          </div>
           
-          <div class="form-group">
-            <label for="description">Descripción / Observaciones</label>
-            <textarea id="description" formControlName="description" class="form-control" rows="3"></textarea>
+            <div class="form-group compact-notes">
+              <label for="description">Descripción / Observaciones</label>
+              <textarea id="description" formControlName="description" class="form-control" rows="2"></textarea>
+            </div>
           </div>
           
           <div class="form-actions">
@@ -149,8 +119,6 @@ interface ExpenseRecord {
               <tr>
                 <th>Fecha</th>
                 <th>Tipo</th>
-                <th>Proyecto</th>
-                <th>Categoría</th>
                 <th>Monto</th>
                 <th>Método de Pago</th>
                 <th>Estado</th>
@@ -159,24 +127,22 @@ interface ExpenseRecord {
             </thead>
             <tbody>
               <tr *ngFor="let record of recentExpenses">
-                <td>{{ record.date | date:'dd/MM/yyyy' }}</td>
-                <td>{{ getExpenseTypeName(record.expenseType) }}</td>
-                <td>{{ getProjectName(record.project) }}</td>
-                <td>{{ getCategoryName(record.category) }}</td>
-                <td>{{ record.amount | currency:'CLP':'symbol':'1.0-0' }}</td>
-                <td>{{ getPaymentMethodName(record.paymentMethod) }}</td>
-                <td>
+                <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
+                <td data-label="Tipo:">{{ getExpenseTypeName(record.expenseType) }}</td>
+                <td data-label="Monto:">{{ record.amount | currency:'CLP':'symbol':'1.0-0' }}</td>
+                <td data-label="Método de Pago:">{{ getPaymentMethodName(record.paymentMethod) }}</td>
+                <td data-label="Estado:">
                   <span class="status-badge" [ngClass]="'status-' + record.status">
                     {{ getStatusName(record.status) }}
                   </span>
                 </td>
-                <td class="actions-cell">
+                <td data-label="Acciones:" class="actions-cell">
                   <button class="action-btn edit-btn" title="Editar">✏️</button>
                   <button class="action-btn delete-btn" title="Eliminar">❌</button>
                 </td>
               </tr>
               <tr *ngIf="recentExpenses.length === 0">
-                <td colspan="8" class="empty-table">No hay registros recientes</td>
+                <td colspan="6" class="empty-table">No hay registros recientes</td>
               </tr>
             </tbody>
           </table>
@@ -185,55 +151,78 @@ interface ExpenseRecord {
     </div>
   `,
   styles: [`
+    /* Estilos base */
     .expenses-container {
-      max-width: 1200px;
+      width: 100%;
+      max-width: 100%;
       margin: 0 auto;
+      padding: 0 5px;
+      box-sizing: border-box;
+      overflow-x: hidden;
     }
     
     .page-title {
-      margin-bottom: 1.5rem;
-      font-size: 1.75rem;
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
       color: #333;
+      text-align: center;
     }
     
     .form-card {
       background-color: white;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      padding: 1.5rem;
-      margin-bottom: 2rem;
+      padding: 1rem;
+      margin: 0 auto 1rem auto;
+      max-width: 100%;
+      overflow-x: hidden;
     }
     
     .form-title {
       margin-top: 0;
-      margin-bottom: 1.5rem;
-      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
+    }
+    
+    .form-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      width: 100%;
     }
     
     .form-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 1rem;
+      gap: 0.5rem;
+      width: 100%;
     }
     
     .form-group {
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.5rem;
+      width: 100%;
+    }
+    
+    .compact-notes {
+      margin-bottom: 0.25rem;
     }
     
     .form-group label {
       display: block;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
       font-weight: 500;
+      font-size: 0.9rem;
     }
     
     .form-control {
       width: 100%;
-      padding: 0.75rem;
+      padding: 0.5rem;
       border: 1px solid #ddd;
       border-radius: 4px;
-      font-size: 1rem;
+      font-size: 0.9rem;
+      box-sizing: border-box;
     }
     
     textarea.form-control {
@@ -242,8 +231,9 @@ interface ExpenseRecord {
     
     .form-actions {
       display: flex;
-      gap: 1rem;
-      margin-top: 1.5rem;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      width: 100%;
     }
     
     .btn {
@@ -254,8 +244,8 @@ interface ExpenseRecord {
       vertical-align: middle;
       user-select: none;
       border: 1px solid transparent;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
       line-height: 1.5;
       border-radius: 0.25rem;
       cursor: pointer;
@@ -265,6 +255,7 @@ interface ExpenseRecord {
       color: #fff;
       background-color: #007bff;
       border-color: #007bff;
+      flex: 1;
     }
     
     .btn-primary:hover {
@@ -276,6 +267,7 @@ interface ExpenseRecord {
       color: #333;
       background-color: #f8f9fa;
       border-color: #ddd;
+      flex: 1;
     }
     
     .btn-secondary:hover {
@@ -285,10 +277,11 @@ interface ExpenseRecord {
     
     .alert {
       position: relative;
-      padding: 0.75rem 1.25rem;
-      margin-top: 1rem;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.75rem;
       border: 1px solid transparent;
       border-radius: 0.25rem;
+      font-size: 0.85rem;
     }
     
     .alert-success {
@@ -305,36 +298,48 @@ interface ExpenseRecord {
     
     .error-message {
       color: #dc3545;
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      margin-top: 0.15rem;
     }
     
     .section-title {
-      margin: 2rem 0 1rem;
-      font-size: 1.25rem;
+      margin: 1rem 0 0.75rem;
+      font-size: 1.1rem;
       color: #333;
+      text-align: center;
     }
     
     .table-responsive {
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 1rem;
+      width: 100%;
     }
     
     .data-table {
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed;
     }
     
     .data-table th,
     .data-table td {
-      padding: 0.75rem;
+      padding: 0.5rem;
       text-align: left;
       border-bottom: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .data-table th {
       background-color: #f8f9fa;
       color: #495057;
       font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
     
     .data-table tbody tr:hover {
@@ -344,7 +349,7 @@ interface ExpenseRecord {
     .empty-table {
       text-align: center;
       color: #6c757d;
-      padding: 2rem 0;
+      padding: 1rem 0;
     }
     
     .actions-cell {
@@ -355,9 +360,9 @@ interface ExpenseRecord {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 1.25rem;
-      padding: 0.25rem;
-      margin-right: 0.5rem;
+      font-size: 1rem;
+      padding: 0.15rem;
+      margin-right: 0.25rem;
     }
     
     .action-btn:hover {
@@ -386,6 +391,122 @@ interface ExpenseRecord {
       background-color: #f8d7da;
       color: #721c24;
     }
+    
+    /* Media queries para responsividad */
+    @media screen and (max-width: 768px) {
+      .expenses-container {
+        padding: 0 5px;
+      }
+      
+      .form-card {
+        padding: 0.75rem;
+        max-width: 100%;
+      }
+      
+      .form-control {
+        padding: 0.45rem;
+        font-size: 0.85rem;
+      }
+      
+      .btn {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.85rem;
+      }
+      
+      /* Ajustes específicos para la tabla en tablets */
+      .data-table {
+        min-width: 100%;
+        table-layout: auto;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+    }
+    
+    @media screen and (max-width: 480px) {
+      .expenses-container {
+        padding: 0;
+      }
+      
+      .page-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      .form-card {
+        padding: 0.5rem;
+        max-width: 100%;
+        border-radius: 0; /* Quita bordes redondeados en móviles */
+      }
+      
+      .form-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      
+      .form-group label {
+        font-size: 0.85rem;
+        margin-bottom: 0.15rem;
+      }
+      
+      .form-control {
+        padding: 0.4rem;
+        font-size: 0.8rem;
+      }
+      
+      textarea.form-control {
+        height: 50px;
+      }
+      
+      /* Transformar tabla a formato de lista en móviles */
+      .data-table {
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table thead {
+        display: none; /* Ocultar encabezados en móviles */
+      }
+      
+      .data-table tbody {
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table tr {
+        display: block;
+        border-bottom: 2px solid #ddd;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem 0;
+      }
+      
+      .data-table td {
+        display: block;
+        text-align: right;
+        border-bottom: 1px solid #eee;
+        padding: 0.35rem 0.5rem;
+        position: relative;
+        overflow: visible;
+        white-space: normal;
+      }
+      
+      .data-table td:before {
+        content: attr(data-label);
+        float: left;
+        font-weight: 600;
+        color: #495057;
+      }
+      
+      /* Forzar el ancho completo en dispositivos pequeños */
+      body, html {
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+    }
   `]
 })
 export class RegistroGastosComponent implements OnInit {
@@ -395,26 +516,12 @@ export class RegistroGastosComponent implements OnInit {
   error = '';
   
   // Datos de ejemplo
-  projects = [
-    { id: '1', name: 'Construcción Ruta 68' },
-    { id: '2', name: 'Extracción Cantera Norte' },
-    { id: '3', name: 'Mantención Maquinaria' }
-  ];
-  
   expenseTypes = [
     { id: '1', name: 'Combustible' },
     { id: '2', name: 'Mantenimiento' },
     { id: '3', name: 'Materiales' },
     { id: '4', name: 'Viáticos' },
     { id: '5', name: 'Otros' }
-  ];
-  
-  categories = [
-    { id: '1', name: 'Maquinaria' },
-    { id: '2', name: 'Vehículos' },
-    { id: '3', name: 'Personal' },
-    { id: '4', name: 'Insumos' },
-    { id: '5', name: 'Administrativo' }
   ];
   
   paymentMethods = [
@@ -441,9 +548,7 @@ export class RegistroGastosComponent implements OnInit {
   constructor(private formBuilder: FormBuilder) {
     this.expenseForm = this.formBuilder.group({
       date: [new Date().toISOString().split('T')[0], Validators.required],
-      project: ['', Validators.required],
       expenseType: ['', Validators.required],
-      category: ['', Validators.required],
       amount: ['', Validators.required],
       paymentMethod: [''],
       receiptNumber: [''],
@@ -454,6 +559,14 @@ export class RegistroGastosComponent implements OnInit {
   
   ngOnInit(): void {
     this.loadRecentExpenses();
+    // Configuración para la tabla responsiva en móviles
+    this.setupMobileTable();
+  }
+  
+  // Configuración para la tabla responsiva en móviles
+  setupMobileTable() {
+    // Esta función se ejecutaría después de que la vista es inicializada
+    // En un entorno real, podría contener código para mejorar la experiencia móvil
   }
   
   // Getter para acceder más fácilmente a los campos del formulario
@@ -482,11 +595,9 @@ export class RegistroGastosComponent implements OnInit {
         date: formValues.date,
         expenseType: formValues.expenseType,
         amount: parseFloat(formValues.amount),
-        project: formValues.project,
         operator: formValues.operator,
         paymentMethod: formValues.paymentMethod || '',
         receiptNumber: formValues.receiptNumber || '',
-        category: formValues.category,
         description: formValues.description || '',
         status: 'pending' // Por defecto, los nuevos gastos son pendientes
       };
@@ -500,9 +611,7 @@ export class RegistroGastosComponent implements OnInit {
     this.submitted = false;
     this.expenseForm.reset({
       date: new Date().toISOString().split('T')[0],
-      project: '',
       expenseType: '',
-      category: '',
       amount: '',
       paymentMethod: '',
       receiptNumber: '',
@@ -519,11 +628,9 @@ export class RegistroGastosComponent implements OnInit {
         date: '2025-05-02',
         expenseType: '1',
         amount: 85000,
-        project: '1',
         operator: '1',
         paymentMethod: '3',
         receiptNumber: 'F-12345',
-        category: '1',
         description: 'Combustible para retroexcavadora',
         status: 'approved'
       },
@@ -532,11 +639,9 @@ export class RegistroGastosComponent implements OnInit {
         date: '2025-05-01',
         expenseType: '2',
         amount: 150000,
-        project: '2',
         operator: '2',
         paymentMethod: '2',
         receiptNumber: 'F-54321',
-        category: '1',
         description: 'Mantenimiento preventivo excavadora',
         status: 'pending'
       },
@@ -545,11 +650,9 @@ export class RegistroGastosComponent implements OnInit {
         date: '2025-04-29',
         expenseType: '4',
         amount: 45000,
-        project: '1',
         operator: '3',
         paymentMethod: '1',
         receiptNumber: 'B-7890',
-        category: '3',
         description: 'Viáticos para operadores',
         status: 'rejected'
       }
@@ -561,19 +664,9 @@ export class RegistroGastosComponent implements OnInit {
     return type ? type.name : 'Desconocido';
   }
   
-  getProjectName(projectId: string): string {
-    const project = this.projects.find(p => p.id === projectId);
-    return project ? project.name : 'Desconocido';
-  }
-  
   getOperatorName(operatorId: string): string {
     const operator = this.operators.find(o => o.id === operatorId);
     return operator ? operator.name : 'Desconocido';
-  }
-  
-  getCategoryName(categoryId: string): string {
-    const category = this.categories.find(c => c.id === categoryId);
-    return category ? category.name : 'Desconocido';
   }
   
   getPaymentMethodName(methodId: string): string {
