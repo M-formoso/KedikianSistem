@@ -1,613 +1,200 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-
-interface ExpenseRecord {
-  id: number;
-  date: string;
-  expenseType: string;
-  amount: number;
-  operator: string;
-  paymentMethod: string;
-  receiptNumber: string;
-  description: string;
-  status: string;
-}
+import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { 
+  ExpenseService,
+  ExpenseRequest,
+  ExpenseRecord,
+  ExpenseType,
+  PaymentMethod,
+  Operator
+} from '../../../core/services/registro-gastos.service';
 
 @Component({
   selector: 'app-registro-gastos',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
-  template: `
-    <div class="expenses-container">
-      <h2 class="page-title">Registro de Gastos</h2>
-      
-      <div class="form-card">
-        <h3 class="form-title">Registrar Nuevo Gasto</h3>
-        
-        <form [formGroup]="expenseForm" (ngSubmit)="onSubmit()">
-          <div class="form-compact">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="date">Fecha</label>
-                <input type="date" id="date" formControlName="date" class="form-control">
-                <div *ngIf="submitted && f['date'].errors" class="error-message">
-                  <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
-                </div>
-              </div>
-              
-              <div class="form-group">
-                <label for="expenseType">Tipo de Gasto</label>
-                <select id="expenseType" formControlName="expenseType" class="form-control">
-                  <option value="">Seleccione tipo de gasto</option>
-                  <option *ngFor="let type of expenseTypes" [value]="type.id">
-                    {{ type.name }}
-                  </option>
-                </select>
-                <div *ngIf="submitted && f['expenseType'].errors" class="error-message">
-                  <div *ngIf="f['expenseType'].errors['required']">El tipo de gasto es requerido</div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="amount">Monto ($)</label>
-              <input type="number" id="amount" formControlName="amount" class="form-control">
-              <div *ngIf="submitted && f['amount'].errors" class="error-message">
-                <div *ngIf="f['amount'].errors['required']">El monto es requerido</div>
-              </div>
-            </div>
-          
-            <div class="form-row">
-              <div class="form-group">
-                <label for="paymentMethod">Método de Pago</label>
-                <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
-                  <option value="">Seleccione método de pago</option>
-                  <option *ngFor="let method of paymentMethods" [value]="method.id">
-                    {{ method.name }}
-                  </option>
-                </select>
-              </div>
-              
-              <div class="form-group">
-                <label for="receiptNumber">Número de Factura/Boleta</label>
-                <input type="text" id="receiptNumber" formControlName="receiptNumber" class="form-control">
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="operator">Operador / Responsable</label>
-              <select id="operator" formControlName="operator" class="form-control">
-                <option value="">Seleccione un operador</option>
-                <option *ngFor="let op of operators" [value]="op.id">
-                  {{ op.name }}
-                </option>
-              </select>
-              <div *ngIf="submitted && f['operator'].errors" class="error-message">
-                <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
-              </div>
-            </div>
-          
-            <div class="form-group compact-notes">
-              <label for="description">Descripción / Observaciones</label>
-              <textarea id="description" formControlName="description" class="form-control" rows="2"></textarea>
-            </div>
-          </div>
-          
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Registrar Gasto</button>
-            <button type="button" class="btn btn-secondary" (click)="resetForm()">Limpiar</button>
-          </div>
-          
-          <div *ngIf="success" class="alert alert-success">
-            Gasto registrado exitosamente
-          </div>
-          
-          <div *ngIf="error" class="alert alert-danger">
-            {{ error }}
-          </div>
-        </form>
-      </div>
-      
-      <div class="recent-records">
-        <h3 class="section-title">Gastos Recientes</h3>
-        
-        <div class="table-responsive">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Monto</th>
-                <th>Método de Pago</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let record of recentExpenses">
-                <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
-                <td data-label="Tipo:">{{ getExpenseTypeName(record.expenseType) }}</td>
-                <td data-label="Monto:">{{ record.amount | currency:'CLP':'symbol':'1.0-0' }}</td>
-                <td data-label="Método de Pago:">{{ getPaymentMethodName(record.paymentMethod) }}</td>
-                <td data-label="Estado:">
-                  <span class="status-badge" [ngClass]="'status-' + record.status">
-                    {{ getStatusName(record.status) }}
-                  </span>
-                </td>
-                <td data-label="Acciones:" class="actions-cell">
-                  <button class="action-btn edit-btn" title="Editar">✏️</button>
-                  <button class="action-btn delete-btn" title="Eliminar">❌</button>
-                </td>
-              </tr>
-              <tr *ngIf="recentExpenses.length === 0">
-                <td colspan="6" class="empty-table">No hay registros recientes</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    /* Estilos base */
-    .expenses-container {
-      width: 100%;
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 0 5px;
-      box-sizing: border-box;
-      overflow-x: hidden;
-    }
-    
-    .page-title {
-      margin-bottom: 1rem;
-      font-size: 1.25rem;
-      color: #333;
-      text-align: center;
-    }
-    
-    .form-card {
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      padding: 1rem;
-      margin: 0 auto 1rem auto;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
-    
-    .form-title {
-      margin-top: 0;
-      margin-bottom: 1rem;
-      font-size: 1.1rem;
-      color: #333;
-      text-align: center;
-    }
-    
-    .form-compact {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      width: 100%;
-    }
-    
-    .form-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 0.5rem;
-      width: 100%;
-    }
-    
-    .form-group {
-      margin-bottom: 0.5rem;
-      width: 100%;
-    }
-    
-    .compact-notes {
-      margin-bottom: 0.25rem;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 0.25rem;
-      font-weight: 500;
-      font-size: 0.9rem;
-    }
-    
-    .form-control {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.9rem;
-      box-sizing: border-box;
-    }
-    
-    textarea.form-control {
-      resize: vertical;
-    }
-    
-    .form-actions {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.75rem;
-      width: 100%;
-    }
-    
-    .btn {
-      display: inline-block;
-      font-weight: 400;
-      text-align: center;
-      white-space: nowrap;
-      vertical-align: middle;
-      user-select: none;
-      border: 1px solid transparent;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      border-radius: 0.25rem;
-      cursor: pointer;
-    }
-    
-    .btn-primary {
-      color: #fff;
-      background-color: #007bff;
-      border-color: #007bff;
-      flex: 1;
-    }
-    
-    .btn-primary:hover {
-      background-color: #0069d9;
-      border-color: #0062cc;
-    }
-    
-    .btn-secondary {
-      color: #333;
-      background-color: #f8f9fa;
-      border-color: #ddd;
-      flex: 1;
-    }
-    
-    .btn-secondary:hover {
-      background-color: #e9ecef;
-      border-color: #ccc;
-    }
-    
-    .alert {
-      position: relative;
-      padding: 0.5rem 0.75rem;
-      margin-top: 0.75rem;
-      border: 1px solid transparent;
-      border-radius: 0.25rem;
-      font-size: 0.85rem;
-    }
-    
-    .alert-success {
-      color: #155724;
-      background-color: #d4edda;
-      border-color: #c3e6cb;
-    }
-    
-    .alert-danger {
-      color: #721c24;
-      background-color: #f8d7da;
-      border-color: #f5c6cb;
-    }
-    
-    .error-message {
-      color: #dc3545;
-      font-size: 0.75rem;
-      margin-top: 0.15rem;
-    }
-    
-    .section-title {
-      margin: 1rem 0 0.75rem;
-      font-size: 1.1rem;
-      color: #333;
-      text-align: center;
-    }
-    
-    .table-responsive {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      margin-bottom: 1rem;
-      width: 100%;
-    }
-    
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    
-    .data-table th,
-    .data-table td {
-      padding: 0.5rem;
-      text-align: left;
-      border-bottom: 1px solid #e0e0e0;
-      font-size: 0.85rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    .data-table th {
-      background-color: #f8f9fa;
-      color: #495057;
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }
-    
-    .data-table tbody tr:hover {
-      background-color: #f8f9fa;
-    }
-    
-    .empty-table {
-      text-align: center;
-      color: #6c757d;
-      padding: 1rem 0;
-    }
-    
-    .actions-cell {
-      white-space: nowrap;
-    }
-    
-    .action-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1rem;
-      padding: 0.15rem;
-      margin-right: 0.25rem;
-    }
-    
-    .action-btn:hover {
-      opacity: 0.8;
-    }
-    
-    .status-badge {
-      display: inline-block;
-      padding: 0.25rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-    
-    .status-pending {
-      background-color: #ffeeba;
-      color: #856404;
-    }
-    
-    .status-approved {
-      background-color: #d4edda;
-      color: #155724;
-    }
-    
-    .status-rejected {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
-    
-    /* Media queries para responsividad */
-    @media screen and (max-width: 768px) {
-      .expenses-container {
-        padding: 0 5px;
-      }
-      
-      .form-card {
-        padding: 0.75rem;
-        max-width: 100%;
-      }
-      
-      .form-control {
-        padding: 0.45rem;
-        font-size: 0.85rem;
-      }
-      
-      .btn {
-        padding: 0.45rem 0.65rem;
-        font-size: 0.85rem;
-      }
-      
-      /* Ajustes específicos para la tabla en tablets */
-      .data-table {
-        min-width: 100%;
-        table-layout: auto;
-      }
-      
-      .data-table th,
-      .data-table td {
-        padding: 0.4rem;
-        font-size: 0.8rem;
-      }
-    }
-    
-    @media screen and (max-width: 480px) {
-      .expenses-container {
-        padding: 0;
-      }
-      
-      .page-title {
-        font-size: 1.1rem;
-        margin-bottom: 0.75rem;
-      }
-      
-      .form-card {
-        padding: 0.5rem;
-        max-width: 100%;
-        border-radius: 0; /* Quita bordes redondeados en móviles */
-      }
-      
-      .form-row {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-      }
-      
-      .form-group label {
-        font-size: 0.85rem;
-        margin-bottom: 0.15rem;
-      }
-      
-      .form-control {
-        padding: 0.4rem;
-        font-size: 0.8rem;
-      }
-      
-      textarea.form-control {
-        height: 50px;
-      }
-      
-      /* Transformar tabla a formato de lista en móviles */
-      .data-table {
-        display: block;
-        width: 100%;
-      }
-      
-      .data-table thead {
-        display: none; /* Ocultar encabezados en móviles */
-      }
-      
-      .data-table tbody {
-        display: block;
-        width: 100%;
-      }
-      
-      .data-table tr {
-        display: block;
-        border-bottom: 2px solid #ddd;
-        margin-bottom: 0.5rem;
-        padding: 0.5rem 0;
-      }
-      
-      .data-table td {
-        display: block;
-        text-align: right;
-        border-bottom: 1px solid #eee;
-        padding: 0.35rem 0.5rem;
-        position: relative;
-        overflow: visible;
-        white-space: normal;
-      }
-      
-      .data-table td:before {
-        content: attr(data-label);
-        float: left;
-        font-weight: 600;
-        color: #495057;
-      }
-      
-      /* Forzar el ancho completo en dispositivos pequeños */
-      body, html {
-        max-width: 100vw;
-        overflow-x: hidden;
-      }
-    }
-  `]
+  templateUrl: './registro-gastos.component.html',
+  styleUrls: ['./registro-gastos.component.css']
 })
-export class RegistroGastosComponent implements OnInit {
-  expenseForm: FormGroup;
+export class RegistroGastosComponent implements OnInit, OnDestroy {
+  // Formulario
+  expenseForm!: FormGroup;
+  
+  // Estados del componente
   submitted = false;
   success = false;
   error = '';
+  loading = false;
+  loadingMasterData = false;
   
-  // Datos de ejemplo
-  expenseTypes = [
-    { id: '1', name: 'Combustible' },
-    { id: '2', name: 'Mantenimiento' },
-    { id: '3', name: 'Materiales' },
-    { id: '4', name: 'Viáticos' },
-    { id: '5', name: 'Otros' }
-  ];
+  // Datos maestros desde el backend
+  expenseTypes: ExpenseType[] = [];
+  paymentMethods: PaymentMethod[] = [];
+  operators: Operator[] = [];
   
-  paymentMethods = [
-    { id: '1', name: 'Efectivo' },
-    { id: '2', name: 'Tarjeta de Crédito' },
-    { id: '3', name: 'Transferencia' },
-    { id: '4', name: 'Cheque' }
-  ];
-  
-  operators = [
-    { id: '1', name: 'Juan Pérez' },
-    { id: '2', name: 'Carlos Rodríguez' },
-    { id: '3', name: 'Miguel González' }
-  ];
-  
-  statusTypes = [
-    { id: 'pending', name: 'Pendiente' },
-    { id: 'approved', name: 'Aprobado' },
-    { id: 'rejected', name: 'Rechazado' }
-  ];
-  
+  // Registros recientes
   recentExpenses: ExpenseRecord[] = [];
   
-  constructor(private formBuilder: FormBuilder) {
-    this.expenseForm = this.formBuilder.group({
-      date: [new Date().toISOString().split('T')[0], Validators.required],
-      expenseType: ['', Validators.required],
-      amount: ['', Validators.required],
-      paymentMethod: [''],
-      receiptNumber: [''],
-      operator: ['', Validators.required],
-      description: ['']
-    });
+  // Para cancelar suscripciones
+  private destroy$ = new Subject<void>();
+  
+  constructor(
+    private formBuilder: FormBuilder,
+    private expenseService: ExpenseService
+  ) {
+    this.initializeForm();
   }
   
   ngOnInit(): void {
+    this.loadMasterData();
     this.loadRecentExpenses();
-    // Configuración para la tabla responsiva en móviles
     this.setupMobileTable();
   }
   
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private initializeForm(): void {
+    this.expenseForm = this.formBuilder.group({
+      date: [new Date().toISOString().split('T')[0], Validators.required],
+      expenseType: ['', Validators.required],
+      amount: ['', [Validators.required, Validators.min(0.01)]],
+      paymentMethod: ['', Validators.required],
+      receiptNumber: [''],
+      operator: ['', Validators.required],
+      description: ['', Validators.maxLength(500)]
+    });
+  }
+  
   // Configuración para la tabla responsiva en móviles
-  setupMobileTable() {
-    // Esta función se ejecutaría después de que la vista es inicializada
-    // En un entorno real, podría contener código para mejorar la experiencia móvil
+  setupMobileTable(): void {
+    // Implementar lógica para tabla responsiva si es necesario
   }
   
   // Getter para acceder más fácilmente a los campos del formulario
-  get f() { return this.expenseForm.controls; }
+  get f() { 
+    return this.expenseForm.controls; 
+  }
   
-  onSubmit() {
+  /**
+   * Cargar todos los datos maestros necesarios para el formulario
+   */
+  loadMasterData(): void {
+    this.loadingMasterData = true;
+    this.error = '';
+    
+    // Cargar todos los datos maestros en paralelo
+    forkJoin({
+      expenseTypes: this.expenseService.getExpenseTypes(),
+      paymentMethods: this.expenseService.getPaymentMethods(),
+      operators: this.expenseService.getOperators()
+    })
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (responses: any) => {
+        // Verificar que todas las respuestas sean exitosas
+        if (responses.expenseTypes && responses.expenseTypes.success) {
+          this.expenseTypes = responses.expenseTypes.data || [];
+        }
+        
+        if (responses.paymentMethods && responses.paymentMethods.success) {
+          this.paymentMethods = responses.paymentMethods.data || [];
+        }
+        
+        if (responses.operators && responses.operators.success) {
+          this.operators = responses.operators.data || [];
+        }
+        
+        this.loadingMasterData = false;
+      },
+      error: (error: any) => {
+        this.error = `Error al cargar datos: ${error.message || error}`;
+        this.loadingMasterData = false;
+        console.error('Error cargando datos maestros:', error);
+      }
+    });
+  }
+  
+  /**
+   * Cargar registros recientes de gastos
+   */
+  loadRecentExpenses(): void {
+    this.expenseService.getRecentExpenses(10)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => {
+          if (response && response.success && response.data) {
+            this.recentExpenses = response.data;
+          }
+        },
+        error: (error: any) => {
+          console.error('Error cargando registros recientes:', error);
+          // No mostrar error al usuario para registros recientes
+        }
+      });
+  }
+  
+  /**
+   * Enviar formulario
+   */
+  onSubmit(): void {
     this.submitted = true;
     this.success = false;
     this.error = '';
     
-    // Detener si el formulario es inválido
     if (this.expenseForm.invalid) {
+      this.markFormGroupTouched();
       return;
     }
+
+    this.loading = true;
     
-    // Aquí enviaríamos los datos a un servicio
-    // Por ahora, simulamos un registro exitoso
-    setTimeout(() => {
-      this.success = true;
-      
-      // Agregar el nuevo registro a la lista de recientes (para demostración)
-      const formValues = this.expenseForm.value;
-      
-      const newExpense: ExpenseRecord = {
-        id: Math.floor(Math.random() * 1000),
-        date: formValues.date,
-        expenseType: formValues.expenseType,
-        amount: parseFloat(formValues.amount),
-        operator: formValues.operator,
-        paymentMethod: formValues.paymentMethod || '',
-        receiptNumber: formValues.receiptNumber || '',
-        description: formValues.description || '',
-        status: 'pending' // Por defecto, los nuevos gastos son pendientes
-      };
-      
-      this.recentExpenses.unshift(newExpense);
-      this.resetForm();
-    }, 800);
+    const formValues = this.expenseForm.value;
+    const expenseData: ExpenseRequest = {
+      date: formValues.date,
+      expenseType: formValues.expenseType,
+      amount: parseFloat(formValues.amount),
+      paymentMethod: formValues.paymentMethod,
+      receiptNumber: formValues.receiptNumber || '',
+      operator: formValues.operator,
+      description: formValues.description || ''
+    };
+
+    this.expenseService.createExpense(expenseData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => {
+          this.loading = false;
+          if (response && response.success) {
+            this.success = true;
+            this.loadRecentExpenses(); // Recargar la lista
+            this.resetForm();
+            
+            // Ocultar mensaje de éxito después de 5 segundos
+            setTimeout(() => {
+              this.success = false;
+            }, 5000);
+          } else {
+            this.error = (response && response.message) || 'Error al crear el registro de gasto';
+          }
+        },
+        error: (error: any) => {
+          this.loading = false;
+          this.error = error.message || error || 'Error al procesar la solicitud';
+          console.error('Error creando registro de gasto:', error);
+        }
+      });
   }
-  
-  resetForm() {
+
+  /**
+   * Resetear formulario
+   */
+  resetForm(): void {
     this.submitted = false;
     this.expenseForm.reset({
       date: new Date().toISOString().split('T')[0],
@@ -620,62 +207,233 @@ export class RegistroGastosComponent implements OnInit {
     });
   }
   
-  loadRecentExpenses() {
-    // Simulamos la carga de datos recientes
-    this.recentExpenses = [
-      {
-        id: 1,
-        date: '2025-05-02',
-        expenseType: '1',
-        amount: 85000,
-        operator: '1',
-        paymentMethod: '3',
-        receiptNumber: 'F-12345',
-        description: 'Combustible para retroexcavadora',
-        status: 'approved'
-      },
-      {
-        id: 2,
-        date: '2025-05-01',
-        expenseType: '2',
-        amount: 150000,
-        operator: '2',
-        paymentMethod: '2',
-        receiptNumber: 'F-54321',
-        description: 'Mantenimiento preventivo excavadora',
-        status: 'pending'
-      },
-      {
-        id: 3,
-        date: '2025-04-29',
-        expenseType: '4',
-        amount: 45000,
-        operator: '3',
-        paymentMethod: '1',
-        receiptNumber: 'B-7890',
-        description: 'Viáticos para operadores',
-        status: 'rejected'
-      }
-    ];
+  /**
+   * Marcar todos los campos del formulario como tocados para mostrar errores
+   */
+  private markFormGroupTouched(): void {
+    Object.keys(this.expenseForm.controls).forEach(key => {
+      const control = this.expenseForm.get(key);
+      control?.markAsTouched();
+    });
   }
   
-  getExpenseTypeName(typeId: string): string {
-    const type = this.expenseTypes.find(t => t.id === typeId);
-    return type ? type.name : 'Desconocido';
+  /**
+   * Refrescar datos maestros
+   */
+  refreshMasterData(): void {
+    this.loadMasterData();
   }
   
+  /**
+   * Refrescar registros recientes
+   */
+  refreshRecentExpenses(): void {
+    this.loadRecentExpenses();
+  }
+  
+  /**
+   * Manejar cambio de tipo de gasto
+   */
+  onExpenseTypeChange(): void {
+    const expenseTypeId = this.expenseForm.get('expenseType')?.value;
+    
+    if (expenseTypeId) {
+      // Cargar operadores por tipo de gasto (si existe esa funcionalidad en el futuro)
+      // Por ahora usar todos los operadores disponibles
+      this.expenseService.getOperators()
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response: any) => {
+            if (response && response.success) {
+              this.operators = response.data || [];
+            }
+          },
+          error: (error: any) => {
+            console.error('Error cargando operadores:', error);
+          }
+        });
+    }
+  }
+  
+  /**
+   * Validar número de recibo duplicado
+   */
+  validateReceiptNumber(): void {
+    const receiptNumber = this.expenseForm.get('receiptNumber')?.value;
+    
+    if (receiptNumber && receiptNumber.trim() !== '') {
+      this.expenseService.validateReceiptNumber(receiptNumber)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response: any) => {
+            if (response && (!response.success || !response.data)) {
+              this.expenseForm.get('receiptNumber')?.setErrors({ 'duplicate': true });
+            } else {
+              // Limpiar error si la validación es exitosa
+              const receiptControl = this.expenseForm.get('receiptNumber');
+              if (receiptControl?.errors?.['duplicate']) {
+                delete receiptControl.errors['duplicate'];
+                if (Object.keys(receiptControl.errors).length === 0) {
+                  receiptControl.setErrors(null);
+                }
+              }
+            }
+          },
+          error: (error: any) => {
+            console.error('Error validando número de recibo:', error);
+          }
+        });
+    }
+  }
+  
+  // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
+  
+  /**
+   * Obtener nombre del tipo de gasto por ID
+   */
+  getExpenseTypeName(expenseTypeId: string): string {
+    const expenseType = this.expenseTypes.find(et => et.id === expenseTypeId);
+    return expenseType ? expenseType.name : 'Tipo desconocido';
+  }
+  
+  /**
+   * Obtener nombre del método de pago por ID
+   */
+  getPaymentMethodName(paymentMethodId: string): string {
+    const paymentMethod = this.paymentMethods.find(pm => pm.id === paymentMethodId);
+    return paymentMethod ? paymentMethod.name : 'Método desconocido';
+  }
+  
+  /**
+   * Obtener nombre del operador por ID
+   */
   getOperatorName(operatorId: string): string {
     const operator = this.operators.find(o => o.id === operatorId);
-    return operator ? operator.name : 'Desconocido';
+    return operator ? operator.name : 'Operador desconocido';
   }
   
-  getPaymentMethodName(methodId: string): string {
-    const method = this.paymentMethods.find(m => m.id === methodId);
-    return method ? method.name : 'No especificado';
+  /**
+   * Verificar si un campo del formulario tiene errores
+   */
+  hasFieldError(fieldName: string): boolean {
+    const field = this.expenseForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted));
   }
   
-  getStatusName(statusId: string): string {
-    const status = this.statusTypes.find(s => s.id === statusId);
-    return status ? status.name : 'Desconocido';
+  /**
+   * Obtener mensaje de error para un campo específico
+   */
+  getFieldError(fieldName: string): string {
+    const field = this.expenseForm.get(fieldName);
+    
+    if (field?.errors) {
+      if (field.errors['required']) {
+        return `${this.getFieldLabel(fieldName)} es requerido`;
+      }
+      if (field.errors['min']) {
+        return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
+      }
+      if (field.errors['maxlength']) {
+        return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
+      }
+      if (field.errors['duplicate']) {
+        return `Este número de recibo ya existe en el sistema`;
+      }
+    }
+    
+    return '';
+  }
+  
+  /**
+   * Obtener etiqueta del campo para mensajes de error
+   */
+  private getFieldLabel(fieldName: string): string {
+    const labels: { [key: string]: string } = {
+      'date': 'La fecha',
+      'expenseType': 'El tipo de gasto',
+      'amount': 'El monto',
+      'paymentMethod': 'El método de pago',
+      'receiptNumber': 'El número de recibo',
+      'operator': 'El operador',
+      'description': 'La descripción'
+    };
+    
+    return labels[fieldName] || fieldName;
+  }
+  
+  /**
+   * Obtener estado de carga general
+   */
+  get isLoading(): boolean {
+    return this.loading || this.loadingMasterData;
+  }
+  
+  /**
+   * Manejar cambio de número de recibo
+   */
+  onReceiptNumberChange(): void {
+    this.validateReceiptNumber();
+  }
+  
+  /**
+   * Filtrar operadores por estado activo
+   */
+  get activeOperators(): Operator[] {
+    return this.operators.filter(operator => operator.isActive !== false);
+  }
+  
+  /**
+   * Filtrar tipos de gasto por estado activo
+   */
+  get activeExpenseTypes(): ExpenseType[] {
+    return this.expenseTypes.filter(expenseType => expenseType.isActive !== false);
+  }
+  
+  /**
+   * Filtrar métodos de pago por estado activo
+   */
+  get activePaymentMethods(): PaymentMethod[] {
+    return this.paymentMethods.filter(paymentMethod => paymentMethod.isActive !== false);
+  }
+  
+  /**
+   * Formatear monto para mostrar
+   */
+  formatAmount(amount: number): string {
+    return this.expenseService.formatAmount(amount);
+  }
+  
+  /**
+   * Obtener estado del gasto
+   */
+  getExpenseStatus(expense: ExpenseRecord): string {
+    return expense.status || 'pending';
+  }
+  
+  /**
+   * Obtener clase CSS para el estado
+   */
+  getStatusClass(status: string): string {
+    const statusClasses: { [key: string]: string } = {
+      'pending': 'badge-warning',
+      'approved': 'badge-success',
+      'rejected': 'badge-danger'
+    };
+    
+    return statusClasses[status] || 'badge-secondary';
+  }
+  
+  /**
+   * Calcular total de gastos recientes
+   */
+  getTotalRecentExpenses(): number {
+    return this.recentExpenses.reduce((total, expense) => total + expense.amount, 0);
+  }
+  
+  /**
+   * Obtener gastos por estado
+   */
+  getExpensesByStatus(status: string): ExpenseRecord[] {
+    return this.recentExpenses.filter(expense => expense.status === status);
   }
 }

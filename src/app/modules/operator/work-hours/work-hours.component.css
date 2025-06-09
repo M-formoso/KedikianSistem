@@ -1,0 +1,399 @@
+/* Estilos base */
+.work-hours-container {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 5px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  
+  .page-title {
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    color: #333;
+    text-align: center;
+  }
+  
+  .form-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    padding: 1rem;
+    margin: 0 auto 1rem auto;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  .active-work-day {
+    border-left: 4px solid #28a745;
+  }
+  
+  .form-title {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: #333;
+    text-align: center;
+  }
+  
+  .form-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  
+  .clock-in-action {
+    display: flex;
+    align-items: flex-end;
+  }
+  
+  .active-session-info {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .active-info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .active-info-item {
+    margin-bottom: 0.5rem;
+  }
+  
+  .info-label {
+    font-weight: 600;
+    margin-right: 0.25rem;
+    font-size: 0.9rem;
+  }
+  
+  .info-value {
+    color: #333;
+    font-size: 0.9rem;
+  }
+  
+  .clock-icon {
+    font-size: 1rem;
+    margin-right: 0.5rem;
+  }
+  
+  .btn-clock-in {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  
+  .form-group {
+    margin-bottom: 0.5rem;
+    width: 100%;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+  }
+  
+  textarea.form-control {
+    resize: vertical;
+  }
+  
+  .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    width: 100%;
+  }
+  
+  .btn {
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    user-select: none;
+    border: 1px solid transparent;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+  
+  .btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+    flex: 1;
+  }
+  
+  .btn-primary:hover {
+    background-color: #0069d9;
+    border-color: #0062cc;
+  }
+  
+  .btn-danger {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+    flex: 1;
+  }
+  
+  .btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+  }
+  
+  .btn-secondary {
+    color: #333;
+    background-color: #f8f9fa;
+    border-color: #ddd;
+    flex: 1;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #e9ecef;
+    border-color: #ccc;
+  }
+  
+  .alert {
+    position: relative;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+  }
+  
+  .alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+  }
+  
+  .alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+  }
+  
+  .error-message {
+    color: #dc3545;
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+  }
+  
+  .section-title {
+    margin: 1rem 0 0.75rem;
+    font-size: 1.1rem;
+    color: #333;
+    text-align: center;
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+    width: 100%;
+  }
+  
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .data-table th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  
+  .data-table tbody tr:hover {
+    background-color: #f8f9fa;
+  }
+  
+  .empty-table {
+    text-align: center;
+    color: #6c757d;
+    padding: 1rem 0;
+  }
+  
+  .actions-cell {
+    white-space: nowrap;
+  }
+  
+  .action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.15rem;
+    margin-right: 0.25rem;
+  }
+  
+  .action-btn:hover {
+    opacity: 0.8;
+  }
+  
+  /* Media Queries para mejor responsividad */
+  @media screen and (max-width: 768px) {
+    .work-hours-container {
+      padding: 0 5px;
+    }
+    
+    .form-card {
+      padding: 0.75rem;
+      max-width: 100%;
+    }
+    
+    .active-info-row {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .active-info-item {
+      margin-bottom: 0.25rem;
+    }
+    
+    .form-control {
+      padding: 0.45rem;
+      font-size: 0.85rem;
+    }
+    
+    .btn {
+      padding: 0.45rem 0.65rem;
+      font-size: 0.85rem;
+    }
+    
+    /* Ajustes específicos para la tabla en tablets */
+    .data-table {
+      min-width: 100%;
+      table-layout: auto;
+    }
+    
+    .data-table th,
+    .data-table td {
+      padding: 0.4rem;
+      font-size: 0.8rem;
+    }
+  }
+  
+  @media screen and (max-width: 480px) {
+    .work-hours-container {
+      padding: 0;
+    }
+    
+    .page-title {
+      font-size: 1.1rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .form-card {
+      padding: 0.5rem;
+      max-width: 100%;
+      border-radius: 0; /* Quita bordes redondeados en móviles */
+    }
+    
+    .active-session-info {
+      padding: 0.75rem;
+    }
+    
+    .active-info-row {
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    
+    .active-info-item {
+      margin-bottom: 0.15rem;
+    }
+    
+    .form-group label {
+      font-size: 0.85rem;
+      margin-bottom: 0.15rem;
+    }
+    
+    .form-control {
+      padding: 0.4rem;
+      font-size: 0.8rem;
+    }
+    
+    textarea.form-control {
+      height: 50px;
+    }
+    
+    /* Ajustes específicos para la tabla en móviles */
+    .data-table {
+      /* Convertir tabla a formato de lista en móviles */
+      display: block;
+      width: 100%;
+    }
+    
+    .data-table thead {
+      display: none; /* Ocultar encabezados en móviles */
+    }
+    
+    .data-table tbody {
+      display: block;
+      width: 100%;
+    }
+    
+    .data-table tr {
+      display: block;
+      border-bottom: 2px solid #ddd;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem 0;
+    }
+    
+    .data-table td {
+      display: block;
+      text-align: right;
+      border-bottom: 1px solid #eee;
+      padding: 0.35rem 0.5rem;
+      position: relative;
+      overflow: visible;
+      white-space: normal;
+    }
+    
+    .data-table td:before {
+      content: attr(data-label);
+      float: left;
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    /* Forzar el ancho completo en dispositivos pequeños */
+    body, html {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+  }

@@ -1,0 +1,144 @@
+<div class="aridos-delivery-container">
+    <h2 class="page-title">Registro de Entrega de Áridos</h2>
+    
+    <div class="form-card">
+      <h3 class="form-title">Registrar Entrega de Material</h3>
+      
+      <form [formGroup]="aridosDeliveryForm" (ngSubmit)="onSubmit()">
+        <div class="form-compact">
+          <div class="form-group">
+            <label for="date">Fecha</label>
+            <input type="date" id="date" formControlName="date" class="form-control">
+            <div *ngIf="submitted && f['date'].errors" class="error-message">
+              <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="project">Proyecto</label>
+            <select id="project" formControlName="project" class="form-control">
+              <option value="">Seleccione un proyecto</option>
+              <option *ngFor="let project of projects" [value]="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['project'].errors" class="error-message">
+              <div *ngIf="f['project'].errors['required']">El proyecto es requerido</div>
+            </div>
+          </div>
+        
+          <div class="form-group">
+            <label for="materialType">Tipo de Material</label>
+            <select id="materialType" formControlName="materialType" class="form-control">
+              <option value="">Seleccione tipo de material</option>
+              <option *ngFor="let material of materialTypes" [value]="material.id">
+                {{ material.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['materialType'].errors" class="error-message">
+              <div *ngIf="f['materialType'].errors['required']">El tipo de material es requerido</div>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half-width">
+              <label for="quantity">Cantidad</label>
+              <input type="number" id="quantity" formControlName="quantity" class="form-control" step="0.1">
+              <div *ngIf="submitted && f['quantity'].errors" class="error-message">
+                <div *ngIf="f['quantity'].errors['required']">La cantidad es requerida</div>
+              </div>
+            </div>
+            
+            <div class="form-group half-width">
+              <label for="unit">Unidad</label>
+              <select id="unit" formControlName="unit" class="form-control">
+                <option value="m3">Metros cúbicos (m³)</option>
+                <option value="ton">Toneladas (ton)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="vehicleId">Vehículo</label>
+            <select id="vehicleId" formControlName="vehicleId" class="form-control">
+              <option value="">Seleccione un vehículo</option>
+              <option *ngFor="let vehicle of vehicles" [value]="vehicle.id">
+                {{ vehicle.name }} ({{ vehicle.id }})
+              </option>
+            </select>
+            <div *ngIf="submitted && f['vehicleId'].errors" class="error-message">
+              <div *ngIf="f['vehicleId'].errors['required']">El vehículo es requerido</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="operator">Operador</label>
+            <select id="operator" formControlName="operator" class="form-control">
+              <option value="">Seleccione un operador</option>
+              <option *ngFor="let op of operators" [value]="op.id">
+                {{ op.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['operator'].errors" class="error-message">
+              <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
+            </div>
+          </div>
+        
+          <div class="form-group compact-notes">
+            <label for="notes">Observaciones</label>
+            <textarea id="notes" formControlName="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Registrar Entrega</button>
+          <button type="button" class="btn btn-secondary" (click)="resetForm()">Limpiar</button>
+        </div>
+        
+        <div *ngIf="success" class="alert alert-success">
+          Entrega de áridos registrada exitosamente
+        </div>
+        
+        <div *ngIf="error" class="alert alert-danger">
+          {{ error }}
+        </div>
+      </form>
+    </div>
+    
+    <div class="recent-records">
+      <h3 class="section-title">Registros Recientes</h3>
+      
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Proyecto</th>
+              <th>Material</th>
+              <th>Cantidad</th>
+              <th>Vehículo</th>
+              <th>Operador</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let record of recentRecords">
+              <td>{{ record.date | date:'dd/MM/yyyy' }}</td>
+              <td>{{ getProjectName(record.project) }}</td>
+              <td>{{ getMaterialName(record.materialType) }}</td>
+              <td>{{ record.quantity }} {{ record.unit === 'm3' ? 'm³' : 'ton' }}</td>
+              <td>{{ getVehicleName(record.vehicleId) }}</td>
+              <td>{{ getOperatorName(record.operator) }}</td>
+              <td class="actions-cell">
+                <button class="action-btn edit-btn" title="Editar">✏️</button>
+                <button class="action-btn delete-btn" title="Eliminar">❌</button>
+              </td>
+            </tr>
+            <tr *ngIf="recentRecords.length === 0">
+              <td colspan="7" class="empty-table">No hay registros recientes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>

@@ -1,0 +1,149 @@
+<div class="machine-hours-container">
+    <h2 class="page-title">Registro de Horas Máquina</h2>
+    
+    <div class="form-card">
+      <h3 class="form-title">Registrar Horas de Uso de Maquinaria</h3>
+      
+      <form [formGroup]="machineHoursForm" (ngSubmit)="onSubmit()">
+        <div class="form-compact">
+          <div class="form-group">
+            <label for="date">Fecha</label>
+            <input type="date" id="date" formControlName="date" class="form-control">
+            <div *ngIf="submitted && f['date'].errors" class="error-message">
+              <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="project">Proyecto</label>
+            <select id="project" formControlName="project" class="form-control">
+              <option value="">Seleccione un proyecto</option>
+              <option *ngFor="let project of projects" [value]="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['project'].errors" class="error-message">
+              <div *ngIf="f['project'].errors['required']">El proyecto es requerido</div>
+            </div>
+          </div>
+        
+          <div class="form-group">
+            <label for="machineType">Tipo de Máquina</label>
+            <select id="machineType" formControlName="machineType" class="form-control">
+              <option value="">Seleccione tipo de máquina</option>
+              <option *ngFor="let type of machineTypes" [value]="type.id">
+                {{ type.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['machineType'].errors" class="error-message">
+              <div *ngIf="f['machineType'].errors['required']">El tipo de máquina es requerido</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="machineId">ID de Máquina</label>
+            <select id="machineId" formControlName="machineId" class="form-control">
+              <option value="">Seleccione una máquina</option>
+              <option *ngFor="let machine of machines" [value]="machine.id">
+                {{ machine.name }} ({{ machine.id }})
+              </option>
+            </select>
+            <div *ngIf="submitted && f['machineId'].errors" class="error-message">
+              <div *ngIf="f['machineId'].errors['required']">La máquina es requerida</div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="operator">Operador</label>
+            <select id="operator" formControlName="operator" class="form-control">
+              <option value="">Seleccione un operador</option>
+              <option *ngFor="let op of operators" [value]="op.id">
+                {{ op.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['operator'].errors" class="error-message">
+              <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half-width">
+              <label for="startHour">Lectura Inicial (horas)</label>
+              <input type="number" id="startHour" formControlName="startHour" class="form-control">
+              <div *ngIf="submitted && f['startHour'].errors" class="error-message">
+                <div *ngIf="f['startHour'].errors['required']">La lectura inicial es requerida</div>
+              </div>
+            </div>
+            
+            <div class="form-group half-width">
+              <label for="endHour">Lectura Final (horas)</label>
+              <input type="number" id="endHour" formControlName="endHour" class="form-control">
+              <div *ngIf="submitted && f['endHour'].errors" class="error-message">
+                <div *ngIf="f['endHour'].errors['required']">La lectura final es requerida</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="fuelUsed">Combustible Utilizado (litros)</label>
+            <input type="number" id="fuelUsed" formControlName="fuelUsed" class="form-control">
+          </div>
+        
+          <div class="form-group compact-notes">
+            <label for="notes">Observaciones</label>
+            <textarea id="notes" formControlName="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Registrar Horas</button>
+          <button type="button" class="btn btn-secondary" (click)="resetForm()">Limpiar</button>
+        </div>
+        
+        <div *ngIf="success" class="alert alert-success">
+          Horas de máquina registradas exitosamente
+        </div>
+        
+        <div *ngIf="error" class="alert alert-danger">
+          {{ error }}
+        </div>
+      </form>
+    </div>
+    
+    <div class="recent-records">
+      <h3 class="section-title">Registros Recientes</h3>
+      
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Máquina</th>
+              <th>Proyecto</th>
+              <th>Operador</th>
+              <th>Horas Trabajadas</th>
+              <th>Combustible</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let record of recentRecords">
+              <td [attr.data-label]="'Fecha'">{{ record.date | date:'dd/MM/yyyy' }}</td>
+              <td [attr.data-label]="'Máquina'">{{ getMachineName(record.machineId) }}</td>
+              <td [attr.data-label]="'Proyecto'">{{ getProjectName(record.project) }}</td>
+              <td [attr.data-label]="'Operador'">{{ getOperatorName(record.operator) }}</td>
+              <td [attr.data-label]="'Horas Trabajadas'">{{ record.totalHours }} hrs</td>
+              <td [attr.data-label]="'Combustible'">{{ record.fuelUsed }} L</td>
+              <td [attr.data-label]="'Acciones'" class="actions-cell">
+                <button class="action-btn edit-btn" title="Editar">✏️</button>
+                <button class="action-btn delete-btn" title="Eliminar">❌</button>
+              </td>
+            </tr>
+            <tr *ngIf="recentRecords.length === 0">
+              <td colspan="7" class="empty-table">No hay registros recientes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+</div>

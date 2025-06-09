@@ -1,9 +1,8 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
-import { HeaderComponent } from '../../shared/components/header/header.component';
-
+import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component'; // ✅ Correcto
+import { HeaderComponent } from '../../shared/components/header/header.component';   // ✅ Correcto
 @Component({
   selector: 'app-operator-layout',
   standalone: true,

@@ -1,0 +1,113 @@
+<div class="work-hours-container">
+    <h2 class="page-title">Registro de Jornada Laboral</h2>
+    
+    <!-- Nuevo panel de fichaje -->
+    <div class="form-card" *ngIf="!activeClockIn">
+      <h3 class="form-title">Fichar Entrada</h3>
+      
+      <form [formGroup]="clockInForm" (ngSubmit)="clockIn()">
+        <div class="form-compact">
+          <div class="form-group">
+            <label for="project">Proyecto</label>
+            <select id="project" formControlName="project" class="form-control">
+              <option value="">Seleccione un proyecto</option>
+              <option *ngFor="let project of projects" [value]="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+            <div *ngIf="clockInSubmitted && clockInForm.get('project')?.errors" class="error-message">
+              <div *ngIf="clockInForm.get('project')?.errors?.['required']">El proyecto es requerido</div>
+            </div>
+          </div>
+          
+          <div class="form-group clock-in-action">
+            <button type="submit" class="btn btn-primary btn-clock-in">
+              <span class="clock-icon">⏱️</span> Fichar Entrada
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Panel de jornada activa -->
+    <div class="form-card active-work-day" *ngIf="activeClockIn">
+      <h3 class="form-title">Jornada Activa</h3>
+      
+      <div class="active-session-info">
+        <div class="active-info-row">
+          <div class="active-info-item">
+            <span class="info-label">Proyecto:</span>
+            <span class="info-value">{{ getProjectName(activeClockIn.project) }}</span>
+          </div>
+          
+          <div class="active-info-item">
+            <span class="info-label">Hora de entrada:</span>
+            <span class="info-value">{{ activeClockIn.startTime }}</span>
+          </div>
+          
+          <div class="active-info-item">
+            <span class="info-label">Tiempo transcurrido:</span>
+            <span class="info-value">{{ getElapsedTime() }}</span>
+          </div>
+        </div>
+      </div>
+      
+      <form [formGroup]="clockOutForm" (ngSubmit)="clockOut()">
+        <div class="form-compact">
+          <div class="form-group">
+            <label for="breakTime">Tiempo de Descanso (minutos)</label>
+            <input type="number" id="breakTime" formControlName="breakTime" class="form-control">
+          </div>
+          
+          <div class="form-group">
+            <label for="notes">Notas</label>
+            <textarea id="notes" formControlName="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-danger">
+            <span class="clock-icon">⏱️</span> Fichar Salida
+          </button>
+        </div>
+      </form>
+    </div>
+    
+    <div class="recent-records">
+      <h3 class="section-title">Registros Recientes</h3>
+      
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Proyecto</th>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th>Descanso</th>
+              <th>Total Horas</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let workDay of recentWorkDays">
+              <td [attr.data-label]="'Fecha'">{{ workDay.date | date:'dd/MM/yyyy' }}</td>
+              <td [attr.data-label]="'Proyecto'">{{ workDay.project }}</td>
+              <td [attr.data-label]="'Entrada'">{{ workDay.startTime }}</td>
+              <td [attr.data-label]="'Salida'">{{ workDay.endTime }}</td>
+              <td [attr.data-label]="'Descanso'">{{ workDay.breakTime }} min</td>
+              <td [attr.data-label]="'Total Horas'">{{ workDay.totalHours }} hrs</td>
+              <td [attr.data-label]="'Acciones'" class="actions-cell">
+                <button class="action-btn edit-btn" title="Editar" *ngIf="!activeClockIn">✏️</button>
+                <button class="action-btn delete-btn" title="Eliminar" *ngIf="!activeClockIn">❌</button>
+              </td>
+            </tr>
+            <tr *ngIf="recentWorkDays.length === 0">
+              <td colspan="7" class="empty-table">No hay registros recientes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+`,

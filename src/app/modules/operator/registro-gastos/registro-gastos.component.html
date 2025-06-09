@@ -1,0 +1,129 @@
+<div class="expenses-container">
+    <h2 class="page-title">Registro de Gastos</h2>
+    
+    <div class="form-card">
+      <h3 class="form-title">Registrar Nuevo Gasto</h3>
+      
+      <form [formGroup]="expenseForm" (ngSubmit)="onSubmit()">
+        <div class="form-compact">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="date">Fecha</label>
+              <input type="date" id="date" formControlName="date" class="form-control">
+              <div *ngIf="submitted && f['date'].errors" class="error-message">
+                <div *ngIf="f['date'].errors['required']">La fecha es requerida</div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="expenseType">Tipo de Gasto</label>
+              <select id="expenseType" formControlName="expenseType" class="form-control">
+                <option value="">Seleccione tipo de gasto</option>
+                <option *ngFor="let type of expenseTypes" [value]="type.id">
+                  {{ type.name }}
+                </option>
+              </select>
+              <div *ngIf="submitted && f['expenseType'].errors" class="error-message">
+                <div *ngIf="f['expenseType'].errors['required']">El tipo de gasto es requerido</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="amount">Monto ($)</label>
+            <input type="number" id="amount" formControlName="amount" class="form-control">
+            <div *ngIf="submitted && f['amount'].errors" class="error-message">
+              <div *ngIf="f['amount'].errors['required']">El monto es requerido</div>
+            </div>
+          </div>
+        
+          <div class="form-row">
+            <div class="form-group">
+              <label for="paymentMethod">Método de Pago</label>
+              <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
+                <option value="">Seleccione método de pago</option>
+                <option *ngFor="let method of paymentMethods" [value]="method.id">
+                  {{ method.name }}
+                </option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="receiptNumber">Número de Factura/Boleta</label>
+              <input type="text" id="receiptNumber" formControlName="receiptNumber" class="form-control">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="operator">Operador / Responsable</label>
+            <select id="operator" formControlName="operator" class="form-control">
+              <option value="">Seleccione un operador</option>
+              <option *ngFor="let op of operators" [value]="op.id">
+                {{ op.name }}
+              </option>
+            </select>
+            <div *ngIf="submitted && f['operator'].errors" class="error-message">
+              <div *ngIf="f['operator'].errors['required']">El operador es requerido</div>
+            </div>
+          </div>
+        
+          <div class="form-group compact-notes">
+            <label for="description">Descripción / Observaciones</label>
+            <textarea id="description" formControlName="description" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Registrar Gasto</button>
+          <button type="button" class="btn btn-secondary" (click)="resetForm()">Limpiar</button>
+        </div>
+        
+        <div *ngIf="success" class="alert alert-success">
+          Gasto registrado exitosamente
+        </div>
+        
+        <div *ngIf="error" class="alert alert-danger">
+          {{ error }}
+        </div>
+      </form>
+    </div>
+    
+    <div class="recent-records">
+      <h3 class="section-title">Gastos Recientes</h3>
+      
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Monto</th>
+              <th>Método de Pago</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let record of recentExpenses">
+              <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
+              <td data-label="Tipo:">{{ getExpenseTypeName(record.expenseType) }}</td>
+              <td data-label="Monto:">{{ record.amount | currency:'CLP':'symbol':'1.0-0' }}</td>
+              <td data-label="Método de Pago:">{{ record.paymentMethod ? getPaymentMethodName(record.paymentMethod!) : 'N/A' }}</td>
+              <td data-label="Estado:">
+                <span class="status-badge" [ngClass]="'status-' + record.status">
+                  {{ record.status }}
+                </span>
+              </td>
+              <td data-label="Acciones:" class="actions-cell">
+                <button class="action-btn edit-btn" title="Editar">✏️</button>
+                <button class="action-btn delete-btn" title="Eliminar">❌</button>
+              </td>
+            </tr>
+            <tr *ngIf="recentExpenses.length === 0">
+              <td colspan="6" class="empty-table">No hay registros recientes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
