@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule,AbstractControl,ValidationErrors } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { 
@@ -12,7 +12,6 @@ import {
   Machine,
   Operator
 } from '../../../core/services/machine-hours.service';
-
 
 @Component({
   selector: 'app-machine-hours',
@@ -62,10 +61,35 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  /**
+   * Inicializar el formulario reactivo
+   */
+  private initializeForm(): void {
+    this.machineHoursForm = this.formBuilder.group({
+      date: [new Date().toISOString().split('T')[0], [Validators.required]],
+      project: ['', [Validators.required]],
+      machineType: ['', [Validators.required]],
+      machineId: ['', [Validators.required]],
+      operator: ['', [Validators.required]],
+      startHour: ['', [Validators.required, Validators.min(0)]],
+      endHour: ['', [Validators.required, Validators.min(0)]],
+      fuelUsed: [0, [Validators.min(0)]],
+      notes: ['']
+    }, { 
+      validators: this.hourSequenceValidator.bind(this)
+    });
+  }
+
+  /**
+   * Validador personalizado para secuencia de horas
+   */
   private hourSequenceValidator(control: AbstractControl): ValidationErrors | null {
-    const formGroup = control as FormGroup;
-    const startHour = formGroup.get('startHour')?.value;
-    const endHour = formGroup.get('endHour')?.value;
+    if (!(control instanceof FormGroup)) {
+      return null;
+    }
+    
+    const startHour = control.get('startHour')?.value;
+    const endHour = control.get('endHour')?.value;
     
     if (startHour && endHour && parseFloat(endHour) <= parseFloat(startHour)) {
       return { hourSequence: true };
@@ -73,24 +97,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     
     return null;
   }
-  
-  private initializeForm(): void {
-    this.machineHoursForm = this.formBuilder.group({
-      date: [new Date().toISOString().split('T')[0], Validators.required],
-      project: ['', Validators.required],
-      machineType: ['', Validators.required],
-      machineId: ['', Validators.required],
-      operator: ['', Validators.required],
-      startHour: ['', [Validators.required, Validators.min(0)]],
-      endHour: ['', [Validators.required, Validators.min(0)]],
-      fuelUsed: [0, [Validators.min(0)]],
-      notes: ['']
-    });
-    
-    // Agregar validación personalizada para horas
-    this.machineHoursForm.addValidators(this.hourSequenceValidator.bind(this));
-  }
-  
+
   // Configuración para la tabla responsiva en móviles
   setupMobileTable(): void {
     // Implementar lógica para tabla responsiva si es necesario
@@ -244,20 +251,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       const control = this.machineHoursForm.get(key);
       control?.markAsTouched();
     });
-  }
-  
-  /**
-   * Validador personalizado para secuencia de horas
-   */
-  private hourSequenceValidator(group: FormGroup): {[key: string]: any} | null {
-    const startHour = group.get('startHour')?.value;
-    const endHour = group.get('endHour')?.value;
-    
-    if (startHour && endHour && parseFloat(endHour) <= parseFloat(startHour)) {
-      return { 'hourSequence': true };
-    }
-    
-    return null;
   }
   
   /**

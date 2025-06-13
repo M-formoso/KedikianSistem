@@ -44,4 +44,15 @@ export class UsuarioService extends BaseApiService {
   getUsuariosPorRol(rol: string): Observable<any> {
     return this.get(this.endpoint, { rol: rol });
   }
+
+  getCurrentUser(): Observable<any> {
+    return this.get('/usuarios/current');
+  }
+  
+  getActiveUsers(): Observable<any> {
+    return this.getUsuarios({ activo: true });
+  }
+
+
 }
+
