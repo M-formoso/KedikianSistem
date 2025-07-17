@@ -14,6 +14,15 @@
   <div *ngIf="error" class="alert alert-danger">
     {{ error }}
   </div>
+
+  <!-- Alerta de límite de 9 horas -->
+  <div *ngIf="activeClockIn && isNearingLimit()" class="alert alert-warning">
+    ⚠️ Atención: Se acerca el límite de 9 horas de jornada laboral
+  </div>
+
+  <div *ngIf="activeClockIn && hasExceededLimit()" class="alert alert-danger">
+    🚨 Ha superado el límite de 9 horas. La jornada se cerrará automáticamente.
+  </div>
   
   <!-- Panel de fichaje de entrada -->
   <div class="form-card" *ngIf="!activeClockIn && !loadingMasterData">
@@ -21,32 +30,6 @@
     
     <form [formGroup]="clockInForm" (ngSubmit)="clockIn()">
       <div class="form-compact">
-        <div class="form-group">
-          <label for="proyecto">Proyecto</label>
-          <select id="proyecto" formControlName="proyecto" class="form-control">
-            <option value="">Seleccione un proyecto</option>
-            <option *ngFor="let proyecto of activeProyectos" [value]="proyecto.id">
-              {{ proyecto.nombre }}
-            </option>
-          </select>
-          <div *ngIf="hasFieldError('proyecto')" class="error-message">
-            {{ getFieldError('proyecto') }}
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="usuario">Usuario</label>
-          <select id="usuario" formControlName="usuario" class="form-control">
-            <option value="">Seleccione un usuario</option>
-            <option *ngFor="let usuario of activeUsuarios" [value]="usuario.id">
-              {{ usuario.nombre }} {{ usuario.apellido }}
-            </option>
-          </select>
-          <div *ngIf="hasFieldError('usuario')" class="error-message">
-            {{ getFieldError('usuario') }}
-          </div>
-        </div>
-        
         <div class="form-group clock-in-action">
           <button type="submit" 
                   class="btn btn-primary btn-clock-in" 
@@ -68,19 +51,34 @@
     <div class="active-session-info">
       <div class="active-info-row">
         <div class="active-info-item">
-          <span class="info-label">Proyecto:</span>
-          <span class="info-value">{{ activeClockIn.proyecto }}</span>
-        </div>
-        
-        <div class="active-info-item">
           <span class="info-label">Hora de entrada:</span>
           <span class="info-value">{{ activeClockIn.startTime }}</span>
         </div>
         
         <div class="active-info-item">
           <span class="info-label">Tiempo transcurrido:</span>
-          <span class="info-value">{{ getElapsedTime() }}</span>
+          <span class="info-value" [ngClass]="{'text-warning': isNearingLimit(), 'text-danger': hasExceededLimit()}">
+            {{ getElapsedTime() }}
+          </span>
         </div>
+
+        <div class="active-info-item">
+          <span class="info-label">Tiempo restante:</span>
+          <span class="info-value" [ngClass]="{'text-warning': isNearingLimit(), 'text-danger': hasExceededLimit()}">
+            {{ getRemainingTime() }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Barra de progreso de jornada -->
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" 
+               [style.width.%]="getWorkDayProgress()"
+               [ngClass]="{'progress-warning': isNearingLimit(), 'progress-danger': hasExceededLimit()}">
+          </div>
+        </div>
+        <span class="progress-text">{{ getWorkDayProgress() }}% de la jornada</span>
       </div>
     </div>
     
@@ -123,6 +121,80 @@
       </div>
     </form>
   </div>
+
+  <!-- Calendario de pagos -->
+  <div class="calendar-card">
+    <div class="section-header">
+      <h3 class="section-title">📅 Calendario de Pagos</h3>
+      <div class="section-actions">
+        <button class="btn btn-secondary btn-sm" 
+                (click)="previousMonth()"
+                [disabled]="loading">
+          ← Anterior
+        </button>
+        <span class="current-month">{{ getCurrentMonthYear() }}</span>
+        <button class="btn btn-secondary btn-sm" 
+                (click)="nextMonth()"
+                [disabled]="loading">
+          Siguiente →
+        </button>
+      </div>
+    </div>
+
+    <!-- Resumen de pagos -->
+    <div class="payment-summary">
+      <div class="summary-item">
+        <span class="summary-label">Último pago:</span>
+        <span class="summary-value">{{ getLastPaymentDate() | date:'dd/MM/yyyy' }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Horas trabajadas este mes:</span>
+        <span class="summary-value">{{ formatHours(getCurrentMonthHours()) }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Monto pendiente:</span>
+        <span class="summary-value">{{ getPendingAmount() | currency:'ARS':'symbol':'1.2-2' }}</span>
+      </div>
+    </div>
+
+    <!-- Calendario -->
+    <div class="calendar-grid">
+      <div class="calendar-header">
+        <div class="day-header">Dom</div>
+        <div class="day-header">Lun</div>
+        <div class="day-header">Mar</div>
+        <div class="day-header">Mié</div>
+        <div class="day-header">Jue</div>
+        <div class="day-header">Vie</div>
+        <div class="day-header">Sáb</div>
+      </div>
+      
+      <div class="calendar-body">
+        <div *ngFor="let day of getCalendarDays(); trackBy: trackByDay" 
+             class="calendar-day"
+             [ngClass]="{
+               'other-month': !day.isCurrentMonth,
+               'today': day.isToday,
+               'has-work': day.hasWorkHours,
+               'payment-day': day.isPaymentDay,
+               'weekend': day.isWeekend
+             }">
+          <span class="day-number">{{ day.dayNumber }}</span>
+          <div class="day-indicators">
+            <span *ngIf="day.hasWorkHours" class="work-indicator" [title]="day.workHours + ' horas'">
+              ⏱️
+            </span>
+            <span *ngIf="day.isPaymentDay" class="payment-indicator" title="Día de pago">
+              💰
+            </span>
+          </div>
+          <div class="day-hours" *ngIf="day.hasWorkHours">
+            {{ day.workHours }}h
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   
   <!-- Sección de registros recientes -->
   <div class="recent-records">
@@ -143,6 +215,10 @@
         <span class="summary-label">Total horas recientes:</span>
         <span class="summary-value">{{ formatHours(getTotalRecentHours()) }}</span>
       </div>
+      <div class="summary-item">
+        <span class="summary-label">Promedio diario:</span>
+        <span class="summary-value">{{ formatHours(getAverageHoursPerDay()) }}</span>
+      </div>
     </div>
     
     <div class="table-responsive">
@@ -150,8 +226,6 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Proyecto</th>
-            <th>Usuario</th>
             <th>Entrada</th>
             <th>Salida</th>
             <th>Descanso</th>
@@ -163,12 +237,13 @@
         <tbody>
           <tr *ngFor="let workHours of recentWorkHours; trackBy: trackByWorkHours">
             <td [attr.data-label]="'Fecha'">{{ workHours.fecha | date:'dd/MM/yyyy' }}</td>
-            <td [attr.data-label]="'Proyecto'">{{ getProyectoName(workHours.proyectoId) }}</td>
-            <td [attr.data-label]="'Usuario'">{{ getUsuarioName(workHours.usuarioId) }}</td>
             <td [attr.data-label]="'Entrada'">{{ workHours.horaInicio }}</td>
             <td [attr.data-label]="'Salida'">{{ workHours.horaFin || 'En curso' }}</td>
             <td [attr.data-label]="'Descanso'">{{ workHours.tiempoDescanso }} min</td>
-            <td [attr.data-label]="'Total Horas'">{{ formatHours(workHours.totalHoras) }}</td>
+            <td [attr.data-label]="'Total Horas'" 
+                [ngClass]="{'text-warning': workHours.totalHoras > 8, 'text-danger': workHours.totalHoras > 9}">
+              {{ formatHours(workHours.totalHoras) }}
+            </td>
             <td [attr.data-label]="'Estado'">
               <span class="badge" [ngClass]="getStatusClass(workHours.estado)">
                 {{ workHours.estado }}
@@ -190,7 +265,7 @@
             </td>
           </tr>
           <tr *ngIf="recentWorkHours.length === 0">
-            <td colspan="9" class="empty-table">No hay registros recientes</td>
+            <td colspan="7" class="empty-table">No hay registros recientes</td>
           </tr>
         </tbody>
       </table>

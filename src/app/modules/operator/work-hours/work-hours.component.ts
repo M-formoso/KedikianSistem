@@ -1,3 +1,5 @@
+/*************  ✨ Windsurf Command ⭐  *************/
+/*******  29f91e10-8878-45b6-b662-8fbc8a47fb1b  *******/
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -6,7 +8,6 @@ import { Subject, takeUntil, forkJoin } from 'rxjs';
 
 // Imports de servicios 
 import { ReporteLaboralService } from '../../../eviromet.ts/reporte-laboral.service';
-import { ProyectoService } from '../../../eviromet.ts/proyecto.service';
 import { UsuarioService } from '../../../eviromet.ts/usiario.service';
 
 // Interfaces locales (ya que los servicios no las exportan)
@@ -14,7 +15,6 @@ interface WorkHoursRequest {
   fecha: string;
   horaInicio: string;
   tiempoDescanso: number;
-  proyectoId: string;
   usuarioId: string;
   notas: string;
   horaInicioTimestamp: Date;
@@ -27,23 +27,11 @@ interface WorkHoursRecord {
   horaFin?: string;
   tiempoDescanso: number;
   totalHoras: number;
-  proyectoId: string;
   usuarioId: string;
   notas: string;
   estado: string;
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface Proyecto {
-  id: string;
-  nombre: string;
-  descripcion?: string;
-  fechaInicio: Date;
-  fechaFin?: Date;
-  estado: string;
-  clienteId?: string;
-  isActive: boolean;
 }
 
 interface Usuario {
@@ -60,8 +48,6 @@ interface ClockStatus {
   isActive: boolean;
   startTime: string;
   startTimestamp: Date;
-  proyecto: string;
-  proyectoId: string;
   usuarioId: string;
   reporteId?: string;
 }
@@ -91,12 +77,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   elapsedTimeInterval: any;
   
   // Datos maestros desde el backend
-  proyectos: Proyecto[] = [];
   usuarios: Usuario[] = [];
   currentUser: Usuario | null = null;
   
   // Registros recientes
   recentWorkHours: WorkHoursRecord[] = [];
+  
+  // Propiedad para manejo del calendario
+  private currentCalendarDate = new Date();
   
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
@@ -104,9 +92,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   constructor(
     private formBuilder: FormBuilder,
     private reporteLaboralService: ReporteLaboralService,
-    private proyectoService: ProyectoService,
     private usuarioService: UsuarioService
   ) {
+  /**
+   * Carga los datos maestros y los registros recientes al iniciarse el componente.
+   * También ajusta la tabla para dispositivos móviles y verifica si hay un registro
+   * de fichaje activo.
+   */
     this.initializeForms();
   }
 
@@ -126,9 +118,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   private initializeForms(): void {
-    // Formulario para fichar entrada
+    // Formulario para fichar entrada (sin proyecto)
     this.clockInForm = this.formBuilder.group({
-      proyecto: ['', Validators.required],
       usuario: ['', Validators.required]
     });
 
@@ -160,9 +151,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.loadingMasterData = true;
     this.error = '';
 
-    // Cargar todos los datos maestros en paralelo
+    // Cargar solo usuarios (sin proyectos)
     forkJoin({
-      proyectos: this.proyectoService.getProyectosActivos(),
       usuarios: this.usuarioService.getUsuarios({ activo: true }), // Ajustado según tu servicio
       // currentUser: this.usuarioService.getCurrentUser() // Comentado - implementar si existe
     })
@@ -170,9 +160,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     .subscribe({
       next: (responses: any) => {
         // Verificar que todas las respuestas sean exitosas
-        if (responses.proyectos && responses.proyectos.success) {
-          this.proyectos = responses.proyectos.data || [];
-        }
         if (responses.usuarios && responses.usuarios.success) {
           this.usuarios = responses.usuarios.data || [];
         }
@@ -229,7 +216,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Fichar entrada
+   * Fichar entrada (sin selección de proyecto)
    */
   clockIn(): void {
     this.clockInSubmitted = true;
@@ -252,7 +239,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       fecha: new Date().toISOString().split('T')[0],
       horaInicio: currentTime,
       tiempoDescanso: 0, // Se establecerá al fichar salida
-      proyectoId: formValues.proyecto,
       usuarioId: formValues.usuario,
       notas: '',
       horaInicioTimestamp: now
@@ -264,13 +250,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         this.loading = false;
         if (response && response.success) {
-          // Crear estado de fichaje activo
+          // Crear estado de fichaje activo (sin proyecto)
           this.activeClockIn = {
             isActive: true,
             startTime: currentTime,
             startTimestamp: now,
-            proyecto: this.getProyectoName(formValues.proyecto),
-            proyectoId: formValues.proyecto,
             usuarioId: formValues.usuario,
             reporteId: response.data.id
           };
@@ -420,14 +404,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
 
   /**
-   * Obtener nombre del proyecto por ID
-   */
-  getProyectoName(proyectoId: string): string {
-    const proyecto = this.proyectos.find(p => p.id === proyectoId);
-    return proyecto ? proyecto.nombre : 'Proyecto desconocido';
-  }
-
-  /**
    * Obtener nombre del usuario por ID
    */
   getUsuarioName(usuarioId: string): string {
@@ -467,7 +443,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
-      'proyecto': 'El proyecto',
       'usuario': 'El usuario',
       'tiempoDescanso': 'El tiempo de descanso',
       'notas': 'Las notas'
@@ -480,13 +455,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   get isLoading(): boolean {
     return this.loading || this.loadingMasterData;
-  }
-
-  /**
-   * Filtrar proyectos activos
-   */
-  get activeProyectos(): Proyecto[] {
-    return this.proyectos.filter(proyecto => proyecto.isActive !== false);
   }
 
   /**
@@ -541,7 +509,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Verificar si puede fichar entrada
    */
   canClockIn(): boolean {
-    return !this.activeClockIn && !this.isLoading;
+    return !this.activeClockIn && !this.isLoading && this.clockInForm.valid;
   }
 
   /**
@@ -556,55 +524,301 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   getCurrentClockInfo(): string {
     if (!this.activeClockIn) return '';
-    return `Proyecto: ${this.activeClockIn.proyecto} | Inicio: ${this.activeClockIn.startTime}`;
+    return `Inicio: ${this.activeClockIn.startTime}`;
   }
 
-  // Agregar estos métodos al final de la clase WorkHoursComponent:
+  /**
+   * TrackBy function para optimizar la renderización de la tabla
+   */
+  trackByWorkHours(index: number, workHours: WorkHoursRecord): string {
+    return workHours.id;
+  }
 
-/**
- * TrackBy function para optimizar la renderización de la tabla
- */
-trackByWorkHours(index: number, workHours: WorkHoursRecord): string {
-  return workHours.id;
-}
+  /**
+   * Editar registro de horas trabajadas
+   */
+  editWorkHours(workHours: WorkHoursRecord): void {
+    // Implementar lógica de edición
+    console.log('Editando registro:', workHours);
+    // Aquí puedes abrir un modal o navegar a una página de edición
+  }
 
-/**
- * Editar registro de horas trabajadas
- */
-editWorkHours(workHours: WorkHoursRecord): void {
-  // Implementar lógica de edición
-  console.log('Editando registro:', workHours);
-  // Aquí puedes abrir un modal o navegar a una página de edición
-}
-
-/**
- * Eliminar registro de horas trabajadas
- */
-deleteWorkHours(workHours: WorkHoursRecord): void {
-  if (confirm('¿Está seguro de que desea eliminar este registro?')) {
-    this.loading = true;
-    this.reporteLaboralService.deleteReporte(Number(workHours.id))
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response: any) => {
-          if (response && response.success) {
-            this.loadRecentWorkHours(); // Recargar la lista
-            this.success = true;
-            setTimeout(() => {
-              this.success = false;
-            }, 3000);
-          } else {
+  /**
+   * Eliminar registro de horas trabajadas
+   */
+  deleteWorkHours(workHours: WorkHoursRecord): void {
+    if (confirm('¿Está seguro de que desea eliminar este registro?')) {
+      this.loading = true;
+      this.reporteLaboralService.deleteReporte(Number(workHours.id))
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response: any) => {
+            if (response && response.success) {
+              this.loadRecentWorkHours(); // Recargar la lista
+              this.success = true;
+              setTimeout(() => {
+                this.success = false;
+              }, 3000);
+            } else {
+              this.error = 'Error al eliminar el registro';
+            }
+            this.loading = false;
+          },
+          error: (error: any) => {
             this.error = 'Error al eliminar el registro';
+            this.loading = false;
+            console.error('Error eliminando registro:', error);
           }
-          this.loading = false;
-        },
-        error: (error: any) => {
-          this.error = 'Error al eliminar el registro';
-          this.loading = false;
-          console.error('Error eliminando registro:', error);
-        }
-      });
+        });
+    }
+  }
+
+  // ============ MÉTODOS DE CONTROL DE LÍMITE DE 9 HORAS ============
+
+  /**
+   * Verificar si se acerca al límite de 9 horas
+   */
+  isNearingLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    const now = new Date();
+    const start = this.activeClockIn.startTimestamp;
+    const diffMs = now.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    return diffHours >= 8; // Alerta a partir de 8 horas
+  }
+
+  /**
+   * Verificar si ha superado el límite de 9 horas
+   */
+  hasExceededLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    const now = new Date();
+    const start = this.activeClockIn.startTimestamp;
+    const diffMs = now.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    return diffHours >= 9; // Límite superado a las 9 horas
+  }
+
+  /**
+   * Obtener tiempo restante hasta el límite
+   */
+  getRemainingTime(): string {
+    if (!this.activeClockIn) return '';
+    
+    const now = new Date();
+    const start = this.activeClockIn.startTimestamp;
+    const diffMs = now.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    const remainingHours = Math.max(0, 9 - diffHours);
+    const hours = Math.floor(remainingHours);
+    const minutes = Math.floor((remainingHours - hours) * 60);
+    
+    return remainingHours <= 0 ? 'Límite superado' : `${hours}h ${minutes}m restantes`;
+  }
+
+  /**
+   * Obtener progreso de la jornada laboral
+   */
+  getWorkDayProgress(): number {
+    if (!this.activeClockIn) return 0;
+    
+    const now = new Date();
+    const start = this.activeClockIn.startTimestamp;
+    const diffMs = now.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    
+    return Math.min(100, Math.round((diffHours / 9) * 100));
+  }
+
+  // ============ MÉTODOS DE CALENDARIO ============
+
+  /**
+   * Obtener mes y año actual del calendario
+   */
+  getCurrentMonthYear(): string {
+    const months = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    
+    return `${months[this.currentCalendarDate.getMonth()]} ${this.currentCalendarDate.getFullYear()}`;
+  }
+
+  /**
+   * Navegar al mes anterior
+   */
+  previousMonth(): void {
+    this.currentCalendarDate = new Date(
+      this.currentCalendarDate.getFullYear(),
+      this.currentCalendarDate.getMonth() - 1,
+      1
+    );
+  }
+
+  /**
+   * Navegar al mes siguiente
+   */
+  nextMonth(): void {
+    this.currentCalendarDate = new Date(
+      this.currentCalendarDate.getFullYear(),
+      this.currentCalendarDate.getMonth() + 1,
+      1
+    );
+  }
+
+  /**
+   * Obtener todos los días del calendario
+   */
+  getCalendarDays(): any[] {
+    const year = this.currentCalendarDate.getFullYear();
+    const month = this.currentCalendarDate.getMonth();
+    
+    // Primer día del mes y último día del mes
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Días a mostrar del mes anterior para completar la semana
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    // Días a mostrar del mes siguiente para completar la semana
+    const endDate = new Date(lastDay);
+    endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
+    
+    const days = [];
+    const currentDate = new Date(startDate);
+    const today = new Date();
+    
+    while (currentDate <= endDate) {
+      const dayData = {
+        dayNumber: currentDate.getDate(),
+        fullDate: new Date(currentDate),
+        isCurrentMonth: currentDate.getMonth() === month,
+        isToday: this.isSameDay(currentDate, today),
+        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6,
+        hasWorkHours: this.hasWorkHoursForDay(currentDate),
+        workHours: this.getWorkHoursForDay(currentDate),
+        isPaymentDay: this.isPaymentDay(currentDate)
+      };
+      
+      days.push(dayData);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return days;
+  }
+
+  /**
+   * TrackBy para optimizar el calendario
+   */
+  trackByDay(index: number, day: any): any {
+    return day.fullDate.getTime();
+  }
+
+  /**
+   * Obtener fecha del último pago
+   */
+  getLastPaymentDate(): Date {
+    // Implementar lógica según tu sistema de pagos
+    // Por ejemplo, último día del mes anterior
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 0);
+  }
+
+  /**
+   * Obtener horas trabajadas en el mes actual
+   */
+  getCurrentMonthHours(): number {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    return this.recentWorkHours
+      .filter(workHours => {
+        const workDate = new Date(workHours.fecha);
+        return workDate.getMonth() === currentMonth && 
+               workDate.getFullYear() === currentYear;
+      })
+      .reduce((total, workHours) => total + workHours.totalHoras, 0);
+  }
+
+  /**
+   * Obtener monto pendiente de pago
+   */
+  getPendingAmount(): number {
+    // Implementar según tu lógica de cálculo de pagos
+    // Ejemplo: horas * tarifa por hora
+    const hoursWorked = this.getCurrentMonthHours();
+    const hourlyRate = 5000; // Ejemplo: $5000 por hora - ajustar según tu sistema
+    return hoursWorked * hourlyRate;
+  }
+
+  // ============ MÉTODOS DE ESTADÍSTICAS ============
+
+  /**
+   * Obtener promedio de horas por día
+   */
+  getAverageHoursPerDay(): number {
+    if (this.recentWorkHours.length === 0) return 0;
+    
+    const totalHours = this.getTotalRecentHours();
+    const workingDays = this.getWorkingDaysCount();
+    
+    return workingDays > 0 ? totalHours / workingDays : 0;
+  }
+
+  // ============ MÉTODOS AUXILIARES PRIVADOS ============
+
+  /**
+   * Verificar si dos fechas son el mismo día
+   */
+  private isSameDay(date1: Date, date2: Date): boolean {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  }
+
+  /**
+   * Verificar si hay horas trabajadas en un día específico
+   */
+  private hasWorkHoursForDay(date: Date): boolean {
+    return this.recentWorkHours.some(workHours => 
+      this.isSameDay(new Date(workHours.fecha), date)
+    );
+  }
+
+  /**
+   * Obtener horas trabajadas en un día específico
+   */
+  private getWorkHoursForDay(date: Date): number {
+    const workHours = this.recentWorkHours.find(workHours => 
+      this.isSameDay(new Date(workHours.fecha), date)
+    );
+    return workHours ? workHours.totalHoras : 0;
+  }
+
+  /**
+   * Verificar si es día de pago
+   */
+  private isPaymentDay(date: Date): boolean {
+    // Implementar lógica según tu sistema
+    // Ejemplo: último día del mes
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return nextDay.getDate() === 1;
+  }
+
+  /**
+   * Obtener cantidad de días trabajados únicos
+   */
+  private getWorkingDaysCount(): number {
+    const uniqueDates = new Set(
+      this.recentWorkHours.map(workHours => workHours.fecha)
+    );
+    return uniqueDates.size;
   }
 }
-}
-

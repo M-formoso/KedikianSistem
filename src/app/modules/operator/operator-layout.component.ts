@@ -6,7 +6,7 @@ import { HeaderComponent } from '../../shared/components/header/header.component
 @Component({
   selector: 'app-operator-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, SidebarComponent, HeaderComponent],
+  imports: [CommonModule, RouterModule, SidebarComponent, HeaderComponent], // Ensure HeaderComponent is imported correctly
   template: `
     <div class="app-container">
       <app-sidebar></app-sidebar>

@@ -38,6 +38,9 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   // Registros recientes
   recentExpenses: ExpenseRecord[] = [];
   
+  // Fecha formateada para mostrar
+  formattedCurrentDate: string = '';
+  
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
   
@@ -46,6 +49,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     private expenseService: ExpenseService
   ) {
     this.initializeForm();
+    this.setFormattedCurrentDate();
   }
   
   ngOnInit(): void {
@@ -435,5 +439,19 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
    */
   getExpensesByStatus(status: string): ExpenseRecord[] {
     return this.recentExpenses.filter(expense => expense.status === status);
+  }
+
+  /**
+   * Establecer la fecha formateada para mostrar en la vista
+   */
+  private setFormattedCurrentDate(): void {
+    const today = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    };
+    this.formattedCurrentDate = today.toLocaleDateString('es-ES', options);
   }
 }

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { Subject, takeUntil, forkJoin, interval } from 'rxjs';
 import { 
   MachineHoursService,
   MachineHoursRequest,
@@ -31,17 +31,28 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   loading = false;
   loadingMasterData = false;
   
+  // Estados del contador de tiempo
+  isTimerActive = false;
+  startTime: Date | null = null;
+  currentTime: Date = new Date();
+  elapsedHours = 0;
+  elapsedMinutes = 0;
+  elapsedSeconds = 0;
+  
   // Datos maestros desde el backend
   projects: Project[] = [];
   machineTypes: MachineType[] = [];
   machines: Machine[] = [];
-  operators: Operator[] = [];
+  
+  // Operador actual (tomado de la sesión)
+  currentOperator: Operator | null = null;
   
   // Registros recientes
   recentRecords: MachineHours[] = [];
   
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
+  private timerSubscription$ = new Subject<void>();
   
   constructor(
     private formBuilder: FormBuilder,
@@ -51,51 +62,220 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
+    //this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
+    this.startClockUpdate();
   }
   
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.timerSubscription$.next();
+    this.timerSubscription$.complete();
   }
 
   /**
    * Inicializar el formulario reactivo
    */
   private initializeForm(): void {
+    const today = new Date().toISOString().split('T')[0];
+    
     this.machineHoursForm = this.formBuilder.group({
-      date: [new Date().toISOString().split('T')[0], [Validators.required]],
+      date: [{ value: today, disabled: true }], // Fecha fija, no editable
       project: ['', [Validators.required]],
       machineType: ['', [Validators.required]],
       machineId: ['', [Validators.required]],
-      operator: ['', [Validators.required]],
-      startHour: ['', [Validators.required, Validators.min(0)]],
-      endHour: ['', [Validators.required, Validators.min(0)]],
-      fuelUsed: [0, [Validators.min(0)]],
       notes: ['']
-    }, { 
-      validators: this.hourSequenceValidator.bind(this)
     });
   }
 
   /**
-   * Validador personalizado para secuencia de horas
+   * Cargar operador actual de la sesión
    */
-  private hourSequenceValidator(control: AbstractControl): ValidationErrors | null {
-    if (!(control instanceof FormGroup)) {
-      return null;
+  //private loadCurrentOperator(): void {
+    //this.machineHoursService.getCurrentOperator()
+      //.pipe(takeUntil(this.destroy$))
+      //.subscribe({
+        //next: (response) => {
+          //if (response.success && response.data) {
+            //this.currentOperator = response.data;
+         // }
+       // },
+        //error: (error) => {
+         // this.error = 'Error al cargar datos del operador actual';
+         // console.error('Error cargando operador actual:', error);
+        //}
+     // });
+    
+ // }
+
+  /**
+   * Actualizar reloj en tiempo real
+   */
+  private startClockUpdate(): void {
+    interval(1000)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.currentTime = new Date();
+        if (this.isTimerActive && this.startTime) {
+          this.updateElapsedTime();
+        }
+      });
+  }
+
+  /**
+   * Actualizar tiempo transcurrido
+   */
+  private updateElapsedTime(): void {
+    if (!this.startTime) return;
+    
+    const now = new Date();
+    const elapsed = now.getTime() - this.startTime.getTime();
+    
+    this.elapsedSeconds = Math.floor((elapsed / 1000) % 60);
+    this.elapsedMinutes = Math.floor((elapsed / (1000 * 60)) % 60);
+    this.elapsedHours = Math.floor(elapsed / (1000 * 60 * 60));
+  }
+
+  /**
+   * Iniciar contador de tiempo
+   */
+  startTimer(): void {
+    if (!this.canStartTimer()) {
+      return;
     }
-    
-    const startHour = control.get('startHour')?.value;
-    const endHour = control.get('endHour')?.value;
-    
-    if (startHour && endHour && parseFloat(endHour) <= parseFloat(startHour)) {
-      return { hourSequence: true };
+
+    this.startTime = new Date();
+    this.isTimerActive = true;
+    this.elapsedHours = 0;
+    this.elapsedMinutes = 0;
+    this.elapsedSeconds = 0;
+    this.error = '';
+    this.success = false;
+
+    // Validar disponibilidad de máquina al iniciar
+    this.validateMachineAvailabilityForStart();
+  }
+
+  /**
+   * Detener contador de tiempo
+   */
+  stopTimer(): void {
+    if (!this.isTimerActive || !this.startTime) {
+      return;
     }
+
+    this.isTimerActive = false;
     
-    return null;
+    // Guardar automáticamente el registro
+    this.saveTimerRecord();
+  }
+
+  /**
+   * Verificar si se puede iniciar el timer
+   */
+  canStartTimer(): boolean {
+    const requiredFields = ['project', 'machineType', 'machineId'];
+    
+    for (const field of requiredFields) {
+      if (!this.machineHoursForm.get(field)?.value) {
+        this.error = `Debe seleccionar ${this.getFieldLabel(field).toLowerCase()} antes de iniciar`;
+        return false;
+      }
+    }
+
+    if (!this.currentOperator) {
+      this.error = 'No se pudo cargar la información del operador';
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Guardar registro cuando se detiene el timer
+   */
+  private saveTimerRecord(): void {
+    if (!this.startTime || !this.currentOperator) {
+      this.error = 'Error: datos incompletos para guardar el registro';
+      return;
+    }
+
+    this.loading = true;
+    
+    const endTime = new Date();
+    const startHour = this.getDecimalHours(this.startTime);
+    const endHour = this.getDecimalHours(endTime);
+    
+    const formValues = this.machineHoursForm.value;
+    const machineHoursData: MachineHoursRequest = {
+      date: new Date().toISOString().split('T')[0], // Fecha actual
+      machineType: formValues.machineType,
+      machineId: formValues.machineId,
+      startHour: startHour,
+      endHour: endHour,
+      project: formValues.project,
+      operator: this.currentOperator.id,
+      fuelUsed: 0, // Ya no se usa
+      notes: formValues.notes || ''
+    };
+
+    this.machineHoursService.createMachineHours(machineHoursData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.loading = false;
+          if (response.success) {
+            this.success = true;
+            this.loadRecentRecords();
+            this.resetTimer();
+            
+            setTimeout(() => {
+              this.success = false;
+            }, 5000);
+          } else {
+            this.error = response.message || 'Error al guardar el registro de horas';
+          }
+        },
+        error: (error) => {
+          this.loading = false;
+          this.error = error.message || 'Error al procesar la solicitud';
+          console.error('Error guardando registro de horas:', error);
+        }
+      });
+  }
+
+  /**
+   * Convertir Date a horas decimales (desde medianoche)
+   */
+  private getDecimalHours(date: Date): number {
+    return date.getHours() + (date.getMinutes() / 60) + (date.getSeconds() / 3600);
+  }
+
+  /**
+   * Resetear timer y formulario
+   */
+  resetTimer(): void {
+    this.startTime = null;
+    this.isTimerActive = false;
+    this.elapsedHours = 0;
+    this.elapsedMinutes = 0;
+    this.elapsedSeconds = 0;
+    
+    // Mantener solo los campos que no son dependientes
+    const currentProject = this.machineHoursForm.get('project')?.value;
+    
+    this.machineHoursForm.reset({
+      date: new Date().toISOString().split('T')[0],
+      project: currentProject, // Mantener proyecto seleccionado
+      machineType: '',
+      machineId: '',
+      notes: ''
+    });
+    
+    this.submitted = false;
   }
 
   // Configuración para la tabla responsiva en móviles
@@ -115,17 +295,15 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.loadingMasterData = true;
     this.error = '';
     
-    // Cargar todos los datos maestros en paralelo
+    // Cargar todos los datos maestros en paralelo (sin operadores)
     forkJoin({
       projects: this.machineHoursService.getProjects(),
       machineTypes: this.machineHoursService.getMachineTypes(),
-      machines: this.machineHoursService.getMachines(),
-      operators: this.machineHoursService.getOperators()
+      machines: this.machineHoursService.getMachines()
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (responses) => {
-        // Verificar que todas las respuestas sean exitosas
         if (responses.projects.success) {
           this.projects = responses.projects.data || [];
         }
@@ -136,10 +314,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         
         if (responses.machines.success) {
           this.machines = responses.machines.data || [];
-        }
-        
-        if (responses.operators.success) {
-          this.operators = responses.operators.data || [];
         }
         
         this.loadingMasterData = false;
@@ -166,105 +340,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando registros recientes:', error);
-          // No mostrar error al usuario para registros recientes
         }
       });
-  }
-  
-  /**
-   * Enviar formulario
-   */
-  onSubmit(): void {
-    this.submitted = true;
-    this.success = false;
-    this.error = '';
-    
-    if (this.machineHoursForm.invalid) {
-      this.markFormGroupTouched();
-      return;
-    }
-
-    this.loading = true;
-    
-    const formValues = this.machineHoursForm.value;
-    const machineHoursData: MachineHoursRequest = {
-      date: formValues.date,
-      machineType: formValues.machineType,
-      machineId: formValues.machineId,
-      startHour: parseFloat(formValues.startHour),
-      endHour: parseFloat(formValues.endHour),
-      project: formValues.project,
-      operator: formValues.operator,
-      fuelUsed: parseFloat(formValues.fuelUsed) || 0,
-      notes: formValues.notes || ''
-    };
-
-    this.machineHoursService.createMachineHours(machineHoursData)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          this.loading = false;
-          if (response.success) {
-            this.success = true;
-            this.loadRecentRecords(); // Recargar la lista
-            this.resetForm();
-            
-            // Ocultar mensaje de éxito después de 5 segundos
-            setTimeout(() => {
-              this.success = false;
-            }, 5000);
-          } else {
-            this.error = response.message || 'Error al crear el registro de horas';
-          }
-        },
-        error: (error) => {
-          this.loading = false;
-          this.error = error.message || 'Error al procesar la solicitud';
-          console.error('Error creando registro de horas:', error);
-        }
-      });
-  }
-
-  /**
-   * Resetear formulario
-   */
-  resetForm(): void {
-    this.submitted = false;
-    this.machineHoursForm.reset({
-      date: new Date().toISOString().split('T')[0],
-      project: '',
-      machineType: '',
-      machineId: '',
-      operator: '',
-      startHour: '',
-      endHour: '',
-      fuelUsed: 0,
-      notes: ''
-    });
-  }
-  
-  /**
-   * Marcar todos los campos del formulario como tocados para mostrar errores
-   */
-  private markFormGroupTouched(): void {
-    Object.keys(this.machineHoursForm.controls).forEach(key => {
-      const control = this.machineHoursForm.get(key);
-      control?.markAsTouched();
-    });
-  }
-  
-  /**
-   * Refrescar datos maestros
-   */
-  refreshMasterData(): void {
-    this.loadMasterData();
-  }
-  
-  /**
-   * Refrescar registros recientes
-   */
-  refreshRecentRecords(): void {
-    this.loadRecentRecords();
   }
   
   /**
@@ -287,86 +364,72 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
             console.error('Error cargando máquinas por tipo:', error);
           }
         });
-      
-      // Cargar operadores por tipo de máquina
-      this.machineHoursService.getOperatorsByMachineType(machineTypeId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (response) => {
-            if (response.success) {
-              this.operators = response.data || [];
-            }
-          },
-          error: (error) => {
-            console.error('Error cargando operadores por tipo:', error);
-          }
-        });
     }
     
-    // Limpiar selecciones dependientes
+    // Limpiar selección de máquina
     this.machineHoursForm.patchValue({
-      machineId: '',
-      operator: ''
+      machineId: ''
     });
+
+    // Si el timer está activo, detenerlo por seguridad
+    if (this.isTimerActive) {
+      this.stopTimer();
+    }
   }
   
   /**
-   * Validar disponibilidad de máquina
+   * Validar disponibilidad de máquina para iniciar trabajo
    */
-  validateMachineAvailability(): void {
+  validateMachineAvailabilityForStart(): void {
     const machineId = this.machineHoursForm.get('machineId')?.value;
-    const date = this.machineHoursForm.get('date')?.value;
-    const startHour = this.machineHoursForm.get('startHour')?.value;
-    const endHour = this.machineHoursForm.get('endHour')?.value;
+    const date = new Date().toISOString().split('T')[0];
+    const currentHour = this.getDecimalHours(new Date());
     
-    if (machineId && date && startHour && endHour) {
+    if (machineId && this.currentOperator) {
       this.machineHoursService.validateMachineAvailability(
         machineId, 
         date, 
-        parseFloat(startHour), 
-        parseFloat(endHour)
+        currentHour, 
+        currentHour + 0.1 // Verificar disponibilidad inmediata
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           if (!response.success || !response.data) {
-            this.machineHoursForm.get('machineId')?.setErrors({ 'unavailable': true });
+            this.error = 'La máquina no está disponible en este momento';
+            this.stopTimer();
           }
         },
         error: (error) => {
           console.error('Error validando disponibilidad de máquina:', error);
+          this.error = 'Error al validar disponibilidad de máquina';
+          this.stopTimer();
         }
       });
     }
   }
   
   /**
-   * Validar disponibilidad de operador
+   * Refrescar datos maestros
    */
-  validateOperatorAvailability(): void {
-    const operatorId = this.machineHoursForm.get('operator')?.value;
-    const date = this.machineHoursForm.get('date')?.value;
-    const startHour = this.machineHoursForm.get('startHour')?.value;
-    const endHour = this.machineHoursForm.get('endHour')?.value;
-    
-    if (operatorId && date && startHour && endHour) {
-      this.machineHoursService.validateOperatorAvailability(
-        operatorId, 
-        date, 
-        parseFloat(startHour), 
-        parseFloat(endHour)
-      )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          if (!response.success || !response.data) {
-            this.machineHoursForm.get('operator')?.setErrors({ 'unavailable': true });
-          }
-        },
-        error: (error) => {
-          console.error('Error validando disponibilidad de operador:', error);
-        }
-      });
+  refreshMasterData(): void {
+    this.loadMasterData();
+  }
+  
+  /**
+   * Refrescar registros recientes
+   */
+  refreshRecentRecords(): void {
+    this.loadRecentRecords();
+  }
+  
+  /**
+   * Manejar cambio de máquina
+   */
+  onMachineChange(): void {
+    // Si el timer está activo, detenerlo por seguridad al cambiar máquina
+    if (this.isTimerActive) {
+      this.stopTimer();
     }
   }
   
@@ -397,31 +460,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Obtener nombre del operador por ID
-   */
-  getOperatorName(operatorId: string): string {
-    const operator = this.operators.find(o => o.id === operatorId);
-    return operator ? operator.name : 'Operador desconocido';
-  }
-  
-  /**
-   * Calcular horas totales automáticamente
-   */
-  calculateTotalHours(): number {
-    const startHour = this.machineHoursForm.get('startHour')?.value;
-    const endHour = this.machineHoursForm.get('endHour')?.value;
-    
-    if (startHour && endHour) {
-      return this.machineHoursService.calculateTotalHours(
-        parseFloat(startHour), 
-        parseFloat(endHour)
-      );
-    }
-    
-    return 0;
-  }
-  
-  /**
    * Verificar si un campo del formulario tiene errores
    */
   hasFieldError(fieldName: string): boolean {
@@ -439,18 +477,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       if (field.errors['required']) {
         return `${this.getFieldLabel(fieldName)} es requerido`;
       }
-      if (field.errors['min']) {
-        return `${this.getFieldLabel(fieldName)} debe ser mayor o igual a ${field.errors['min'].min}`;
-      }
-      if (field.errors['unavailable']) {
-        return `${this.getFieldLabel(fieldName)} no está disponible para el horario seleccionado`;
-      }
-    }
-    
-    // Error de validación de secuencia de horas
-    if (this.machineHoursForm.errors?.['hourSequence'] && 
-        (fieldName === 'endHour' || fieldName === 'startHour')) {
-      return 'La hora de fin debe ser mayor a la hora de inicio';
     }
     
     return '';
@@ -461,14 +487,10 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
-      'date': 'La fecha',
       'project': 'El proyecto',
       'machineType': 'El tipo de máquina',
       'machineId': 'La máquina',
-      'operator': 'El operador',
-      'startHour': 'La hora de inicio',
-      'endHour': 'La hora de fin',
-      'fuelUsed': 'El combustible usado'
+      'notes': 'Las observaciones'
     };
     
     return labels[fieldName] || fieldName;
@@ -482,49 +504,10 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Manejar cambio de máquina
-   */
-  onMachineChange(): void {
-    this.validateMachineAvailability();
-  }
-  
-  /**
-   * Manejar cambio de operador
-   */
-  onOperatorChange(): void {
-    this.validateOperatorAvailability();
-  }
-  
-  /**
-   * Manejar cambio de fecha
-   */
-  onDateChange(): void {
-    // Revalidar disponibilidad cuando cambia la fecha
-    this.validateMachineAvailability();
-    this.validateOperatorAvailability();
-  }
-  
-  /**
-   * Manejar cambio de horas
-   */
-  onHourChange(): void {
-    // Revalidar disponibilidad cuando cambian las horas
-    this.validateMachineAvailability();
-    this.validateOperatorAvailability();
-  }
-  
-  /**
    * Filtrar máquinas por estado activo
    */
   get activeMachines(): Machine[] {
     return this.machines.filter(machine => machine.status !== 'inactive');
-  }
-  
-  /**
-   * Filtrar operadores por estado activo
-   */
-  get activeOperators(): Operator[] {
-    return this.operators.filter(operator => operator.status !== 'inactive');
   }
   
   /**
@@ -535,16 +518,78 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Formatear horas para mostrar
+   * Formatear tiempo transcurrido para mostrar
    */
-  formatHours(hours: number): string {
-    return this.machineHoursService.formatHours(hours);
+  get formattedElapsedTime(): string {
+    const hours = this.elapsedHours.toString().padStart(2, '0');
+    const minutes = this.elapsedMinutes.toString().padStart(2, '0');
+    const seconds = this.elapsedSeconds.toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+  /**
+   * Formatear tiempo transcurrido en formato decimal
+   */
+  get elapsedTimeDecimal(): number {
+    return this.elapsedHours + (this.elapsedMinutes / 60) + (this.elapsedSeconds / 3600);
+  }
+
+  /**
+   * Obtener hora actual formateada
+   */
+  get formattedCurrentTime(): string {
+    return this.currentTime.toLocaleTimeString('es-ES', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+  }
+
+  /**
+   * Obtener fecha actual formateada
+   */
+  get formattedCurrentDate(): string {
+    return this.currentTime.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  /**
+   * Verificar si hay trabajo en progreso
+   */
+  get hasWorkInProgress(): boolean {
+    return this.isTimerActive && this.startTime !== null;
+  }
+
+  /**
+   * Obtener hora de inicio formateada
+   */
+  get formattedStartTime(): string {
+    if (!this.startTime) return '';
+    return this.startTime.toLocaleTimeString('es-ES', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+  trackByRecordId(index: number, record: MachineHours): string {
+    return record.id?.toString() || index.toString();
+  }
+  getTotalHoursToday(): number {
+    return this.recentRecords
+      .filter(record => record.date === new Date().toISOString().split('T')[0])
+      .reduce((total, record) => total + record.totalHours, 0);
   }
   
-  /**
-   * Calcular eficiencia de combustible
-   */
-  getFuelEfficiency(totalHours: number, fuelUsed: number): number {
-    return this.machineHoursService.calculateFuelEfficiency(totalHours, fuelUsed);
+  getUniqueMachinesToday(): number {
+    const today = new Date().toISOString().split('T')[0];
+    const machines = new Set(
+      this.recentRecords
+        .filter(record => record.date === today)
+        .map(record => record.machineId)
+    );
+    return machines.size;
   }
 }

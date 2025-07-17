@@ -9,7 +9,7 @@ import { catchError, retry } from 'rxjs/operators';
 })
 export class BaseApiService {
   // URL base de tu backend según el archivo txt
-  protected readonly apiUrl = 'http://localhost:8000/api';
+  protected readonly apiUrl = 'http://localhost:8000/api/v1';
   
   // Headers por defecto
   protected httpOptions = {
