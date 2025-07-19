@@ -1,8 +1,25 @@
-// src/app/core/services/api/base-api.service.ts
+// src/app/eviromet.ts/base-api.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, retry } from 'rxjs/operators';
+import { catchError, retry, map } from 'rxjs/operators';
+
+// Interfaces para las respuestas del backend
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  errors?: string[];
+}
+
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -21,7 +38,7 @@ export class BaseApiService {
 
   constructor(protected http: HttpClient) {}
 
-  // GET genérico
+  // GET genérico - Adaptado para manejar respuestas directas del backend
   protected get<T>(endpoint: string, params?: any): Observable<T> {
     let httpParams = new HttpParams();
     
@@ -40,38 +57,89 @@ export class BaseApiService {
     return this.http.get<T>(`${this.apiUrl}${endpoint}`, options)
       .pipe(
         retry(1),
+        map(response => {
+          // Tu backend a veces devuelve directamente los datos, otras veces con wrapper
+          // Intentamos normalizar la respuesta
+          if (this.isApiResponse(response)) {
+            return response as T;
+          }
+          // Si no es un ApiResponse, creamos uno
+          return {
+            success: true,
+            data: response,
+            message: 'Datos obtenidos correctamente'
+          } as unknown as T;
+        }),
         catchError(this.handleError)
       );
   }
 
-  // POST genérico
+  // POST genérico - Adaptado para crear wrapper de respuesta si es necesario
   protected post<T>(endpoint: string, data: any): Observable<T> {
     return this.http.post<T>(`${this.apiUrl}${endpoint}`, data, this.httpOptions)
       .pipe(
         retry(1),
+        map(response => {
+          if (this.isApiResponse(response)) {
+            return response as T;
+          }
+          return {
+            success: true,
+            data: response,
+            message: 'Creado correctamente'
+          } as unknown as T;
+        }),
         catchError(this.handleError)
       );
   }
 
-  // PUT genérico
+  // PUT genérico - Adaptado para crear wrapper de respuesta si es necesario
   protected put<T>(endpoint: string, data: any): Observable<T> {
     return this.http.put<T>(`${this.apiUrl}${endpoint}`, data, this.httpOptions)
       .pipe(
         retry(1),
+        map(response => {
+          if (this.isApiResponse(response)) {
+            return response as T;
+          }
+          return {
+            success: true,
+            data: response,
+            message: 'Actualizado correctamente'
+          } as unknown as T;
+        }),
         catchError(this.handleError)
       );
   }
 
-  // DELETE genérico
+  // DELETE genérico - Adaptado para crear wrapper de respuesta
   protected delete<T>(endpoint: string): Observable<T> {
     return this.http.delete<T>(`${this.apiUrl}${endpoint}`, this.httpOptions)
       .pipe(
         retry(1),
+        map(response => {
+          if (this.isApiResponse(response)) {
+            return response as T;
+          }
+          return {
+            success: true,
+            data: response,
+            message: 'Eliminado correctamente'
+          } as unknown as T;
+        }),
         catchError(this.handleError)
       );
   }
 
-  // Manejo de errores
+  // Método helper para verificar si la respuesta tiene el formato ApiResponse
+  private isApiResponse(response: any): boolean {
+    return response && 
+           typeof response === 'object' && 
+           'success' in response && 
+           'data' in response;
+  }
+
+  // Manejo de errores mejorado
   private handleError(error: HttpErrorResponse) {
     let errorMessage = 'Ocurrió un error desconocido';
     
@@ -82,27 +150,34 @@ export class BaseApiService {
       // Error del lado del servidor
       console.error(`Código de error: ${error.status}, Mensaje: ${error.message}`);
       
-      switch (error.status) {
-        case 400:
-          errorMessage = 'Solicitud incorrecta';
-          break;
-        case 401:
-          errorMessage = 'No autorizado';
-          break;
-        case 403:
-          errorMessage = 'Acceso prohibido';
-          break;
-        case 404:
-          errorMessage = 'Recurso no encontrado';
-          break;
-        case 422:
-          errorMessage = 'Datos de entrada inválidos';
-          break;
-        case 500:
-          errorMessage = 'Error interno del servidor';
-          break;
-        default:
-          errorMessage = `Error ${error.status}: ${error.message}`;
+      // Verificar si el error tiene el formato de tu backend
+      if (error.error && error.error.detail) {
+        errorMessage = error.error.detail;
+      } else if (error.error && error.error.message) {
+        errorMessage = error.error.message;
+      } else {
+        switch (error.status) {
+          case 400:
+            errorMessage = 'Solicitud incorrecta';
+            break;
+          case 401:
+            errorMessage = 'No autorizado';
+            break;
+          case 403:
+            errorMessage = 'Acceso prohibido';
+            break;
+          case 404:
+            errorMessage = 'Recurso no encontrado';
+            break;
+          case 422:
+            errorMessage = 'Datos de entrada inválidos';
+            break;
+          case 500:
+            errorMessage = 'Error interno del servidor';
+            break;
+          default:
+            errorMessage = `Error ${error.status}: ${error.message}`;
+        }
       }
     }
     

@@ -5,31 +5,64 @@ import { WorkHoursComponent } from './work-hours/work-hours.component';
 import { MachineHoursComponent} from './machine-hours/machine-hours.component';  
 import { EntregaAridosComponent } from './entrega-aridos/entrega-aridos.component';
 import { RegistroGastosComponent } from './registro-gastos/registro-gastos.component';
+import { authGuard } from '../../core/auth/auth.guard';
 
 export const operatorRoutes: Routes = [
   {
     path: '',
     component: OperatorLayoutComponent,
+    canActivate: [authGuard], // ✅ Proteger todas las rutas del operario
+    data: { role: 'operario' }, // ✅ Especificar que requiere rol de operario
     children: [
+      {
+        path: '',
+        redirectTo: 'dashboard',
+        pathMatch: 'full'
+      },
       {
         path: 'dashboard',
         component: DashboardComponent,
+        data: { 
+          title: 'Panel Principal',
+          description: 'Resumen de actividades y accesos rápidos'
+        }
       },
       {
         path: 'work-hours',
-        component: WorkHoursComponent, // ✅ ruta de registro horas laborales
+        component: WorkHoursComponent,
+        data: { 
+          title: 'Registro Jornada Laboral',
+          description: 'Fichar entrada y salida, gestionar horas de trabajo'
+        }
       },
       {
         path: 'machine-hours',
-        component: MachineHoursComponent, // ✅ ruta de registro horas de máquina
+        component: MachineHoursComponent,
+        data: { 
+          title: 'Registro Horas Máquina',
+          description: 'Controlar horas de uso de maquinaria pesada'
+        }
       },
       {
         path: 'entrega-aridos',
-        component: EntregaAridosComponent, // ✅ ruta de entrega de áridos
+        component: EntregaAridosComponent,
+        data: { 
+          title: 'Entrega de Áridos',
+          description: 'Registrar entregas de materiales de construcción'
+        }
       },
       {
         path: 'registro-gastos',
-        component:RegistroGastosComponent
+        component: RegistroGastosComponent,
+        data: { 
+          title: 'Registro de Gastos',
+          description: 'Documentar gastos operativos y administrativos'
+        }
+      },
+      // ✅ Ruta de fallback para rutas no encontradas dentro del módulo operario
+      {
+        path: '**',
+        redirectTo: 'dashboard'
       }
     ]
   }

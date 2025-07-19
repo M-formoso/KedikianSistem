@@ -1,25 +1,14 @@
-/*************  ✨ Windsurf Command ⭐  *************/
-/*******  29f91e10-8878-45b6-b662-8fbc8a47fb1b  *******/
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 
-// Imports de servicios 
-import { ReporteLaboralService } from '../../../eviromet.ts/reporte-laboral.service';
-import { UsuarioService } from '../../../eviromet.ts/usiario.service';
+// Imports de servicios actualizados
+import { ReporteLaboralService, ReporteLaboralCreate } from '../../../eviromet.ts/reporte-laboral.service';
+import { UsuarioService, Usuario } from '../../../eviromet.ts/usiario.service';
 
-// Interfaces locales (ya que los servicios no las exportan)
-interface WorkHoursRequest {
-  fecha: string;
-  horaInicio: string;
-  tiempoDescanso: number;
-  usuarioId: string;
-  notas: string;
-  horaInicioTimestamp: Date;
-}
-
+// Interfaces locales adaptadas al backend
 interface WorkHoursRecord {
   id: string;
   fecha: string;
@@ -32,16 +21,6 @@ interface WorkHoursRecord {
   estado: string;
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface Usuario {
-  id: string;
-  nombre: string;
-  apellido: string;
-  email: string;
-  telefono?: string;
-  rol: string;
-  isActive: boolean;
 }
 
 interface ClockStatus {
@@ -94,11 +73,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     private reporteLaboralService: ReporteLaboralService,
     private usuarioService: UsuarioService
   ) {
-  /**
-   * Carga los datos maestros y los registros recientes al iniciarse el componente.
-   * También ajusta la tabla para dispositivos móviles y verifica si hay un registro
-   * de fichaje activo.
-   */
     this.initializeForms();
   }
 
@@ -151,28 +125,39 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.loadingMasterData = true;
     this.error = '';
 
-    // Cargar solo usuarios (sin proyectos)
+    // Cargar usuarios y usuario actual
     forkJoin({
-      usuarios: this.usuarioService.getUsuarios({ activo: true }), // Ajustado según tu servicio
-      // currentUser: this.usuarioService.getCurrentUser() // Comentado - implementar si existe
+      usuarios: this.usuarioService.getActiveUsers(),
+      currentUser: this.usuarioService.getCurrentUser()
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (responses: any) => {
-        // Verificar que todas las respuestas sean exitosas
-        if (responses.usuarios && responses.usuarios.success) {
-          this.usuarios = responses.usuarios.data || [];
+        // Manejar respuesta de usuarios
+        if (responses.usuarios) {
+          if (responses.usuarios.success && responses.usuarios.data) {
+            this.usuarios = responses.usuarios.data;
+          } else if (Array.isArray(responses.usuarios)) {
+            // Si el backend devuelve directamente el array
+            this.usuarios = responses.usuarios;
+          }
         }
-        // Comentado hasta implementar getCurrentUser
-        /*
-        if (responses.currentUser && responses.currentUser.success) {
-          this.currentUser = responses.currentUser.data;
+
+        // Manejar respuesta de usuario actual
+        if (responses.currentUser) {
+          if (responses.currentUser.success && responses.currentUser.data) {
+            this.currentUser = responses.currentUser.data;
+          } else if (responses.currentUser.id) {
+            // Si el backend devuelve directamente el usuario
+            this.currentUser = responses.currentUser;
+          }
+          
           // Pre-seleccionar el usuario actual
           if (this.currentUser) {
             this.clockInForm.patchValue({ usuario: this.currentUser.id });
           }
         }
-        */
+        
         this.loadingMasterData = false;
       },
       error: (error: any) => {
@@ -187,13 +172,20 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Cargar registros recientes de horas trabajadas
    */
   loadRecentWorkHours(): void {
-    this.reporteLaboralService.getReportes({ limit: 10, orderBy: 'fecha', order: 'desc' })
+    this.reporteLaboralService.getReportesRecientes(10)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response: any) => {
+        let reportes = [];
+        
         if (response && response.success && response.data) {
-          this.recentWorkHours = response.data;
+          reportes = response.data;
+        } else if (Array.isArray(response)) {
+          reportes = response;
         }
+        
+        // Convertir los reportes al formato que espera la tabla
+        this.recentWorkHours = this.reporteLaboralService.formatForTable(reportes);
       },
       error: (error: any) => {
         console.error('Error cargando registros recientes:', error);
@@ -235,7 +227,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const currentTime = `${hours}:${minutes}`;
 
     const formValues = this.clockInForm.value;
-    const workHoursData: WorkHoursRequest = {
+    const workHoursData: ReporteLaboralCreate = {
       fecha: new Date().toISOString().split('T')[0],
       horaInicio: currentTime,
       tiempoDescanso: 0, // Se establecerá al fichar salida
@@ -249,14 +241,22 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     .subscribe({
       next: (response: any) => {
         this.loading = false;
-        if (response && response.success) {
-          // Crear estado de fichaje activo (sin proyecto)
+        
+        let reporteCreado = null;
+        if (response && response.success && response.data) {
+          reporteCreado = response.data;
+        } else if (response && response.id) {
+          reporteCreado = response;
+        }
+
+        if (reporteCreado) {
+          // Crear estado de fichaje activo
           this.activeClockIn = {
             isActive: true,
             startTime: currentTime,
             startTimestamp: now,
             usuarioId: formValues.usuario,
-            reporteId: response.data.id
+            reporteId: reporteCreado.id?.toString()
           };
 
           // Guardar en localStorage para persistencia
@@ -279,7 +279,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             this.success = false;
           }, 3000);
         } else {
-          this.error = (response && response.message) || 'Error al iniciar sesión de trabajo';
+          this.error = 'Error al crear el fichaje: respuesta inválida del servidor';
         }
       },
       error: (error: any) => {
@@ -294,7 +294,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Fichar salida
    */
   clockOut(): void {
-    if (!this.activeClockIn) return;
+    if (!this.activeClockIn || !this.activeClockIn.reporteId) return;
 
     this.loading = true;
     this.error = '';
@@ -316,7 +316,15 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     .subscribe({
       next: (response: any) => {
         this.loading = false;
+        
+        let success = false;
         if (response && response.success) {
+          success = true;
+        } else if (response && response.id) {
+          success = true;
+        }
+
+        if (success) {
           // Limpiar el estado activo
           clearInterval(this.elapsedTimeInterval);
           localStorage.removeItem('activeWorkClockIn');
@@ -336,7 +344,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             this.success = false;
           }, 3000);
         } else {
-          this.error = (response && response.message) || 'Error al finalizar sesión de trabajo';
+          this.error = 'Error al finalizar fichaje: respuesta inválida del servidor';
         }
       },
       error: (error: any) => {
@@ -407,8 +415,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Obtener nombre del usuario por ID
    */
   getUsuarioName(usuarioId: string): string {
-    const usuario = this.usuarios.find(u => u.id === usuarioId);
-    return usuario ? `${usuario.nombre} ${usuario.apellido}` : 'Usuario desconocido';
+    const usuario = this.usuarios.find(u => u.id?.toString() === usuarioId);
+    return usuario ? usuario.nombre : 'Usuario desconocido';
   }
 
   /**
@@ -461,7 +469,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Filtrar usuarios activos
    */
   get activeUsuarios(): Usuario[] {
-    return this.usuarios.filter(usuario => usuario.isActive !== false);
+    return this.usuarios.filter(usuario => usuario.estado !== false);
   }
 
   /**
@@ -499,13 +507,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Obtener reportes por estado
-   */
-  getWorkHoursByStatus(status: string): WorkHoursRecord[] {
-    return this.recentWorkHours.filter(workHours => workHours.estado === status);
-  }
-
-  /**
    * Verificar si puede fichar entrada
    */
   canClockIn(): boolean {
@@ -520,14 +521,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Obtener información del fichaje actual
-   */
-  getCurrentClockInfo(): string {
-    if (!this.activeClockIn) return '';
-    return `Inicio: ${this.activeClockIn.startTime}`;
-  }
-
-  /**
    * TrackBy function para optimizar la renderización de la tabla
    */
   trackByWorkHours(index: number, workHours: WorkHoursRecord): string {
@@ -538,9 +531,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Editar registro de horas trabajadas
    */
   editWorkHours(workHours: WorkHoursRecord): void {
-    // Implementar lógica de edición
     console.log('Editando registro:', workHours);
-    // Aquí puedes abrir un modal o navegar a una página de edición
+    // Implementar lógica de edición
   }
 
   /**
@@ -553,7 +545,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (response: any) => {
+            let success = false;
             if (response && response.success) {
+              success = true;
+            } else if (response && response.message) {
+              success = true;
+            }
+
+            if (success) {
               this.loadRecentWorkHours(); // Recargar la lista
               this.success = true;
               setTimeout(() => {
@@ -635,7 +634,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return Math.min(100, Math.round((diffHours / 9) * 100));
   }
 
-  // ============ MÉTODOS DE CALENDARIO ============
+  // ============ MÉTODOS DE CALENDARIO (mantenidos para compatibilidad) ============
 
   /**
    * Obtener mes y año actual del calendario
@@ -678,15 +677,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const year = this.currentCalendarDate.getFullYear();
     const month = this.currentCalendarDate.getMonth();
     
-    // Primer día del mes y último día del mes
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     
-    // Días a mostrar del mes anterior para completar la semana
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
-    // Días a mostrar del mes siguiente para completar la semana
     const endDate = new Date(lastDay);
     endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
     
@@ -724,8 +720,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Obtener fecha del último pago
    */
   getLastPaymentDate(): Date {
-    // Implementar lógica según tu sistema de pagos
-    // Por ejemplo, último día del mes anterior
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 0);
   }
@@ -750,14 +744,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Obtener monto pendiente de pago
    */
   getPendingAmount(): number {
-    // Implementar según tu lógica de cálculo de pagos
-    // Ejemplo: horas * tarifa por hora
     const hoursWorked = this.getCurrentMonthHours();
-    const hourlyRate = 5000; // Ejemplo: $5000 por hora - ajustar según tu sistema
+    const hourlyRate = 5000; // Ejemplo: $5000 por hora
     return hoursWorked * hourlyRate;
   }
-
-  // ============ MÉTODOS DE ESTADÍSTICAS ============
 
   /**
    * Obtener promedio de horas por día
@@ -805,8 +795,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Verificar si es día de pago
    */
   private isPaymentDay(date: Date): boolean {
-    // Implementar lógica según tu sistema
-    // Ejemplo: último día del mes
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
     return nextDay.getDate() === 1;
