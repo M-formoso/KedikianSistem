@@ -5,13 +5,24 @@ import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin, interval } from 'rxjs';
 import { 
   MachineHoursService,
-  MachineHoursRequest,
   MachineHours,
   Project,
   MachineType,
   Machine,
   Operator
 } from '../../../core/services/machine-hours.service';
+
+// Interface para los datos del formulario
+interface MachineHoursRequest {
+  date: string;
+  machineType: string;
+  machineId: string;
+  startHour: number;
+  endHour: number;
+  project: string;
+  operator: string;
+  notes?: string;
+}
 
 @Component({
   selector: 'app-machine-hours',
@@ -62,7 +73,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
-    //this.loadCurrentOperator();
+    this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
@@ -94,22 +105,15 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   /**
    * Cargar operador actual de la sesión
    */
-  //private loadCurrentOperator(): void {
-    //this.machineHoursService.getCurrentOperator()
-      //.pipe(takeUntil(this.destroy$))
-      //.subscribe({
-        //next: (response) => {
-          //if (response.success && response.data) {
-            //this.currentOperator = response.data;
-         // }
-       // },
-        //error: (error) => {
-         // this.error = 'Error al cargar datos del operador actual';
-         // console.error('Error cargando operador actual:', error);
-        //}
-     // });
-    
- // }
+  private loadCurrentOperator(): void {
+    // Crear operador mock por ahora
+    this.currentOperator = {
+      id: 999,
+      nombre: 'Operario Test',
+      email: 'operario@test.com',
+      roles: 'operario'
+    };
+  }
 
   /**
    * Actualizar reloj en tiempo real
@@ -211,14 +215,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     
     const formValues = this.machineHoursForm.value;
     const machineHoursData: MachineHoursRequest = {
-      date: new Date().toISOString().split('T')[0], // Fecha actual
+      date: new Date().toISOString().split('T')[0],
       machineType: formValues.machineType,
       machineId: formValues.machineId,
       startHour: startHour,
       endHour: endHour,
       project: formValues.project,
-      operator: this.currentOperator.id,
-      fuelUsed: 0, // Ya no se usa
+      operator: this.currentOperator.id.toString(),
       notes: formValues.notes || ''
     };
 
@@ -236,7 +239,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
               this.success = false;
             }, 5000);
           } else {
-            this.error = response.message || 'Error al guardar el registro de horas';
+            this.error = 'Error al guardar el registro de horas';
           }
         },
         error: (error) => {
@@ -264,12 +267,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.elapsedMinutes = 0;
     this.elapsedSeconds = 0;
     
-    // Mantener solo los campos que no son dependientes
     const currentProject = this.machineHoursForm.get('project')?.value;
     
     this.machineHoursForm.reset({
       date: new Date().toISOString().split('T')[0],
-      project: currentProject, // Mantener proyecto seleccionado
+      project: currentProject,
       machineType: '',
       machineId: '',
       notes: ''
@@ -295,7 +297,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.loadingMasterData = true;
     this.error = '';
     
-    // Cargar todos los datos maestros en paralelo (sin operadores)
     forkJoin({
       projects: this.machineHoursService.getProjects(),
       machineTypes: this.machineHoursService.getMachineTypes(),
@@ -351,7 +352,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const machineTypeId = this.machineHoursForm.get('machineType')?.value;
     
     if (machineTypeId) {
-      // Cargar máquinas por tipo
       this.machineHoursService.getMachinesByType(machineTypeId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
@@ -366,12 +366,10 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         });
     }
     
-    // Limpiar selección de máquina
     this.machineHoursForm.patchValue({
       machineId: ''
     });
 
-    // Si el timer está activo, detenerlo por seguridad
     if (this.isTimerActive) {
       this.stopTimer();
     }
@@ -390,7 +388,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         machineId, 
         date, 
         currentHour, 
-        currentHour + 0.1 // Verificar disponibilidad inmediata
+        currentHour + 0.1
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -427,7 +425,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Manejar cambio de máquina
    */
   onMachineChange(): void {
-    // Si el timer está activo, detenerlo por seguridad al cambiar máquina
     if (this.isTimerActive) {
       this.stopTimer();
     }
@@ -439,8 +436,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Obtener nombre del proyecto por ID
    */
   getProjectName(projectId: string): string {
-    const project = this.projects.find(p => p.id === projectId);
-    return project ? project.name : 'Proyecto desconocido';
+    const project = this.projects.find(p => p.id.toString() === projectId);
+    return project ? project.nombre : 'Proyecto desconocido';
   }
   
   /**
@@ -455,8 +452,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Obtener nombre de la máquina por ID
    */
   getMachineName(machineId: string): string {
-    const machine = this.machines.find(m => m.id === machineId);
-    return machine ? machine.name : 'Máquina desconocida';
+    const machine = this.machines.find(m => m.id.toString() === machineId);
+    return machine ? machine.nombre : 'Máquina desconocida';
   }
   
   /**
@@ -507,14 +504,14 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Filtrar máquinas por estado activo
    */
   get activeMachines(): Machine[] {
-    return this.machines.filter(machine => machine.status !== 'inactive');
+    return this.machines.filter(machine => machine.estado === true);
   }
   
   /**
    * Filtrar proyectos por estado activo
    */
   get activeProjects(): Project[] {
-    return this.projects.filter(project => project.status !== 'inactive');
+    return this.projects.filter(project => project.estado === true);
   }
   
   /**
@@ -574,9 +571,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       minute: '2-digit' 
     });
   }
+  
   trackByRecordId(index: number, record: MachineHours): string {
     return record.id?.toString() || index.toString();
   }
+  
   getTotalHoursToday(): number {
     return this.recentRecords
       .filter(record => record.date === new Date().toISOString().split('T')[0])

@@ -5,7 +5,7 @@
     <div class="operator-info" *ngIf="currentOperator">
       <div class="operator-badge">
         <span class="operator-icon">👷</span>
-        <span class="operator-name">{{ currentOperator.name }}</span>
+        <span class="operator-name">{{ currentOperator.nombre }}</span>
       </div>
       <div class="date-time-info">
         <div class="current-date">{{ formattedCurrentDate }}</div>
@@ -62,7 +62,7 @@
             [disabled]="isTimerActive">
             <option value="">Seleccione un proyecto</option>
             <option *ngFor="let project of activeProjects" [value]="project.id">
-              {{ project.name }}
+              {{ project.nombre }}
             </option>
           </select>
           <div *ngIf="hasFieldError('project')" class="error-message">
@@ -102,7 +102,7 @@
             (change)="onMachineChange()">
             <option value="">Seleccione una máquina</option>
             <option *ngFor="let machine of activeMachines" [value]="machine.id">
-              {{ machine.name }} - {{ machine.model }}
+              {{ machine.nombre }}
             </option>
           </select>
           <div *ngIf="hasFieldError('machineId')" class="error-message">
