@@ -14,7 +14,7 @@ class UsuarioBase(BaseModel):
     nombre: str
     email: EmailStr
     estado: bool
-    roles: RolEnum  # Un solo rol por usuario, más simple
+    roles: str  # Un solo rol por usuario, más simple
 
 class UsuarioCreate(UsuarioBase):
     hash_contrasena: str

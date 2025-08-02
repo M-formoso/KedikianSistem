@@ -4,8 +4,7 @@ import { Router } from '@angular/router';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
-import { UsuarioService, Usuario } from '../../eviromet.ts/usiario.service';
-// Extender la interfaz Usuario para agregar el token
+
 // Interface específica para el frontend (sin enums)
 export interface UsuarioConToken {
   id?: number;
@@ -38,11 +37,11 @@ export class AuthService {
 
   constructor(
     private router: Router,
-    private usuarioService: UsuarioService,
     private http: HttpClient
   ) {
     this.cargarUsuarioDesdeAlmacenamiento();
   }
+
   private cargarUsuarioDesdeAlmacenamiento(): void {
     const usuarioAlmacenado = localStorage.getItem('usuarioActual');
     if (usuarioAlmacenado) {
@@ -62,15 +61,10 @@ export class AuthService {
    * Verificar si el usuario almacenado sigue siendo válido
    */
   private verificarUsuarioValido(userId: number): void {
-    this.usuarioService.getUsuario(userId).subscribe({
-      next: (response: any) => {
-        let usuario = null;
-        if (response && response.success && response.data) {
-          usuario = response.data;
-        } else if (response && response.id) {
-          usuario = response;
-        }
-
+    if (!userId) return;
+    
+    this.http.get<UsuarioConToken>(`${environment.apiUrl}/usuarios/${userId}`).subscribe({
+      next: (usuario: UsuarioConToken) => {
         if (!usuario || !usuario.estado) {
           // Usuario no válido, cerrar sesión
           this.cerrarSesion();
@@ -135,9 +129,6 @@ export class AuthService {
     );
   }
 
-  /**
-   * Crear usuario mock para operario (fallback)
-   */
   /**
    * Crear usuario mock para operario (fallback)
    */
@@ -272,16 +263,8 @@ export class AuthService {
     
     if (usuario && usuario.id) {
       // Verificar que el usuario sigue siendo válido
-      return this.usuarioService.getUsuario(usuario.id).pipe(
-        map((response: any) => {
-          let usuarioActualizado = null;
-          
-          if (response && response.success && response.data) {
-            usuarioActualizado = response.data;
-          } else if (response && response.id) {
-            usuarioActualizado = response;
-          }
-
+      return this.http.get<UsuarioConToken>(`${environment.apiUrl}/usuarios/${usuario.id}`).pipe(
+        map((usuarioActualizado: UsuarioConToken) => {
           if (usuarioActualizado && usuarioActualizado.estado) {
             const usuarioConToken: UsuarioConToken = {
               ...usuarioActualizado,
@@ -324,16 +307,8 @@ export class AuthService {
       fecha_creacion: new Date().toISOString()
     };
 
-    return this.usuarioService.createUsuario(nuevoUsuario).pipe(
-      map((response: any) => {
-        let usuarioCreado = null;
-        
-        if (response && response.success && response.data) {
-          usuarioCreado = response.data;
-        } else if (response && response.id) {
-          usuarioCreado = response;
-        }
-    
+    return this.http.post<UsuarioConToken>(`${environment.apiUrl}/usuarios`, nuevoUsuario).pipe(
+      map((usuarioCreado: UsuarioConToken) => {
         if (usuarioCreado) {
           const usuarioConToken: UsuarioConToken = {
             ...usuarioCreado,
@@ -350,23 +325,15 @@ export class AuthService {
   /**
    * Actualizar perfil del usuario actual
    */
-  actualizarPerfil(datosActualizacion: Partial<Usuario>): Observable<UsuarioConToken> {
+  actualizarPerfil(datosActualizacion: Partial<UsuarioConToken>): Observable<UsuarioConToken> {
     const usuario = this.usuarioActualSubject.value;
     
     if (!usuario || !usuario.id) {
       return throwError(() => new Error('No hay usuario autenticado'));
     }
 
-    return this.usuarioService.updateUsuario(usuario.id, datosActualizacion).pipe(
-      map((response: any) => {
-        let usuarioActualizado = null;
-        
-        if (response && response.success && response.data) {
-          usuarioActualizado = response.data;
-        } else if (response && response.id) {
-          usuarioActualizado = response;
-        }
-
+    return this.http.put<UsuarioConToken>(`${environment.apiUrl}/usuarios/${usuario.id}`, datosActualizacion).pipe(
+      map((usuarioActualizado: UsuarioConToken) => {
         if (usuarioActualizado) {
           const usuarioConToken: UsuarioConToken = {
             ...usuarioActualizado,
