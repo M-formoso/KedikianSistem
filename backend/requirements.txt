@@ -7,3 +7,5 @@ passlib[bcrypt]
 pydantic
 pandas
 openpyxl
+psycopg2-binary
+gunicorn==23.0.0

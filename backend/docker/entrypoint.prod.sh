@@ -2,4 +2,8 @@
 
 echo "Starting FastAPI application..."
 
-gunicorn -c gunicorn.conf.py main:app
+# Cambiar al directorio donde está main.py
+cd app
+
+# Ejecutar gunicorn desde el directorio correcto
+gunicorn -c ../gunicorn.conf.py main:app

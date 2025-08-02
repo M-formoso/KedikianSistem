@@ -24,6 +24,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         print(f"❌ LOGIN ERROR - {e}")
         raise e
 
+@router.get("/me", response_model=UsuarioOut)
+def get_current_user_info(current_user: UsuarioOut = Depends(get_current_user)):
+    """Obtener información del usuario autenticado"""
+    return current_user
+
 @router.get("/me")
 def get_current_user_info(current_user: UsuarioOut = Depends(get_current_user)):
     return current_user

@@ -32,9 +32,6 @@ def authenticate_user(db: Session, email: str, password: str) -> Usuario:
     return user
 
 def login_user(db: Session, email: str, password: str):
-    # Decodificar credenciales en base64
-    email_decoded = base64.b64decode(email).decode('utf-8')
-    password_decoded = base64.b64decode(password).decode('utf-8')
-    user = authenticate_user(db, email_decoded, password_decoded)
+    user = authenticate_user(db, email, password)
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}

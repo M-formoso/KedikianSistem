@@ -3,11 +3,18 @@ from datetime import datetime
 from typing import List, Optional, Union
 
 # Usuario
+from enum import Enum
+
+class RolEnum(str, Enum):
+    OPERARIO = "operario"
+    ADMINISTRADOR = "administrador"
+    SUPERVISOR = "supervisor"
+
 class UsuarioBase(BaseModel):
     nombre: str
     email: EmailStr
     estado: bool
-    roles: List[str]
+    roles: RolEnum  # Un solo rol por usuario, más simple
 
 class UsuarioCreate(UsuarioBase):
     hash_contrasena: str

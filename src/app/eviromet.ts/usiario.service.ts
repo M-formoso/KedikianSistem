@@ -3,13 +3,19 @@ import { Observable, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { BaseApiService } from './base-api.service';
 
+export enum RolEnum {
+  OPERARIO = 'operario',
+  ADMINISTRADOR = 'administrador',
+  SUPERVISOR = 'supervisor'
+}
+
 export interface Usuario {
   id?: number;
   nombre: string;
   email: string;
   hash_contrasena?: string;
   estado: boolean;
-  roles: string;
+  roles: RolEnum;
   fecha_creacion?: string;
 }
 
@@ -60,10 +66,22 @@ export class UsuarioService extends BaseApiService {
   getActiveUsers(): Observable<any> {
     return this.getUsuarios().pipe(
       map(response => {
-        if (Array.isArray(response)) {
-          return response.filter(user => user.estado === true);
+        let usuarios = [];
+        
+        if (response && response.success && response.data) {
+          usuarios = response.data;
+        } else if (Array.isArray(response)) {
+          usuarios = response;
+        } else {
+          return { success: true, data: [] };
         }
-        return response;
+        
+        const activeUsers = usuarios.filter((user: Usuario) => user.estado === true);
+        return { success: true, data: activeUsers };
+      }),
+      catchError(error => {
+        console.error('Error obteniendo usuarios activos:', error);
+        return of({ success: false, data: [], message: error.message });
       })
     );
   }

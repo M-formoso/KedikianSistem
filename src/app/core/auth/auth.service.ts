@@ -1,12 +1,21 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
 import { Router } from '@angular/router';
-import { map, catchError } from 'rxjs/operators';
+import { map, catchError, switchMap } from 'rxjs/operators';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { UsuarioService, Usuario } from '../../eviromet.ts/usiario.service';
-
 // Extender la interfaz Usuario para agregar el token
-export interface UsuarioConToken extends Usuario {
-  token?: string; // Para el frontend
+// Interface específica para el frontend (sin enums)
+export interface UsuarioConToken {
+  id?: number;
+  nombre: string;
+  email: string;
+  hash_contrasena?: string;
+  estado: boolean;
+  roles: string; // String simple en el frontend
+  fecha_creacion: string;
+  token?: string;
 }
 
 // Alias para mantener compatibilidad con componentes que usan inglés
@@ -29,11 +38,11 @@ export class AuthService {
 
   constructor(
     private router: Router,
-    private usuarioService: UsuarioService
+    private usuarioService: UsuarioService,
+    private http: HttpClient
   ) {
     this.cargarUsuarioDesdeAlmacenamiento();
   }
-
   private cargarUsuarioDesdeAlmacenamiento(): void {
     const usuarioAlmacenado = localStorage.getItem('usuarioActual');
     if (usuarioAlmacenado) {
@@ -85,59 +94,50 @@ export class AuthService {
   }
 
   private iniciarSesion(credenciales: CredencialesLogin): Observable<UsuarioConToken> {
-    // Por ahora mantenemos el sistema mock pero mejorado
-    // TODO: Implementar autenticación real cuando el backend tenga JWT
-    
-    return this.usuarioService.getUsuarios({ search: credenciales.nombreUsuario }).pipe(
-      map((response: any) => {
-        let usuarios = [];
+    const formData = new FormData();
+    formData.append('username', credenciales.nombreUsuario);
+    formData.append('password', credenciales.contraseña);
+
+    return this.http.post<{access_token: string, token_type: string}>(`${environment.apiUrl}/auth/login`, formData).pipe(
+      switchMap((loginResponse) => {
+        // Guardar token
+        const token = loginResponse.access_token;
         
-        if (response && response.success && response.data) {
-          usuarios = response.data;
-        } else if (Array.isArray(response)) {
-          usuarios = response;
-        }
-
-        // Buscar usuario por nombre o email
-        const usuario = usuarios.find((u: Usuario) => 
-          u.nombre.toLowerCase() === credenciales.nombreUsuario.toLowerCase() ||
-          u.email.toLowerCase() === credenciales.nombreUsuario.toLowerCase()
-        );
-
-        if (usuario && usuario.estado) {
-          // Por ahora, aceptamos cualquier contraseña que no esté vacía
-          // TODO: Implementar verificación real de contraseña
-          if (credenciales.contraseña && credenciales.contraseña.trim() !== '') {
+        return this.http.get<UsuarioConToken>(`${environment.apiUrl}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).pipe(
+          map((usuario) => {
             const usuarioConToken: UsuarioConToken = {
               ...usuario,
-              token: 'fake-jwt-token-' + usuario.id
+              token: token
             };
 
             localStorage.setItem('usuarioActual', JSON.stringify(usuarioConToken));
             this.usuarioActualSubject.next(usuarioConToken);
             
             return usuarioConToken;
-          }
-        }
-
-        // Si no encontramos usuario o credenciales inválidas, crear usuario mock para testing
-        if (credenciales.nombreUsuario === 'operario' && credenciales.contraseña === '1234') {
-          return this.crearUsuarioMockOperario();
-        }
-
-        if (credenciales.nombreUsuario === 'admin' && credenciales.contraseña === '1234') {
-          return this.crearUsuarioMockAdmin();
-        }
-
-        throw new Error('Credenciales inválidas');
+          })
+        );
       }),
       catchError((error) => {
         console.error('Error en login:', error);
-        return throwError(() => new Error('Error al iniciar sesión: ' + error.message));
+        
+        // Fallback a usuarios mock solo para desarrollo
+        if (credenciales.nombreUsuario === 'operario' && credenciales.contraseña === '1234') {
+          return of(this.crearUsuarioMockOperario());
+        }
+        if (credenciales.nombreUsuario === 'admin' && credenciales.contraseña === '1234') {
+          return of(this.crearUsuarioMockAdmin());
+        }
+
+        return throwError(() => new Error('Credenciales inválidas'));
       })
     );
   }
 
+  /**
+   * Crear usuario mock para operario (fallback)
+   */
   /**
    * Crear usuario mock para operario (fallback)
    */
@@ -147,7 +147,7 @@ export class AuthService {
       nombre: 'Operario Test',
       email: 'operario@test.com',
       estado: true,
-      roles: 'operario',
+      roles: 'operario', // String simple, no enum en el frontend
       fecha_creacion: new Date().toISOString(),
       token: 'fake-jwt-token-operario'
     };
@@ -167,7 +167,7 @@ export class AuthService {
       nombre: 'Admin Test',
       email: 'admin@test.com',
       estado: true,
-      roles: 'administrador',
+      roles: 'administrador', // String simple, no enum en el frontend
       fecha_creacion: new Date().toISOString(),
       token: 'fake-jwt-token-admin'
     };
@@ -318,7 +318,7 @@ export class AuthService {
     const nuevoUsuario = {
       nombre: datosUsuario.nombre,
       email: datosUsuario.email,
-      hash_contrasena: datosUsuario.contraseña, // En un sistema real, esto se hasharía
+      hash_contrasena: datosUsuario.contraseña,
       estado: true,
       roles: datosUsuario.roles || 'operario',
       fecha_creacion: new Date().toISOString()
@@ -333,17 +333,17 @@ export class AuthService {
         } else if (response && response.id) {
           usuarioCreado = response;
         }
-
+    
         if (usuarioCreado) {
-          return usuarioCreado;
+          const usuarioConToken: UsuarioConToken = {
+            ...usuarioCreado,
+            token: 'fake-token-' + usuarioCreado.id
+          };
+          return usuarioConToken;
         } else {
           throw new Error('Error al crear usuario');
         }
       }),
-      catchError((error) => {
-        console.error('Error registrando usuario:', error);
-        return throwError(() => new Error('Error al registrar usuario: ' + error.message));
-      })
     );
   }
 
