@@ -5,13 +5,14 @@ import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { 
   EntregaAridosService, 
-  AridosDeliveryRequest,
-  AridosDelivery,
+  EntregaAridoCreate,
+  EntregaAridoOut,
   Project,
   MaterialType,
   Vehicle,
   Operator 
 } from '../../../core/services/entrega-aridos.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-entrega-aridos',
@@ -38,7 +39,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   operators: Operator[] = [];
   
   // Registros recientes
-  recentRecords: AridosDelivery[] = [];
+  recentRecords: EntregaAridoOut[] = [];
 
   formattedCurrentDate: string = '';
   
@@ -52,16 +53,17 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   
   constructor(
     private formBuilder: FormBuilder, 
-    private entregaAridosService: EntregaAridosService
+    private entregaAridosService: EntregaAridosService,
+    private authService: AuthService
   ) {
     this.initializeForm();
-    this.setFormattedCurrentDate(); // ⬇️ AGREGAR ESTA LÍNEA AQUÍ
+    this.setFormattedCurrentDate();
   }
   
   ngOnInit(): void {
+    this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
-    this.loadCurrentOperator();
     this.setupMobileTable();
   }
   
@@ -77,8 +79,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       project: ['', Validators.required],
       materialType: ['', Validators.required],
       quantity: ['', [Validators.required, Validators.min(0.1)]],
-      // La unidad se establece por defecto como m3 y es readonly
-      unit: [{ value: 'm3', disabled: true }],
+      // La unidad se establece por defecto como m³ y es readonly
+      unit: [{ value: 'm³', disabled: true }],
       vehicleId: ['', Validators.required],
       // El operador se carga automáticamente desde la sesión
       operator: [{ value: '', disabled: true }],
@@ -100,28 +102,39 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    * Cargar operador actual desde el servicio de autenticación
    */
   loadCurrentOperator(): void {
-    // CÓDIGO COMENTADO TEMPORALMENTE
-    /*
-    // Aquí deberías obtener el operador desde tu servicio de autenticación
-    // Por ejemplo: this.authService.getCurrentOperator()
-    this.entregaAridosService.getCurrentOperator()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          if (response.success && response.data) {
-            this.currentOperator = response.data;
-            // Establecer el operador en el formulario
-            this.aridosDeliveryForm.patchValue({
-              operator: this.currentOperator.id
-            });
-          }
-        },
-        error: (error) => {
-          console.error('Error cargando operador actual:', error);
-          this.error = 'Error al cargar información del operador';
-        }
+    const currentUser = this.authService.getCurrentUser();
+    if (currentUser) {
+      // Crear objeto Operator basado en el usuario actual
+      this.currentOperator = {
+        id: currentUser.id || 999,
+        nombre: currentUser.nombre,
+        name: currentUser.nombre, // Alias para compatibilidad
+        email: currentUser.email,
+        roles: currentUser.roles,
+        estado: currentUser.estado,
+        status: currentUser.estado ? 'active' : 'inactive'
+      };
+      
+      // Establecer el operador en el formulario
+      this.aridosDeliveryForm.patchValue({
+        operator: this.currentOperator.id
       });
-    */
+    } else {
+      // Fallback a operador mock
+      this.currentOperator = {
+        id: 999,
+        nombre: 'Operario Test',
+        name: 'Operario Test',
+        email: 'operario@test.com',
+        roles: 'operario',
+        estado: true,
+        status: 'active'
+      };
+      
+      this.aridosDeliveryForm.patchValue({
+        operator: this.currentOperator.id
+      });
+    }
   }
   
   /**
@@ -131,11 +144,12 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
     this.loadingMasterData = true;
     this.error = '';
     
-    // Cargar solo los datos maestros necesarios (sin operadores ya que se carga automáticamente)
+    // Cargar todos los datos maestros en paralelo
     forkJoin({
       projects: this.entregaAridosService.getProjects(),
       materialTypes: this.entregaAridosService.getMaterialTypes(),
-      vehicles: this.entregaAridosService.getVehicles()
+      vehicles: this.entregaAridosService.getVehicles(),
+      operators: this.entregaAridosService.getOperators()
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({
@@ -151,6 +165,10 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
         
         if (responses.vehicles.success) {
           this.vehicles = responses.vehicles.data || [];
+        }
+        
+        if (responses.operators.success) {
+          this.operators = responses.operators.data || [];
         }
         
         this.loadingMasterData = false;
@@ -195,20 +213,22 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.currentOperator) {
+      this.error = 'No se pudo cargar la información del operador';
+      return;
+    }
+
     this.loading = true;
     
-    const deliveryData: AridosDeliveryRequest = {
-      // Usar la fecha actual ya que es fija
-      date: new Date().toISOString().split('T')[0],
-      project: this.aridosDeliveryForm.value.project,
-      materialType: this.aridosDeliveryForm.value.materialType,
-      quantity: parseFloat(this.aridosDeliveryForm.value.quantity),
-      // La unidad siempre será m3
-      unit: 'm3',
-      vehicleId: this.aridosDeliveryForm.value.vehicleId,
-      // Usar el operador actual
-      operator: this.currentOperator?.id || '',
-      notes: this.aridosDeliveryForm.value.notes || ''
+    const formValues = this.aridosDeliveryForm.value;
+    
+    // Crear objeto de entrega según las interfaces del backend
+    const deliveryData: EntregaAridoCreate = {
+      proyecto_id: parseInt(formValues.project),
+      usuario_id: this.currentOperator.id,
+      tipo_arido: formValues.materialType,
+      cantidad: parseFloat(formValues.quantity),
+      fecha_entrega: new Date().toISOString() // Fecha actual en formato ISO
     };
 
     this.entregaAridosService.createDelivery(deliveryData)
@@ -248,8 +268,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       project: '',
       materialType: '',
       quantity: '',
-      // La unidad siempre es m3
-      unit: 'm3',
+      // La unidad siempre es m³
+      unit: 'm³',
       vehicleId: '',
       // Mantener el operador actual
       operator: this.currentOperator?.id || '',
@@ -318,9 +338,9 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   /**
    * Obtener nombre del proyecto por ID
    */
-  getProjectName(projectId: string): string {
-    const project = this.projects.find(p => p.id === projectId);
-    return project ? project.name : 'Proyecto desconocido';
+  getProjectName(projectId: string | number): string {
+    const project = this.projects.find(p => p.id.toString() === projectId.toString());
+    return project ? project.nombre : 'Proyecto desconocido';
   }
   
   /**
@@ -342,14 +362,14 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   /**
    * Obtener nombre del operador por ID
    */
-  getOperatorName(operatorId: string): string {
+  getOperatorName(operatorId: string | number): string {
     // Si es el operador actual, usar su información
-    if (this.currentOperator && operatorId === this.currentOperator.id) {
-      return this.currentOperator.name;
+    if (this.currentOperator && operatorId.toString() === this.currentOperator.id.toString()) {
+      return this.currentOperator.nombre;
     }
     // Si no, buscar en la lista (para registros históricos)
-    const operator = this.operators.find(o => o.id === operatorId);
-    return operator ? operator.name : 'Operador desconocido';
+    const operator = this.operators.find(o => o.id.toString() === operatorId.toString());
+    return operator ? operator.nombre : 'Operador desconocido';
   }
   
   /**
@@ -428,22 +448,26 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    * Filtrar proyectos por estado activo
    */
   get activeProjects(): Project[] {
-    return this.projects.filter(project => project.status !== 'inactive');
+    return this.projects.filter(project => project.estado === true);
   }
   
   /**
    * Obtener nombre del operador actual
    */
   get currentOperatorName(): string {
-    return this.currentOperator?.name || 'No definido';
+    return this.currentOperator?.nombre || 'No definido';
   }
 
   /**
- * TrackBy function for better performance in ngFor
- */
-  trackByRecordId(index: number, record: AridosDelivery): string {
+   * TrackBy function for better performance in ngFor
+   */
+  trackByRecordId(index: number, record: EntregaAridoOut): string {
     return record.id?.toString() || index.toString();
   }
+
+  /**
+   * Establecer la fecha formateada para mostrar en la vista
+   */
   private setFormattedCurrentDate(): void {
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
@@ -455,4 +479,83 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
     this.formattedCurrentDate = today.toLocaleDateString('es-ES', options);
   }
 
+  /**
+   * Editar registro (placeholder)
+   */
+  editRecord(record: EntregaAridoOut): void {
+    console.log('Editando registro:', record);
+    // Implementar lógica de edición
+  }
+
+  /**
+   * Eliminar registro
+   */
+  deleteRecord(record: EntregaAridoOut): void {
+    if (record.id && confirm('¿Está seguro de que desea eliminar este registro?')) {
+      this.loading = true;
+      this.entregaAridosService.deleteDelivery(record.id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response) => {
+            if (response.success) {
+              this.success = true;
+              this.loadRecentRecords(); // Recargar la lista
+              setTimeout(() => {
+                this.success = false;
+              }, 3000);
+            } else {
+              this.error = response.message || 'Error al eliminar el registro';
+            }
+            this.loading = false;
+          },
+          error: (error) => {
+            this.error = error.message || 'Error al eliminar el registro';
+            this.loading = false;
+            console.error('Error eliminando registro:', error);
+          }
+        });
+    }
+  }
+
+  /**
+   * Obtener total de cantidad entregada hoy
+   */
+  getTotalQuantityToday(): number {
+    const today = new Date().toISOString().split('T')[0];
+    return this.recentRecords
+      .filter(record => record.date && record.date.split('T')[0] === today)
+      .reduce((total, record) => total + record.quantity, 0);
+  }
+
+  /**
+   * Obtener cantidad de proyectos activos
+   */
+  getActiveProjectsCount(): number {
+    return this.activeProjects.length;
+  }
+
+  /**
+   * Obtener cantidad de materiales únicos entregados
+   */
+  getUniqueMaterialsCount(): number {
+    const uniqueMaterials = new Set(this.recentRecords.map(record => record.materialType));
+    return uniqueMaterials.size;
+  }
+
+  /**
+   * Obtener entregas del día actual
+   */
+  getTodayDeliveries(): EntregaAridoOut[] {
+    const today = new Date().toISOString().split('T')[0];
+    return this.recentRecords.filter(record => 
+      record.date && record.date.split('T')[0] === today
+    );
+  }
+
+  /**
+   * Verificar si hay entregas hoy
+   */
+  hasTodayDeliveries(): boolean {
+    return this.getTodayDeliveries().length > 0;
+  }
 }

@@ -1,7 +1,3 @@
-// ==========================================
-// 1. src/app/core/services/machine-hours.service.ts
-// ==========================================
-
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
@@ -26,6 +22,7 @@ export interface Project {
   nombre: string;
   estado: boolean;
   ubicacion?: string;
+  descripcion?: string;
 }
 
 export interface Machine {
@@ -33,6 +30,7 @@ export interface Machine {
   nombre: string;
   estado: boolean;
   horas_uso: number;
+  proyecto_id?: number;
 }
 
 export interface MachineType {
@@ -147,7 +145,7 @@ export class MachineHoursService {
   createMachineHours(machineHours: any): Observable<{ success: boolean; data: any }> {
     // Transformar datos para el backend
     const reporteData = {
-      usuario_id: 1, // Por ahora usar ID fijo
+      usuario_id: parseInt(machineHours.operator),
       maquina_id: parseInt(machineHours.machineId),
       fecha_asignacion: new Date().toISOString(),
       horas_turno: new Date().toISOString()
@@ -167,10 +165,26 @@ export class MachineHoursService {
    */
   getRecentMachineHours(limit: number = 10): Observable<{ success: boolean; data: any[] }> {
     return this.http.get<any[]>(`${this.apiUrl}/reportes-laborales`).pipe(
-      map(reportes => ({
-        success: true,
-        data: reportes.slice(0, limit) // Tomar solo los primeros 'limit' elementos
-      })),
+      map(reportes => {
+        // Transformar reportes del backend al formato del frontend
+        const transformedData = reportes.slice(0, limit).map(reporte => ({
+          id: reporte.id,
+          date: reporte.fecha_asignacion ? reporte.fecha_asignacion.split('T')[0] : '',
+          machineType: 'excavadora', // Por defecto, se puede mejorar
+          machineId: reporte.maquina_id?.toString() || '',
+          startHour: reporte.fecha_asignacion ? this.getDecimalHours(new Date(reporte.fecha_asignacion)) : 0,
+          endHour: reporte.horas_turno ? this.getDecimalHours(new Date(reporte.horas_turno)) : 0,
+          totalHours: reporte.horas_turno ? this.calculateHours(reporte.fecha_asignacion, reporte.horas_turno) : 0,
+          project: reporte.proyecto_id?.toString() || '',
+          operator: reporte.usuario_id?.toString() || '',
+          notes: ''
+        }));
+
+        return {
+          success: true,
+          data: transformedData
+        };
+      }),
       catchError(this.handleError)
     );
   }
@@ -193,6 +207,25 @@ export class MachineHoursService {
       success: true,
       data: true // Por ahora siempre disponible
     });
+  }
+
+  // ========== MÉTODOS PRIVADOS ==========
+
+  /**
+   * Convertir Date a horas decimales (desde medianoche)
+   */
+  private getDecimalHours(date: Date): number {
+    return date.getHours() + (date.getMinutes() / 60) + (date.getSeconds() / 3600);
+  }
+
+  /**
+   * Calcular horas entre dos timestamps
+   */
+  private calculateHours(start: string, end: string): number {
+    const startTime = new Date(start);
+    const endTime = new Date(end);
+    const diffMs = endTime.getTime() - startTime.getTime();
+    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
   }
 
   // ========== MANEJO DE ERRORES ==========

@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin, interval } from 'rxjs';
 import { 
@@ -11,6 +11,7 @@ import {
   Machine,
   Operator
 } from '../../../core/services/machine-hours.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 // Interface para los datos del formulario
 interface MachineHoursRequest {
@@ -67,7 +68,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   
   constructor(
     private formBuilder: FormBuilder,
-    private machineHoursService: MachineHoursService
+    private machineHoursService: MachineHoursService,
+    private authService: AuthService
   ) {
     this.initializeForm();
   }
@@ -106,13 +108,23 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Cargar operador actual de la sesión
    */
   private loadCurrentOperator(): void {
-    // Crear operador mock por ahora
-    this.currentOperator = {
-      id: 999,
-      nombre: 'Operario Test',
-      email: 'operario@test.com',
-      roles: 'operario'
-    };
+    const user = this.authService.getCurrentUser();
+    if (user) {
+      this.currentOperator = {
+        id: user.id || 999,
+        nombre: user.nombre,
+        email: user.email,
+        roles: user.roles
+      };
+    } else {
+      // Fallback a operador mock
+      this.currentOperator = {
+        id: 999,
+        nombre: 'Operario Test',
+        email: 'operario@test.com',
+        roles: 'operario'
+      };
+    }
   }
 
   /**
