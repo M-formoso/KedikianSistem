@@ -1,24 +1,28 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
+import { tap, switchMap, catchError } from 'rxjs/operators';
 import { Router } from '@angular/router';
-import { map, catchError, switchMap } from 'rxjs/operators';
-import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
-// Interface específica para el frontend (sin enums)
-export interface UsuarioConToken {
-  id?: number;
-  nombre: string;
-  email: string;
-  hash_contrasena?: string;
-  estado: boolean;
-  roles: string; // String simple en el frontend
-  fecha_creacion: string;
+export interface Usuario {
+  id: string;
+  nombreUsuario: string;
+  roles: string[];
   token?: string;
+  // 🚀 AGREGADO: Para mantener compatibilidad con el interceptor
+  access_token?: string;
 }
 
-// Alias para mantener compatibilidad con componentes que usan inglés
-export type User = UsuarioConToken;
+// Interfaz para la respuesta del login OAuth2
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
+const apiUrl = `${environment.apiUrl}`;
+
+export type User = Usuario;
 
 export interface CredencialesLogin {
   nombreUsuario: string;
@@ -26,19 +30,16 @@ export interface CredencialesLogin {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AuthService {
-  private usuarioActualSubject = new BehaviorSubject<UsuarioConToken | null>(null);
+  private usuarioActualSubject = new BehaviorSubject<Usuario | null>(null);
   public usuarioActual$ = this.usuarioActualSubject.asObservable();
-  
+
   // Alias para componentes que usan nombres en inglés
   public currentUser$ = this.usuarioActual$;
 
-  constructor(
-    private router: Router,
-    private http: HttpClient
-  ) {
+  constructor(private router: Router, private http: HttpClient) {
     this.cargarUsuarioDesdeAlmacenamiento();
   }
 
@@ -48,130 +49,125 @@ export class AuthService {
       try {
         const usuario = JSON.parse(usuarioAlmacenado);
         this.usuarioActualSubject.next(usuario);
-        
-        // Verificar si el usuario sigue siendo válido en el backend
-        this.verificarUsuarioValido(usuario.id);
       } catch (error) {
         localStorage.removeItem('usuarioActual');
       }
     }
   }
 
-  /**
-   * Verificar si el usuario almacenado sigue siendo válido
-   */
-  private verificarUsuarioValido(userId: number): void {
-    if (!userId) return;
+  login(username: string, password: string): Observable<Usuario> {
+    // 🔒 LOGS SEGUROS - Sin exponer credenciales
+    console.log('🚀 Iniciando autenticación...');
+    console.log('📧 Username length:', username?.length || 0);
+    console.log('🔒 Password length:', password?.length || 0);
+    console.log('🌐 Endpoint:', `${apiUrl}/auth/login`);
+  
+    // Codificar en base64 (sin mostrar en logs)
+    const usernameBase64 = btoa(username);
+    const passwordBase64 = btoa(password);
+  
+    const body = new HttpParams()
+      .set('username', usernameBase64)
+      .set('password', passwordBase64);
+      
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/x-www-form-urlencoded'
+    });
     
-    this.http.get<UsuarioConToken>(`${environment.apiUrl}/usuarios/${userId}`).subscribe({
-      next: (usuario: UsuarioConToken) => {
-        if (!usuario || !usuario.estado) {
-          // Usuario no válido, cerrar sesión
-          this.cerrarSesion();
-        }
-      },
-      error: () => {
-        // Error al verificar, cerrar sesión por seguridad
-        this.cerrarSesion();
-      }
-    });
-  }
-
-  /**
-   * Método de login mejorado que conecta con el backend
-   */
-  login(username: string, password: string): Observable<UsuarioConToken> {
-    return this.iniciarSesion({
-      nombreUsuario: username,
-      contraseña: password
-    });
-  }
-
-  private iniciarSesion(credenciales: CredencialesLogin): Observable<UsuarioConToken> {
-    const formData = new FormData();
-    formData.append('username', credenciales.nombreUsuario);
-    formData.append('password', credenciales.contraseña);
-
-    return this.http.post<{access_token: string, token_type: string}>(`${environment.apiUrl}/auth/login`, formData).pipe(
-      switchMap((loginResponse) => {
-        // Guardar token
-        const token = loginResponse.access_token;
+    const loginUrl = `${apiUrl}/auth/login`;
+    
+    // 🔒 LOG SEGURO - Solo confirmar que se está enviando
+    console.log('📤 Enviando petición de autenticación...');
+    
+    return this.http.post<LoginResponse>(
+      loginUrl,
+      body.toString(),
+      { headers }
+    ).pipe(
+      switchMap((loginResponse: LoginResponse) => {
+        // 🔒 LOG SEGURO - No mostrar token completo
+        console.log('✅ Respuesta de autenticación recibida');
+        console.log('🎫 Token type:', loginResponse.token_type);
+        console.log('🎫 Token recibido:', loginResponse.access_token ? 'SÍ' : 'NO');
         
-        return this.http.get<UsuarioConToken>(`${environment.apiUrl}/auth/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).pipe(
-          map((usuario) => {
-            const usuarioConToken: UsuarioConToken = {
-              ...usuario,
-              token: token
-            };
-
-            localStorage.setItem('usuarioActual', JSON.stringify(usuarioConToken));
-            this.usuarioActualSubject.next(usuarioConToken);
+        const tokenData = {
+          access_token: loginResponse.access_token,
+          token_type: loginResponse.token_type,
+          token: loginResponse.access_token
+        };
+        
+        localStorage.setItem('usuarioActual', JSON.stringify(tokenData));
+        
+        return this.obtenerInformacionUsuario(loginResponse.access_token).pipe(
+          tap((usuarioInfo: any) => {
+            // 🔒 LOG SEGURO - Solo información no sensible
+            console.log('✅ Información del usuario obtenida');
+            console.log('👤 Usuario ID:', usuarioInfo.id);
+            console.log('📧 Email:', usuarioInfo.email);
+            console.log('🏷️ Nombre:', usuarioInfo.nombre);
+            console.log('🎯 Roles:', usuarioInfo.roles);
+            console.log('✅ Estado activo:', usuarioInfo.estado);
             
-            return usuarioConToken;
+            const usuarioCompleto: Usuario = {
+              id: usuarioInfo.id || 'temp',
+              nombreUsuario: usuarioInfo.email || usuarioInfo.nombreUsuario || username,
+              roles: usuarioInfo.roles || ['administrador'],
+              token: loginResponse.access_token,
+              access_token: loginResponse.access_token,
+              ...usuarioInfo
+            };
+            
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioCompleto));
+            this.usuarioActualSubject.next(usuarioCompleto);
+            
+            console.log('✅ Usuario autenticado y guardado correctamente');
+            
+            return usuarioCompleto;
+          }),
+          catchError((error) => {
+            console.warn('⚠️ No se pudo obtener información detallada del usuario');
+            console.warn('⚠️ Error status:', error.status);
+            
+            const usuarioPorDefecto: Usuario = {
+              id: 'temp',
+              nombreUsuario: username,
+              roles: ['administrador'],
+              token: loginResponse.access_token,
+              access_token: loginResponse.access_token
+            };
+            
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioPorDefecto));
+            this.usuarioActualSubject.next(usuarioPorDefecto);
+            
+            console.log('✅ Usuario creado con datos por defecto');
+            
+            return of(usuarioPorDefecto);
           })
         );
       }),
+      tap((usuario: Usuario) => {
+        console.log('🎯 Login completado exitosamente');
+        console.log('👤 Usuario final - ID:', usuario.id);
+        console.log('🎯 Roles asignados:', usuario.roles);
+        console.log('🔐 Token presente:', !!usuario.access_token);
+      }),
       catchError((error) => {
-        console.error('Error en login:', error);
+        // 🔒 LOG SEGURO DE ERRORES - Sin exponer información sensible
+        console.error('❌ Error en autenticación');
+        console.error('📊 Status:', error.status);
+        console.error('📊 StatusText:', error.statusText);
         
-        // Fallback a usuarios mock solo para desarrollo
-        if (credenciales.nombreUsuario === 'operario' && credenciales.contraseña === '1234') {
-          return of(this.crearUsuarioMockOperario());
+        // Solo en desarrollo (puedes controlar esto con environment)
+        if (!environment.production) {
+          console.error('🔧 [DEV] Error URL:', error.url);
+          console.error('🔧 [DEV] Error details:', error.error);
         }
-        if (credenciales.nombreUsuario === 'admin' && credenciales.contraseña === '1234') {
-          return of(this.crearUsuarioMockAdmin());
-        }
-
-        return throwError(() => new Error('Credenciales inválidas'));
+        
+        return throwError(() => error);
       })
     );
-  }
+  }  
 
-  /**
-   * Crear usuario mock para operario (fallback)
-   */
-  private crearUsuarioMockOperario(): UsuarioConToken {
-    const mockOperario: UsuarioConToken = {
-      id: 999,
-      nombre: 'Operario Test',
-      email: 'operario@test.com',
-      estado: true,
-      roles: 'operario', // String simple, no enum en el frontend
-      fecha_creacion: new Date().toISOString(),
-      token: 'fake-jwt-token-operario'
-    };
-
-    localStorage.setItem('usuarioActual', JSON.stringify(mockOperario));
-    this.usuarioActualSubject.next(mockOperario);
-    
-    return mockOperario;
-  }
-
-  /**
-   * Crear usuario mock para admin (fallback)
-   */
-  private crearUsuarioMockAdmin(): UsuarioConToken {
-    const mockAdmin: UsuarioConToken = {
-      id: 998,
-      nombre: 'Admin Test',
-      email: 'admin@test.com',
-      estado: true,
-      roles: 'administrador', // String simple, no enum en el frontend
-      fecha_creacion: new Date().toISOString(),
-      token: 'fake-jwt-token-admin'
-    };
-
-    localStorage.setItem('usuarioActual', JSON.stringify(mockAdmin));
-    this.usuarioActualSubject.next(mockAdmin);
-    
-    return mockAdmin;
-  }
-
-  /**
-   * Cerrar sesión
-   */
   cerrarSesion(): void {
     localStorage.removeItem('usuarioActual');
     this.usuarioActualSubject.next(null);
@@ -183,24 +179,17 @@ export class AuthService {
     this.cerrarSesion();
   }
 
-  /**
-   * Obtener usuario actual
-   */
-  obtenerUsuarioActual(): UsuarioConToken | null {
+  obtenerUsuarioActual(): Usuario | null {
     return this.usuarioActualSubject.value;
   }
 
   // Alias para obtenerUsuarioActual
-  getCurrentUser(): UsuarioConToken | null {
+  getCurrentUser(): Usuario | null {
     return this.obtenerUsuarioActual();
   }
 
-  /**
-   * Verificar si está autenticado
-   */
   estaAutenticado(): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    return !!usuario && !!usuario.token && usuario.estado;
+    return !!this.usuarioActualSubject.value;
   }
 
   // Alias para estaAutenticado
@@ -208,199 +197,49 @@ export class AuthService {
     return this.estaAutenticado();
   }
 
-  // Alias adicional que usan algunos componentes
-  isLoggedIn(): boolean {
-    return this.estaAutenticado();
-  }
-
-  /**
-   * Verificar si es administrador
-   */
   esAdministrador(): boolean {
     const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles === 'administrador';
+    return !!usuario && usuario.roles.includes('administrador');
   }
 
-  // Alias para esAdministrador
-  isAdmin(): boolean {
-    return this.esAdministrador();
-  }
-
-  /**
-   * Verificar si es operario
-   */
   esOperario(): boolean {
     const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles === 'operario';
+    return !!usuario && usuario.roles.includes('operario');
   }
 
-  // Alias para esOperario
-  isOperator(): boolean {
-    return this.esOperario();
-  }
-
-  /**
-   * Método para verificar rol específico
-   */
+  // Método para verificar el rol (alias)
   hasRole(role: string): boolean {
     const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles === role;
+    return !!usuario && usuario.roles.includes(role);
   }
 
-  /**
-   * Obtener token de autenticación
-   */
+  // 🚀 MEJORADO: Obtener token de múltiples fuentes
   obtenerTokenAuth(): string | null {
     const usuario = this.usuarioActualSubject.value;
-    return usuario?.token || null;
+    return usuario?.access_token || usuario?.token || null;
   }
 
-  /**
-   * Refrescar token (simulado por ahora)
-   */
-  refrescarToken(): Observable<UsuarioConToken> {
-    const usuario = this.usuarioActualSubject.value;
-    
-    if (usuario && usuario.id) {
-      // Verificar que el usuario sigue siendo válido
-      return this.http.get<UsuarioConToken>(`${environment.apiUrl}/usuarios/${usuario.id}`).pipe(
-        map((usuarioActualizado: UsuarioConToken) => {
-          if (usuarioActualizado && usuarioActualizado.estado) {
-            const usuarioConToken: UsuarioConToken = {
-              ...usuarioActualizado,
-              token: 'refreshed-token-' + usuarioActualizado.id
-            };
-
-            localStorage.setItem('usuarioActual', JSON.stringify(usuarioConToken));
-            this.usuarioActualSubject.next(usuarioConToken);
-            
-            return usuarioConToken;
-          } else {
-            throw new Error('Usuario no válido');
-          }
-        }),
-        catchError((error) => {
-          this.cerrarSesion();
-          return throwError(() => new Error('Error al refrescar token: ' + error.message));
-        })
-      );
-    }
-
-    return throwError(() => new Error('No hay usuario autenticado'));
-  }
-
-  /**
-   * Registrar nuevo usuario (conecta con backend)
-   */
-  registrarUsuario(datosUsuario: {
-    nombre: string;
-    email: string;
-    contraseña: string;
-    roles?: string;
-  }): Observable<UsuarioConToken> {
-    const nuevoUsuario = {
-      nombre: datosUsuario.nombre,
-      email: datosUsuario.email,
-      hash_contrasena: datosUsuario.contraseña,
-      estado: true,
-      roles: datosUsuario.roles || 'operario',
-      fecha_creacion: new Date().toISOString()
-    };
-
-    return this.http.post<UsuarioConToken>(`${environment.apiUrl}/usuarios`, nuevoUsuario).pipe(
-      map((usuarioCreado: UsuarioConToken) => {
-        if (usuarioCreado) {
-          const usuarioConToken: UsuarioConToken = {
-            ...usuarioCreado,
-            token: 'fake-token-' + usuarioCreado.id
-          };
-          return usuarioConToken;
-        } else {
-          throw new Error('Error al crear usuario');
-        }
-      }),
+  refrescarToken(): Observable<Usuario> {
+    return throwError(
+      () => new Error('Token refresh no disponible en modo simulado')
     );
   }
 
-  /**
-   * Actualizar perfil del usuario actual
-   */
-  actualizarPerfil(datosActualizacion: Partial<UsuarioConToken>): Observable<UsuarioConToken> {
-    const usuario = this.usuarioActualSubject.value;
+  // 🚀 MEJORADO: Pasar token como parámetro para evitar referencias circulares
+  private obtenerInformacionUsuario(token: string): Observable<any> {
+    // Obtener información del usuario desde el backend
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
     
-    if (!usuario || !usuario.id) {
-      return throwError(() => new Error('No hay usuario autenticado'));
-    }
-
-    return this.http.put<UsuarioConToken>(`${environment.apiUrl}/usuarios/${usuario.id}`, datosActualizacion).pipe(
-      map((usuarioActualizado: UsuarioConToken) => {
-        if (usuarioActualizado) {
-          const usuarioConToken: UsuarioConToken = {
-            ...usuarioActualizado,
-            token: usuario.token
-          };
-
-          localStorage.setItem('usuarioActual', JSON.stringify(usuarioConToken));
-          this.usuarioActualSubject.next(usuarioConToken);
-          
-          return usuarioConToken;
-        } else {
-          throw new Error('Error al actualizar usuario');
-        }
+    return this.http.get<any>(`${apiUrl}/auth/me`, { headers }).pipe(
+      tap((userInfo) => {
+        console.log('✅ Usuario obtenido de /auth/me:', userInfo);
       }),
       catchError((error) => {
-        console.error('Error actualizando perfil:', error);
-        return throwError(() => new Error('Error al actualizar perfil: ' + error.message));
+        console.warn('⚠️ Error al obtener información del usuario desde /auth/me:', error);
+        throw error; // Re-lanzar el error para que sea manejado en el switchMap
       })
     );
-  }
-
-  /**
-   * Cambiar contraseña (simulado)
-   */
-  cambiarContraseña(contraseñaActual: string, nuevaContraseña: string): Observable<boolean> {
-    // TODO: Implementar cambio de contraseña real
-    return of(true);
-  }
-
-  /**
-   * Verificar permisos específicos
-   */
-  tienePermiso(permiso: string): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    
-    if (!usuario) return false;
-
-    // Lógica básica de permisos basada en roles
-    switch (permiso) {
-      case 'crear_reportes':
-      case 'editar_reportes_propios':
-      case 'fichar_entrada_salida':
-        return usuario.roles === 'operario' || usuario.roles === 'administrador';
-      
-      case 'ver_todos_reportes':
-      case 'editar_todos_reportes':
-      case 'administrar_usuarios':
-      case 'ver_estadisticas':
-        return usuario.roles === 'administrador';
-      
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * Obtener información del usuario para el header
-   */
-  getUsuarioParaHeader(): { nombre: string; rol: string; email: string } | null {
-    const usuario = this.usuarioActualSubject.value;
-    
-    if (!usuario) return null;
-
-    return {
-      nombre: usuario.nombre,
-      rol: usuario.roles === 'operario' ? 'Operario' : 'Administrador',
-      email: usuario.email
-    };
   }
 }

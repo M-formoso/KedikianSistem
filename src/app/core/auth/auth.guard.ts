@@ -1,71 +1,37 @@
 import { Injectable } from '@angular/core';
-import { CanActivateFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { AuthService } from './auth.service';
-import { inject } from '@angular/core';
+import {
+  CanActivate,
+  ActivatedRouteSnapshot,
+  RouterStateSnapshot,
+  Router,
+} from '@angular/router';
+import { AuthService } from '../services/auth.service';
 
-export const authGuard: CanActivateFn = (
-  route: ActivatedRouteSnapshot,
-  state: RouterStateSnapshot
-) => {
-  const authService = inject(AuthService);
-  const router = inject(Router);
-  
-  // Verificar si el usuario está autenticado
-  if (!authService.isLoggedIn()) {
-    console.log('Usuario no autenticado, redirigiendo a login');
-    router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
-    return false;
-  }
-  
-  const currentUser = authService.getCurrentUser();
-  
-  if (!currentUser) {
-    console.log('No se pudo obtener usuario actual, redirigiendo a login');
-    router.navigate(['/login']);
-    return false;
-  }
-  
-  // Verificar si la ruta requiere un rol específico
-  const requiredRole = route.data['role'];
-  
-  if (requiredRole) {
-    const userRole = currentUser.roles;
+@Injectable({
+  providedIn: 'root',
+})
+export class AuthGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot
+  ): boolean {
+    console.log('🔒 AuthGuard - Verificando autenticación para:', state.url);
+    console.log('👤 Usuario actual:', this.authService.obtenerUsuarioActual());
+    console.log('🔐 ¿Está autenticado?:', this.authService.estaAutenticado());
     
-    console.log('Verificando acceso:', {
-      requiredRole,
-      userRole,
-      userName: currentUser.nombre
+    if (this.authService.estaAutenticado()) {
+      // El usuario está autenticado, permitir el acceso
+      console.log('✅ Acceso permitido');
+      return true;
+    }
+
+    // El usuario no está autenticado, redirigir al login
+    console.log('❌ Usuario no autenticado, redirigiendo a login');
+    this.router.navigate(['/login'], {
+      queryParams: { returnUrl: state.url },
     });
-    
-    // Verificar rol específico
-    if (requiredRole === 'operario' && userRole === 'operario') {
-      return true;
-    }
-    
-    if (requiredRole === 'administrador' && userRole === 'administrador') {
-      return true;
-    }
-    
-    // Los administradores pueden acceder a rutas de operario
-    if (requiredRole === 'operario' && userRole === 'administrador') {
-      return true;
-    }
-    
-    // Si no tiene el rol requerido, redirigir según su rol actual
-    console.log('Usuario sin permisos para esta ruta, redirigiendo...');
-    
-    if (userRole === 'operario') {
-      router.navigate(['/operator/dashboard']);
-    } else if (userRole === 'administrador') {
-      // TODO: Crear rutas de administrador
-      router.navigate(['/operator/dashboard']); // Por ahora redirigir a operario
-    } else {
-      router.navigate(['/login']);
-    }
-    
     return false;
   }
-  
-  // Si no se especifica un rol requerido, permitir el acceso a usuarios autenticados
-  return true;
-};
+}
