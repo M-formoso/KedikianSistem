@@ -7,7 +7,7 @@ import {
   Validators,
   ReactiveFormsModule,
 } from '@angular/forms';
-import { AuthService, Usuario } from '../../core/services/auth.service';
+import { AuthService, Usuario } from '../../core/services/auth.service'; // ✅ Import correcto
 import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
 
 @Component({
@@ -72,6 +72,15 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
             {{ error }}
           </div>
         </form>
+
+        <!-- ✅ Información de prueba -->
+        <div class="mt-3 text-center" *ngIf="!loading">
+          <small class="text-muted">
+            <strong>Credenciales de prueba:</strong><br>
+            Usuario: admin / Contraseña: admin123<br>
+            Usuario: operario / Contraseña: operario123
+          </small>
+        </div>
       </div>
     </div>
   `,
@@ -129,30 +138,21 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
       }
 
       .btn {
-        display: inline-block;
-        font-weight: 400;
-        text-align: center;
-        white-space: nowrap;
-        vertical-align: middle;
-        user-select: none;
-        border: 1px solid transparent;
+        width: 100%;
         padding: 0.75rem 1.5rem;
         font-size: 1rem;
-        line-height: 1.5;
         border-radius: 0.25rem;
         cursor: pointer;
-        width: 100%;
+        border: none;
       }
 
       .btn-primary {
         color: #fff;
         background-color: #007bff;
-        border-color: #007bff;
       }
 
-      .btn-primary:hover {
+      .btn-primary:hover:not(:disabled) {
         background-color: #0069d9;
-        border-color: #0062cc;
       }
 
       .btn:disabled {
@@ -161,9 +161,8 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
       }
 
       .alert {
-        position: relative;
         padding: 0.75rem 1.25rem;
-        margin-bottom: 1rem;
+        margin-top: 1rem;
         border: 1px solid transparent;
         border-radius: 0.25rem;
       }
@@ -175,10 +174,8 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
       }
 
       .spinner-border {
-        display: inline-block;
         width: 1rem;
         height: 1rem;
-        vertical-align: text-bottom;
         border: 0.2em solid currentColor;
         border-right-color: transparent;
         border-radius: 50%;
@@ -190,6 +187,18 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
         to {
           transform: rotate(360deg);
         }
+      }
+
+      .text-muted {
+        color: #6c757d !important;
+      }
+
+      .mt-3 {
+        margin-top: 1rem !important;
+      }
+
+      .text-center {
+        text-align: center !important;
       }
     `,
   ],
@@ -232,28 +241,21 @@ export class LoginComponent {
       next: (usuario: Usuario) => {
         this.loading = false;
         console.log('✅ Login exitoso');
-        console.log('👤 Usuario:', usuario.nombreUsuario);
+        console.log('👤 Usuario:', usuario.nombre);
         console.log('🎯 Roles desde backend:', usuario.roles);
 
-        // 🔹 Mapear roles del backend a los de Angular
-        const mappedRoles = usuario.roles.map((rol) => {
-          if (rol.toLowerCase() === 'user') return 'operario';
-          if (rol.toLowerCase() === 'admin') return 'administrador';
-          return rol.toLowerCase();
-        });
-
-        console.log('🎯 Roles mapeados:', mappedRoles);
-
-        if (mappedRoles.includes('administrador')) {
-          console.log('✅ Administrador detectado, redirigiendo...');
-          window.location.href =
-            'http://168.197.50.82/administrador/dashboard';
-        } else if (mappedRoles.includes('operario')) {
+        // ✅ LÓGICA DE REDIRECCIÓN CORREGIDA
+        if (this.authService.esAdministrador()) {
+          console.log('✅ Administrador detectado, redirigiendo a panel de operario...');
+          // Por ahora redirigir al panel de operario hasta que implementes el de admin
+          this.router.navigate(['/operator/dashboard']);
+        } else if (this.authService.esOperario()) {
           console.log('✅ Operario detectado, redirigiendo...');
-          window.location.href = 'http://168.197.50.82/operario/dashboard';
+          this.router.navigate(['/operator/dashboard']);
         } else {
-          console.error('❌ Rol no reconocido:', mappedRoles);
-          this.error = 'Usuario sin rol válido.';
+          console.log('✅ Usuario sin rol específico, redirigiendo a panel de operario...');
+          // Por defecto, ir al panel de operario
+          this.router.navigate(['/operator/dashboard']);
         }
       },
       error: (error: HttpErrorResponse) => {
@@ -263,7 +265,7 @@ export class LoginComponent {
         if (error.status === 401) {
           this.error = 'Usuario o contraseña incorrectos';
         } else if (error.status === 0) {
-          this.error = 'Error de conexión. Verifique su conexión a internet.';
+          this.error = 'Error de conexión. Verifique su conexión a internet y que el servidor esté funcionando.';
         } else if (error.status >= 500) {
           this.error = 'Error en el servidor. Intente nuevamente.';
         } else {

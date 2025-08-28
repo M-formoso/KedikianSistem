@@ -12,8 +12,7 @@ import {
   Vehicle,
   Operator 
 } from '../../../core/services/entrega-aridos.service';
-import { AuthService } from '../../../core/auth/auth.service';
-
+import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'app-entrega-aridos',
   standalone: true,
@@ -61,7 +60,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
-    this.loadCurrentOperator();
+    //this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
@@ -101,6 +100,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   /**
    * Cargar operador actual desde el servicio de autenticación
    */
+
+  /**
   loadCurrentOperator(): void {
     const currentUser = this.authService.getCurrentUser();
     if (currentUser) {

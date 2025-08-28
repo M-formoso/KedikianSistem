@@ -1,9 +1,8 @@
 import { Routes } from '@angular/router';
 import { provideRouter } from '@angular/router';
-import { LoginComponent } from './modules/auth/login.component';
+import { LoginComponent } from './modules/login/login.component';
 import { operatorRoutes } from './modules/operator/operator.routes';
-import { authGuard } from './core/auth/auth.guard';
-
+import { AuthRoleGuard } from './core/guards/auth-role.guard';
 export const routes: Routes = [
   // ===== RUTA RAÍZ =====
   { 
@@ -26,11 +25,11 @@ export const routes: Routes = [
   {
     path: 'operator',
     children: operatorRoutes,
-    canActivate: [authGuard],
+    canActivate: [AuthRoleGuard], // ✅ Guard correcto aplicado
     data: {
       title: 'Panel del Operario',
       description: 'Sistema de gestión para operarios',
-      role: 'operario'
+      role: 'operario' // ✅ Rol requerido
     }
   },
   

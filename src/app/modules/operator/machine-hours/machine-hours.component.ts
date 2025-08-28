@@ -11,8 +11,7 @@ import {
   Machine,
   Operator
 } from '../../../core/services/machine-hours.service';
-import { AuthService } from '../../../core/auth/auth.service';
-
+import { AuthService } from '../../../core/services/auth.service';
 // Interface para los datos del formulario
 interface MachineHoursRequest {
   date: string;
@@ -75,7 +74,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
-    this.loadCurrentOperator();
+    //this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
@@ -107,6 +106,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   /**
    * Cargar operador actual de la sesión
    */
+
+  /**
   private loadCurrentOperator(): void {
     const user = this.authService.getCurrentUser();
     if (user) {

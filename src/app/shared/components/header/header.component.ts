@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AuthService, UsuarioConToken } from '../../../core/auth/auth.service';
+import { AuthService, Usuario } from '../../../core/services/auth.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -235,20 +235,18 @@ import { Subscription } from 'rxjs';
   `]
 })
 export class HeaderComponent implements OnInit, OnDestroy {
-  currentUser: UsuarioConToken | null = null;
+  currentUser: Usuario | null = null;
   isLoaded = false;
   private subscription: Subscription = new Subscription();
   
   constructor(private authService: AuthService) {}
   
   ngOnInit(): void {
-    // Suscribirse a los cambios del usuario actual
     this.subscription.add(
       this.authService.usuarioActual$.subscribe(user => {
         this.currentUser = user;
         this.isLoaded = true;
         
-        // Log para debugging (opcional, remover en producción)
         if (user) {
           console.log('Usuario cargado en header:', user.nombre, '-', user.roles);
         }
@@ -257,15 +255,19 @@ export class HeaderComponent implements OnInit, OnDestroy {
   }
   
   ngOnDestroy(): void {
-    // Limpieza de suscripciones para evitar memory leaks
     this.subscription.unsubscribe();
   }
   
   /**
    * Obtener nombre del rol en español
    */
-  getRoleName(rol: string): string {
-    const roles: { [key: string]: string } = {
+  getRoleName(roles: string[] | string): string {
+    if (!roles || (Array.isArray(roles) && roles.length === 0)) {
+      return 'Sin rol';
+    }
+    const rol = Array.isArray(roles) ? roles[0] : roles;
+
+    const rolesMap: { [key: string]: string } = {
       'operario': 'Operario',
       'administrador': 'Administrador',
       'admin': 'Administrador',
@@ -273,66 +275,43 @@ export class HeaderComponent implements OnInit, OnDestroy {
       'gerente': 'Gerente'
     };
     
-    return roles[rol.toLowerCase()] || rol;
+    return rolesMap[rol.toLowerCase()] || rol;
   }
   
-  /**
-   * Cerrar sesión
-   */
   logout(): void {
     if (confirm('¿Está seguro de que desea cerrar sesión?')) {
       this.authService.cerrarSesion();
     }
   }
   
-  /**
-   * Obtener iniciales del usuario para avatar
-   */
   getUserInitials(): string {
     if (!this.currentUser || !this.currentUser.nombre) {
       return 'U';
     }
-    
     const names = this.currentUser.nombre.split(' ');
-    if (names.length >= 2) {
-      return (names[0][0] + names[1][0]).toUpperCase();
-    }
-    
-    return this.currentUser.nombre[0].toUpperCase();
+    return names.length >= 2
+      ? (names[0][0] + names[1][0]).toUpperCase()
+      : this.currentUser.nombre[0].toUpperCase();
   }
   
-  /**
-   * Obtener información del usuario para tooltip
-   */
   getUserTooltip(): string {
-    if (!this.currentUser) {
-      return '';
-    }
-    
+    if (!this.currentUser) return '';
     return `${this.currentUser.nombre}\n${this.currentUser.email}\n${this.getRoleName(this.currentUser.roles)}`;
   }
   
-  /**
-   * Verificar si el usuario es administrador
-   */
   isAdmin(): boolean {
     return this.authService.esAdministrador();
   }
   
-  /**
-   * Verificar si el usuario es operario
-   */
   isOperator(): boolean {
     return this.authService.esOperario();
   }
   
-  /**
-   * Obtener clase CSS según el rol
-   */
   getRoleClass(): string {
-    if (!this.currentUser) {
-      return '';
+    if (!this.currentUser || !this.currentUser.roles || this.currentUser.roles.length === 0) {
+      return 'role-default';
     }
+    const rol = Array.isArray(this.currentUser.roles) ? this.currentUser.roles[0] : this.currentUser.roles;
     
     const roleClasses: { [key: string]: string } = {
       'operario': 'role-operator',
@@ -341,15 +320,10 @@ export class HeaderComponent implements OnInit, OnDestroy {
       'supervisor': 'role-supervisor'
     };
     
-    return roleClasses[this.currentUser.roles.toLowerCase()] || 'role-default';
+    return roleClasses[rol.toLowerCase()] || 'role-default';
   }
   
-  /**
-   * Manejar click en el perfil del usuario (para futuras funcionalidades)
-   */
   onUserClick(): void {
-    // Aquí se puede implementar un menú desplegable con opciones del usuario
-    // Por ejemplo: Ver perfil, Configuración, etc.
     console.log('User clicked:', this.currentUser);
   }
 }

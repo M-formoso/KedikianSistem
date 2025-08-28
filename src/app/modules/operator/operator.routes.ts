@@ -5,13 +5,13 @@ import { WorkHoursComponent } from './work-hours/work-hours.component';
 import { MachineHoursComponent} from './machine-hours/machine-hours.component';  
 import { EntregaAridosComponent } from './entrega-aridos/entrega-aridos.component';
 import { RegistroGastosComponent } from './registro-gastos/registro-gastos.component';
-import { authGuard } from '../../core/auth/auth.guard';
-
+import { AuthRoleGuard } from '../../core/guards/auth-role.guard';
 export const operatorRoutes: Routes = [
   {
     path: '',
     component: OperatorLayoutComponent,
-    canActivate: [authGuard], // ✅ Proteger todas las rutas del operario
+    canActivate: [AuthRoleGuard]
+, // ✅ Proteger todas las rutas del operario
     data: { role: 'operario' }, // ✅ Especificar que requiere rol de operario
     children: [
       {
