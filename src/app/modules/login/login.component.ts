@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import {
@@ -7,207 +7,29 @@ import {
   Validators,
   ReactiveFormsModule,
 } from '@angular/forms';
-import { AuthService, Usuario } from '../../core/services/auth.service'; // ✅ Import correcto
+import { AuthService, Usuario } from '../../core/services/auth.service';
 import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, HttpClientModule],
-  template: `
-    <div class="login-container">
-      <div class="login-card">
-        <h2 class="login-title">Sistema Movimiento de Suelo</h2>
-
-        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
-          <div class="form-group">
-            <label for="username">Usuario</label>
-            <input
-              type="text"
-              id="username"
-              formControlName="username"
-              class="form-control"
-              [ngClass]="{ 'is-invalid': submitted && f['username'].errors }"
-            />
-            <div
-              *ngIf="submitted && f['username'].errors"
-              class="error-message"
-            >
-              <div *ngIf="f['username'].errors['required']">
-                El usuario es requerido
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="password">Contraseña</label>
-            <input
-              type="password"
-              id="password"
-              formControlName="password"
-              class="form-control"
-              [ngClass]="{ 'is-invalid': submitted && f['password'].errors }"
-            />
-            <div
-              *ngIf="submitted && f['password'].errors"
-              class="error-message"
-            >
-              <div *ngIf="f['password'].errors['required']">
-                La contraseña es requerida
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <button type="submit" class="btn btn-primary" [disabled]="loading">
-              <span
-                *ngIf="loading"
-                class="spinner-border spinner-border-sm"
-              ></span>
-              Iniciar Sesión
-            </button>
-          </div>
-
-          <div *ngIf="error" class="alert alert-danger mt-3">
-            {{ error }}
-          </div>
-        </form>
-
-        <!-- ✅ Información de prueba -->
-        <div class="mt-3 text-center" *ngIf="!loading">
-          <small class="text-muted">
-            <strong>Credenciales de prueba:</strong><br>
-            Usuario: admin / Contraseña: admin123<br>
-            Usuario: operario / Contraseña: operario123
-          </small>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [
-    `
-      .login-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        background-color: #f5f5f5;
-      }
-
-      .login-card {
-        width: 100%;
-        max-width: 400px;
-        padding: 2rem;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      }
-
-      .login-title {
-        text-align: center;
-        margin-bottom: 2rem;
-        color: #333;
-      }
-
-      .form-group {
-        margin-bottom: 1.5rem;
-      }
-
-      .form-group label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 500;
-      }
-
-      .form-control {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 1rem;
-      }
-
-      .is-invalid {
-        border-color: #dc3545;
-      }
-
-      .error-message {
-        color: #dc3545;
-        font-size: 0.85rem;
-        margin-top: 0.25rem;
-      }
-
-      .btn {
-        width: 100%;
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
-        border-radius: 0.25rem;
-        cursor: pointer;
-        border: none;
-      }
-
-      .btn-primary {
-        color: #fff;
-        background-color: #007bff;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        background-color: #0069d9;
-      }
-
-      .btn:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-      }
-
-      .alert {
-        padding: 0.75rem 1.25rem;
-        margin-top: 1rem;
-        border: 1px solid transparent;
-        border-radius: 0.25rem;
-      }
-
-      .alert-danger {
-        color: #721c24;
-        background-color: #f8d7da;
-        border-color: #f5c6cb;
-      }
-
-      .spinner-border {
-        width: 1rem;
-        height: 1rem;
-        border: 0.2em solid currentColor;
-        border-right-color: transparent;
-        border-radius: 50%;
-        animation: spinner-border 0.75s linear infinite;
-        margin-right: 0.5rem;
-      }
-
-      @keyframes spinner-border {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .text-muted {
-        color: #6c757d !important;
-      }
-
-      .mt-3 {
-        margin-top: 1rem !important;
-      }
-
-      .text-center {
-        text-align: center !important;
-      }
-    `,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterModule,
+    HttpClientModule
   ],
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.css']
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   loginForm: FormGroup;
   loading = false;
   submitted = false;
   error = '';
+  success = false;
+  successMessage = '';
+  connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connected';
 
   constructor(
     private formBuilder: FormBuilder,
@@ -215,63 +37,170 @@ export class LoginComponent {
     private authService: AuthService
   ) {
     this.loginForm = this.formBuilder.group({
-      username: ['', Validators.required],
-      password: ['', Validators.required],
+      username: ['', [Validators.required, Validators.minLength(3)]],
+      password: ['', [Validators.required, Validators.minLength(3)]],
     });
+  }
+
+  ngOnInit(): void {
+    // Verificar si ya está autenticado
+    if (this.authService.estaAutenticado()) {
+      this.redirectToUserDashboard();
+    }
+
+    // Verificar conectividad con el backend
+    this.checkBackendConnection();
   }
 
   get f() {
     return this.loginForm.controls;
   }
 
-  onSubmit() {
+  private async checkBackendConnection(): Promise<void> {
+    this.connectionStatus = 'connecting';
+    
+    try {
+      // ✅ CORREGIDO: Usar la URL directa del backend
+      // Usar /auth/me que es más apropiado para verificar el estado del servicio
+      const response = await fetch('http://kedikian.site/api/v1/auth/me', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.status === 401 || response.ok) {
+        // 401 es esperado sin autenticación, pero significa que el backend responde
+        this.connectionStatus = 'connected';
+      } else {
+        this.connectionStatus = 'disconnected';
+      }
+    } catch (error) {
+      console.warn('Backend no disponible:', error);
+      this.connectionStatus = 'disconnected';
+    }
+  }
+
+  getConnectionStatusText(): string {
+    switch (this.connectionStatus) {
+      case 'connected':
+        return 'Conectado al servidor';
+      case 'connecting':
+        return 'Verificando conexión...';
+      case 'disconnected':
+        return 'Sin conexión al servidor';
+      default:
+        return 'Estado desconocido';
+    }
+  }
+
+  onSubmit(): void {
     this.submitted = true;
+    this.error = '';
+    this.success = false;
 
     if (this.loginForm.invalid) {
+      this.markAllFieldsAsTouched();
+      return;
+    }
+
+    if (this.connectionStatus === 'disconnected') {
+      this.error = 'No hay conexión con el servidor. Verifique su conexión a internet.';
       return;
     }
 
     this.loading = true;
-    this.error = '';
+    const { username, password } = this.loginForm.value;
 
-    const usernameFromForm = this.f['username'].value;
-    const passwordFromForm = this.f['password'].value;
+    console.log('🔐 Intentando autenticar usuario:', username);
 
-    this.authService.login(usernameFromForm, passwordFromForm).subscribe({
+    this.authService.login(username, password).subscribe({
       next: (usuario: Usuario) => {
         this.loading = false;
-        console.log('✅ Login exitoso');
-        console.log('👤 Usuario:', usuario.nombre);
-        console.log('🎯 Roles desde backend:', usuario.roles);
+        this.success = true;
+        this.successMessage = `¡Bienvenido, ${usuario.nombre}!`;
+        
+        console.log('✅ Login exitoso para:', usuario.nombre, '- Rol:', usuario.roles);
 
-        // ✅ LÓGICA DE REDIRECCIÓN CORREGIDA
-        if (this.authService.esAdministrador()) {
-          console.log('✅ Administrador detectado, redirigiendo a panel de operario...');
-          // Por ahora redirigir al panel de operario hasta que implementes el de admin
-          this.router.navigate(['/operator/dashboard']);
-        } else if (this.authService.esOperario()) {
-          console.log('✅ Operario detectado, redirigiendo...');
-          this.router.navigate(['/operator/dashboard']);
-        } else {
-          console.log('✅ Usuario sin rol específico, redirigiendo a panel de operario...');
-          // Por defecto, ir al panel de operario
-          this.router.navigate(['/operator/dashboard']);
-        }
+        // Pequeña pausa para mostrar el mensaje de éxito
+        setTimeout(() => {
+          this.redirectToUserDashboard();
+        }, 1500);
       },
       error: (error: HttpErrorResponse) => {
         this.loading = false;
-        console.error('❌ Error en login - Status:', error.status);
+        this.success = false;
+        
+        console.error('❌ Error en login:', error);
 
+        // Manejo específico de errores
         if (error.status === 401) {
-          this.error = 'Usuario o contraseña incorrectos';
+          this.error = 'Usuario o contraseña incorrectos. Verifique sus credenciales.';
         } else if (error.status === 0) {
-          this.error = 'Error de conexión. Verifique su conexión a internet y que el servidor esté funcionando.';
+          this.error = 'Error de conexión. Verifique su conexión a internet y que el servidor esté disponible.';
+          this.connectionStatus = 'disconnected';
         } else if (error.status >= 500) {
-          this.error = 'Error en el servidor. Intente nuevamente.';
+          this.error = 'Error en el servidor. Intente nuevamente en unos momentos.';
+        } else if (error.status === 422) {
+          this.error = 'Datos de login inválidos. Verifique el formato de sus credenciales.';
         } else {
-          this.error = 'Error de autenticación. Intente nuevamente.';
+          this.error = error.message || 'Error de autenticación. Intente nuevamente.';
         }
+
+        // Si hay error, limpiar el formulario de contraseña
+        this.loginForm.patchValue({ password: '' });
+        this.submitted = false;
       },
     });
+  }
+
+  private redirectToUserDashboard(): void {
+    const user = this.authService.obtenerUsuarioActual();
+    
+    if (!user) {
+      console.warn('⚠️ No hay usuario después del login');
+      this.router.navigate(['/login']);
+      return;
+    }
+
+    // Redirigir según el rol del usuario
+    if (this.authService.esAdministrador()) {
+      console.log('✅ Redirigiendo administrador al dashboard');
+      this.router.navigate(['/operator/dashboard']); // Por ahora al mismo dashboard
+    } else if (this.authService.esOperario()) {
+      console.log('✅ Redirigiendo operario al dashboard');
+      this.router.navigate(['/operator/dashboard']);
+    } else {
+      console.log('✅ Redirigiendo usuario sin rol específico al dashboard');
+      this.router.navigate(['/operator/dashboard']);
+    }
+  }
+
+  private markAllFieldsAsTouched(): void {
+    Object.keys(this.loginForm.controls).forEach(key => {
+      const control = this.loginForm.get(key);
+      control?.markAsTouched();
+    });
+  }
+
+  // Método para llenar automáticamente las credenciales de prueba
+  fillTestCredentials(type: 'operario' | 'admin'): void {
+    if (type === 'operario') {
+      this.loginForm.patchValue({
+        username: 'operario',
+        password: 'operario123'
+      });
+    } else if (type === 'admin') {
+      this.loginForm.patchValue({
+        username: 'admin',
+        password: 'admin123'
+      });
+    }
+  }
+
+  // Método para reintentar conexión
+  retryConnection(): void {
+    this.checkBackendConnection();
   }
 }

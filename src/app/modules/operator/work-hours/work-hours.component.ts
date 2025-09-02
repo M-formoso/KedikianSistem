@@ -1,39 +1,23 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
-import { Subject, takeUntil } from 'rxjs';
-import { environment } from '../../../../environments/environment';
+import { HttpClientModule } from '@angular/common/http';
+import { Subject, takeUntil, interval } from 'rxjs';
+import { 
+  WorkHoursService,
+  WorkDay,
+  ReporteLaboral
+} from '../../../core/services/work-hours.service';
+import { AuthService, Usuario } from '../../../core/services/auth.service';
 
-// Interfaces locales adaptadas al backend
-interface WorkHoursRecord {
-  id: string;
-  fecha: string;
-  horaInicio: string;
-  horaFin?: string;
-  tiempoDescanso: number;
-  totalHoras: number;
-  usuarioId: string;
-  notas: string;
-  estado: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
+// Interface para el estado del fichaje activo
 interface ClockStatus {
   isActive: boolean;
   startTime: string;
   startTimestamp: Date;
-  usuarioId: string;
-  reporteId?: string;
-}
-
-interface Usuario {
-  id?: number;
-  nombre: string;
-  email: string;
-  estado: boolean;
-  roles: string;
+  usuarioId: number;
+  reporteId: number;
+  notas?: string;
 }
 
 @Component({
@@ -54,18 +38,16 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   error = '';
   loading = false;
   loadingMasterData = false;
-  clockInSubmitted = false;
   
   // Estado de fichaje
   activeClockIn: ClockStatus | null = null;
   elapsedTimeInterval: any;
   
-  // Datos maestros desde el backend
-  usuarios: Usuario[] = [];
+  // Usuario actual
   currentUser: Usuario | null = null;
   
   // Registros recientes
-  recentWorkHours: WorkHoursRecord[] = [];
+  recentWorkHours: WorkDay[] = [];
   
   // Propiedad para manejo del calendario
   private currentCalendarDate = new Date();
@@ -75,16 +57,18 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
   constructor(
     private formBuilder: FormBuilder,
-    private http: HttpClient
+    private workHoursService: WorkHoursService,
+    private authService: AuthService
   ) {
     this.initializeForms();
   }
 
   ngOnInit(): void {
-    this.loadMasterData();
+    this.loadCurrentUser();
+    this.checkForActiveClockIn();
     this.loadRecentWorkHours();
     this.setupMobileTable();
-    this.checkForActiveClockIn();
+    this.startClockUpdate();
   }
 
   ngOnDestroy(): void {
@@ -96,9 +80,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   private initializeForms(): void {
-    // Formulario para fichar entrada (sin proyecto)
+    // Formulario para fichar entrada (simplificado)
     this.clockInForm = this.formBuilder.group({
-      usuario: ['', Validators.required]
+      notas: ['']
     });
 
     // Formulario para fichar salida
@@ -108,185 +92,140 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadCurrentUser(): void {
+    this.currentUser = this.authService.obtenerUsuarioActual();
+    if (!this.currentUser) {
+      this.error = 'No se pudo cargar la información del usuario. Inicie sesión nuevamente.';
+      this.authService.cerrarSesion();
+    } else {
+      console.log('Usuario actual cargado:', this.currentUser);
+    }
+  }
+
   // Configuración para la tabla responsiva en móviles
   setupMobileTable(): void {
-    // Implementar lógica para tabla responsiva si es necesario
-  }
-
-  // Getter para acceder más fácilmente a los campos del formulario
-  get f() {
-    return this.clockInForm.controls;
-  }
-
-  get fOut() {
-    return this.clockOutForm.controls;
+    // Implementación futura para tabla responsiva
   }
 
   /**
-   * Cargar todos los datos maestros necesarios para el formulario
+   * Actualizar reloj en tiempo real
    */
-  loadMasterData(): void {
-    this.loadingMasterData = true;
-    this.error = '';
-
-    // Cargar usuarios desde el backend
-    this.http.get<Usuario[]>(`${environment.apiUrl}/usuarios`)
+  private startClockUpdate(): void {
+    interval(1000)
       .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (usuarios: Usuario[]) => {
-          this.usuarios = usuarios.filter(u => u.estado === true);
-          
-          // Establecer usuario actual (primer operario activo)
-          this.currentUser = this.usuarios.find(u => u.roles === 'operario') || this.usuarios[0] || {
-            id: 999,
-            nombre: 'Operario Actual',
-            email: 'operario@test.com',
-            estado: true,
-            roles: 'operario'
-          };
-
-          // Pre-seleccionar el usuario actual
-          if (this.currentUser) {
-            this.clockInForm.patchValue({ usuario: this.currentUser.id });
-          }
-
-          this.loadingMasterData = false;
-        },
-        error: (error: any) => {
-          console.error('Error cargando usuarios:', error);
-          
-          // Fallback a usuario mock
-          this.currentUser = {
-            id: 999,
-            nombre: 'Operario Test',
-            email: 'operario@test.com',
-            estado: true,
-            roles: 'operario'
-          };
-          this.usuarios = [this.currentUser];
-          
-          if (this.currentUser) {
-            this.clockInForm.patchValue({ usuario: this.currentUser.id });
-          }
-          
-          this.loadingMasterData = false;
+      .subscribe(() => {
+        if (this.activeClockIn) {
+          this.activeClockIn = { ...this.activeClockIn }; // Trigger change detection
         }
       });
-  }
-
-  /**
-   * Cargar registros recientes de horas trabajadas
-   */
-  loadRecentWorkHours(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/reportes-laborales`)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (reportes: any[]) => {
-          // Convertir reportes del backend al formato del frontend
-          this.recentWorkHours = reportes.map(reporte => ({
-            id: reporte.id.toString(),
-            fecha: reporte.fecha_asignacion.split('T')[0],
-            horaInicio: new Date(reporte.fecha_asignacion).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            horaFin: reporte.horas_turno ? new Date(reporte.horas_turno).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '',
-            tiempoDescanso: 60, // Valor por defecto
-            totalHoras: reporte.horas_turno ? this.calculateHours(reporte.fecha_asignacion, reporte.horas_turno) : 0,
-            usuarioId: reporte.usuario_id.toString(),
-            notas: '',
-            estado: reporte.horas_turno ? 'completado' : 'activo',
-            createdAt: new Date(reporte.created || reporte.fecha_asignacion),
-            updatedAt: new Date(reporte.updated || reporte.fecha_asignacion)
-          }));
-        },
-        error: (error: any) => {
-          console.error('Error cargando registros recientes:', error);
-          this.recentWorkHours = [];
-        }
-      });
-  }
-
-  /**
-   * Calcular horas entre dos timestamps
-   */
-  private calculateHours(start: string, end: string): number {
-    const startTime = new Date(start);
-    const endTime = new Date(end);
-    const diffMs = endTime.getTime() - startTime.getTime();
-    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
   }
 
   // Comprobar si hay un fichaje activo guardado
   checkForActiveClockIn(): void {
+    if (!this.currentUser) return;
+
+    // Primero verificar localStorage
     const savedClockIn = localStorage.getItem('activeWorkClockIn');
     if (savedClockIn) {
-      this.activeClockIn = JSON.parse(savedClockIn);
-      // Asegurarse de que startTimestamp sea un objeto Date
-      if (this.activeClockIn) {
-        this.activeClockIn.startTimestamp = new Date(this.activeClockIn.startTimestamp);
-        this.startElapsedTimeCounter();
+      try {
+        const parsed = JSON.parse(savedClockIn);
+        this.activeClockIn = {
+          ...parsed,
+          startTimestamp: new Date(parsed.startTimestamp)
+        };
+        console.log('Fichaje activo encontrado en localStorage:', this.activeClockIn);
+        return;
+      } catch (error) {
+        console.error('Error parsing localStorage clockIn:', error);
+        localStorage.removeItem('activeWorkClockIn');
       }
     }
+
+    // Si no hay en localStorage, verificar en el backend
+    this.workHoursService.getActiveWorkDay(this.currentUser.id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const reporte = response.data;
+            this.activeClockIn = {
+              isActive: true,
+              startTime: this.extractTime(reporte.fecha_asignacion),
+              startTimestamp: new Date(reporte.fecha_asignacion),
+              usuarioId: reporte.usuario_id,
+              reporteId: reporte.id!
+            };
+            
+            // Guardar en localStorage para persistencia
+            localStorage.setItem('activeWorkClockIn', JSON.stringify(this.activeClockIn));
+            console.log('Fichaje activo encontrado en backend:', this.activeClockIn);
+          }
+        },
+        error: (error) => {
+          console.error('Error verificando fichaje activo:', error);
+        }
+      });
   }
 
   /**
-   * Fichar entrada (sin selección de proyecto)
+   * Extraer tiempo de un timestamp ISO
+   */
+  private extractTime(isoString: string): string {
+    return new Date(isoString).toLocaleTimeString('es-ES', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+
+  /**
+   * Fichar entrada
    */
   clockIn(): void {
-    this.clockInSubmitted = true;
-    this.success = false;
-    this.error = '';
-
-    if (this.clockInForm.invalid) {
-      this.markFormGroupTouched(this.clockInForm);
+    if (!this.currentUser) {
+      this.error = 'Usuario no disponible';
       return;
     }
 
     this.loading = true;
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const currentTime = `${hours}:${minutes}`;
+    this.success = false;
+    this.error = '';
 
     const formValues = this.clockInForm.value;
-    const reporteData = {
-      usuario_id: parseInt(formValues.usuario),
-      fecha_asignacion: now.toISOString(),
-      horas_turno: null // Se llenará al hacer clockOut
-    };
 
-    this.http.post<any>(`${environment.apiUrl}/reportes-laborales`, reporteData)
+    this.workHoursService.clockIn(this.currentUser.id, formValues.notas)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (response: any) => {
+        next: (response) => {
           this.loading = false;
-          if (response && response.id) {
+          if (response.success && response.data) {
+            const reporte = response.data;
+            const now = new Date();
+            
             // Crear estado de fichaje activo
             this.activeClockIn = {
               isActive: true,
-              startTime: currentTime,
-              startTimestamp: now,
-              usuarioId: formValues.usuario,
-              reporteId: response.id.toString()
+              startTime: this.extractTime(reporte.fecha_asignacion),
+              startTimestamp: new Date(reporte.fecha_asignacion),
+              usuarioId: reporte.usuario_id,
+              reporteId: reporte.id!,
+              notas: formValues.notas
             };
 
             localStorage.setItem('activeWorkClockIn', JSON.stringify(this.activeClockIn));
-            this.startElapsedTimeCounter();
+            
             this.success = true;
-            this.clockInSubmitted = false;
-            this.clockInForm.reset();
-
-            if (this.currentUser) {
-              this.clockInForm.patchValue({ usuario: this.currentUser.id });
-            }
+            this.clockInForm.reset({ notas: '' });
 
             setTimeout(() => { this.success = false; }, 3000);
+            console.log('Fichaje de entrada registrado:', this.activeClockIn);
           } else {
-            this.error = 'Error al crear el fichaje';
+            this.error = response.message || 'Error al registrar fichaje de entrada';
           }
         },
-        error: (error: any) => {
+        error: (error) => {
           this.loading = false;
-          this.error = 'Error al procesar la solicitud';
-          console.error('Error iniciando sesión de trabajo:', error);
+          this.error = error.message || 'Error al procesar la solicitud';
+          console.error('Error fichando entrada:', error);
         }
       });
   }
@@ -295,66 +234,72 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Fichar salida
    */
   clockOut(): void {
-    if (!this.activeClockIn || !this.activeClockIn.reporteId) return;
+    if (!this.activeClockIn || !this.currentUser) {
+      this.error = 'No hay fichaje activo';
+      return;
+    }
 
     this.loading = true;
     this.error = '';
 
-    const now = new Date();
     const formValues = this.clockOutForm.value;
     
-    const updateData = {
-      horas_turno: now.toISOString()
-    };
+    this.workHoursService.clockOut(
+      this.activeClockIn.reporteId, 
+      formValues.tiempoDescanso, 
+      formValues.notas
+    )
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        this.loading = false;
+        
+        if (response.success) {
+          // Limpiar el estado activo
+          localStorage.removeItem('activeWorkClockIn');
+          this.activeClockIn = null;
 
-    this.http.put<any>(`${environment.apiUrl}/reportes-laborales/${this.activeClockIn.reporteId}`, updateData)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response: any) => {
-          this.loading = false;
-          
-          if (response) {
-            // Limpiar el estado activo
-            clearInterval(this.elapsedTimeInterval);
-            localStorage.removeItem('activeWorkClockIn');
-            this.activeClockIn = null;
+          // Resetear el formulario de salida
+          this.clockOutForm.reset({
+            tiempoDescanso: 60,
+            notas: ''
+          });
 
-            // Resetear el formulario de salida
-            this.clockOutForm.reset({
-              tiempoDescanso: 60,
-              notas: ''
-            });
+          this.success = true;
+          this.loadRecentWorkHours(); // Recargar registros recientes
 
-            this.success = true;
-            this.loadRecentWorkHours(); // Recargar registros recientes
-
-            setTimeout(() => { this.success = false; }, 3000);
-          } else {
-            this.error = 'Error al finalizar fichaje';
-          }
-        },
-        error: (error: any) => {
-          this.loading = false;
-          this.error = 'Error al procesar la solicitud';
-          console.error('Error finalizando sesión de trabajo:', error);
+          setTimeout(() => { this.success = false; }, 3000);
+          console.log('Fichaje de salida registrado correctamente');
+        } else {
+          this.error = response.message || 'Error al finalizar fichaje';
         }
-      });
+      },
+      error: (error) => {
+        this.loading = false;
+        this.error = error.message || 'Error al procesar la solicitud';
+        console.error('Error fichando salida:', error);
+      }
+    });
   }
 
-  // Iniciar contador de tiempo transcurrido
-  startElapsedTimeCounter(): void {
-    // Limpiar cualquier intervalo existente
-    if (this.elapsedTimeInterval) {
-      clearInterval(this.elapsedTimeInterval);
-    }
-
-    // Actualizar cada minuto
-    this.elapsedTimeInterval = setInterval(() => {
-      // Esto forzará la actualización del template con getElapsedTime()
-      if (this.activeClockIn) {
-        this.activeClockIn = { ...this.activeClockIn };
-      }
-    }, 60000); // 60000 ms = 1 minuto
+  /**
+   * Cargar registros recientes de horas trabajadas
+   */
+  loadRecentWorkHours(): void {
+    this.workHoursService.getRecentWorkDays(10)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.recentWorkHours = response.data;
+            console.log('Registros recientes cargados:', this.recentWorkHours.length);
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando registros recientes:', error);
+          this.recentWorkHours = [];
+        }
+      });
   }
 
   // Calcular tiempo transcurrido desde el fichaje de entrada
@@ -372,23 +317,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Marcar todos los campos del formulario como tocados para mostrar errores
-   */
-  private markFormGroupTouched(formGroup: FormGroup): void {
-    Object.keys(formGroup.controls).forEach(key => {
-      const control = formGroup.get(key);
-      control?.markAsTouched();
-    });
-  }
-
-  /**
-   * Refrescar datos maestros
-   */
-  refreshMasterData(): void {
-    this.loadMasterData();
-  }
-
-  /**
    * Refrescar registros recientes
    */
   refreshRecentWorkHours(): void {
@@ -396,14 +324,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
-
-  /**
-   * Obtener nombre del usuario por ID
-   */
-  getUsuarioName(usuarioId: string): string {
-    const usuario = this.usuarios.find(u => u.id?.toString() === usuarioId);
-    return usuario ? usuario.nombre : 'Usuario desconocido';
-  }
 
   /**
    * Verificar si un campo del formulario tiene errores
@@ -437,7 +357,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
-      'usuario': 'El usuario',
       'tiempoDescanso': 'El tiempo de descanso',
       'notas': 'Las notas'
     };
@@ -452,24 +371,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Filtrar usuarios activos
-   */
-  get activeUsuarios(): Usuario[] {
-    return this.usuarios.filter(usuario => usuario.estado !== false);
-  }
-
-  /**
    * Formatear horas para mostrar
    */
   formatHours(hours: number): string {
     return `${hours.toFixed(1)}h`;
-  }
-
-  /**
-   * Obtener estado del reporte
-   */
-  getWorkHoursStatus(workHours: WorkHoursRecord): string {
-    return workHours.estado || 'activo';
   }
 
   /**
@@ -479,7 +384,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const statusClasses: { [key: string]: string } = {
       'activo': 'badge-success',
       'pendiente': 'badge-warning',
-      'completado': 'badge-info',
+      'completado': 'badge-secondary',
       'cancelado': 'badge-danger'
     };
     return statusClasses[status] || 'badge-secondary';
@@ -496,7 +401,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * Verificar si puede fichar entrada
    */
   canClockIn(): boolean {
-    return !this.activeClockIn && !this.isLoading && this.clockInForm.valid;
+    return !this.activeClockIn && !this.isLoading && !!this.currentUser;
   }
 
   /**
@@ -509,35 +414,42 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   /**
    * TrackBy function para optimizar la renderización de la tabla
    */
-  trackByWorkHours(index: number, workHours: WorkHoursRecord): string {
-    return workHours.id;
+  trackByWorkHours(index: number, workHours: WorkDay): string {
+    return workHours.id?.toString() || index.toString();
   }
 
   /**
    * Editar registro de horas trabajadas
    */
-  editWorkHours(workHours: WorkHoursRecord): void {
+  editWorkHours(workHours: WorkDay): void {
     console.log('Editando registro:', workHours);
-    // Implementar lógica de edición
+    // TODO: Implementar lógica de edición
   }
 
   /**
    * Eliminar registro de horas trabajadas
    */
-  deleteWorkHours(workHours: WorkHoursRecord): void {
+  deleteWorkHours(workHours: WorkDay): void {
+    if (!workHours.id) return;
+    
     if (confirm('¿Está seguro de que desea eliminar este registro?')) {
       this.loading = true;
-      this.http.delete<any>(`${environment.apiUrl}/reportes-laborales/${workHours.id}`)
+      
+      this.workHoursService.deleteWorkDay(workHours.id)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: () => {
-            this.loadRecentWorkHours(); // Recargar la lista
-            this.success = true;
+          next: (response) => {
+            if (response.success) {
+              this.loadRecentWorkHours(); // Recargar la lista
+              this.success = true;
+              setTimeout(() => { this.success = false; }, 3000);
+            } else {
+              this.error = response.message || 'Error al eliminar el registro';
+            }
             this.loading = false;
-            setTimeout(() => { this.success = false; }, 3000);
           },
-          error: (error: any) => {
-            this.error = 'Error al eliminar el registro';
+          error: (error) => {
+            this.error = error.message || 'Error al eliminar el registro';
             this.loading = false;
             console.error('Error eliminando registro:', error);
           }
@@ -552,13 +464,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   isNearingLimit(): boolean {
     if (!this.activeClockIn) return false;
-    
-    const now = new Date();
-    const start = this.activeClockIn.startTimestamp;
-    const diffMs = now.getTime() - start.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-    
-    return diffHours >= 8; // Alerta a partir de 8 horas
+    return this.workHoursService.isNearingLimit(this.activeClockIn.startTimestamp);
   }
 
   /**
@@ -566,13 +472,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   hasExceededLimit(): boolean {
     if (!this.activeClockIn) return false;
-    
-    const now = new Date();
-    const start = this.activeClockIn.startTimestamp;
-    const diffMs = now.getTime() - start.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-    
-    return diffHours >= 9; // Límite superado a las 9 horas
+    return this.workHoursService.hasExceededLimit(this.activeClockIn.startTimestamp);
   }
 
   /**
@@ -581,12 +481,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   getRemainingTime(): string {
     if (!this.activeClockIn) return '';
     
-    const now = new Date();
-    const start = this.activeClockIn.startTimestamp;
-    const diffMs = now.getTime() - start.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+    const elapsed = this.workHoursService.calculateElapsedTime(this.activeClockIn.startTimestamp);
+    const totalHours = elapsed.hours + (elapsed.minutes / 60);
     
-    const remainingHours = Math.max(0, 9 - diffHours);
+    const remainingHours = Math.max(0, 9 - totalHours);
     const hours = Math.floor(remainingHours);
     const minutes = Math.floor((remainingHours - hours) * 60);
     
@@ -599,12 +497,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   getWorkDayProgress(): number {
     if (!this.activeClockIn) return 0;
     
-    const now = new Date();
-    const start = this.activeClockIn.startTimestamp;
-    const diffMs = now.getTime() - start.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+    const elapsed = this.workHoursService.calculateElapsedTime(this.activeClockIn.startTimestamp);
+    const totalHours = elapsed.hours + (elapsed.minutes / 60);
     
-    return Math.min(100, Math.round((diffHours / 9) * 100));
+    return Math.min(100, Math.round((totalHours / 9) * 100));
   }
 
   // ============ MÉTODOS DE CALENDARIO ============
