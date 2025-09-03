@@ -56,30 +56,12 @@ export function AuthInterceptor(
     catchError((error: HttpErrorResponse) => {
       // Si es error 401, intentar refrescar token solo una vez
       if (error.status === 401 && token && !request.url.includes('/auth/refresh')) {
-        console.log('🔄 Intentando refrescar token...');
+        console.log('🔄 Token inválido, cerrando sesión...');
         
-        return authService.refrescarToken().pipe(
-          switchMap((usuario) => {
-            // Reintentar con el nuevo token
-            const newToken = usuario.access_token;
-            if (newToken) {
-              const retryRequest = request.clone({
-                setHeaders: {
-                  'Authorization': `Bearer ${newToken}`,
-                  'Accept': 'application/json'
-                }
-              });
-              return next(retryRequest);
-            }
-            throw error;
-          }),
-          catchError((refreshError) => {
-            // Si falla el refresh, cerrar sesión
-            console.error('❌ Error refrescando token, cerrando sesión');
-            authService.cerrarSesion();
-            return throwError(() => refreshError);
-          })
-        );
+        // En lugar de intentar refrescar, cerrar sesión directamente
+        // porque el backend actual no implementa refresh token
+        authService.cerrarSesion();
+        return throwError(() => new Error('Sesión expirada'));
       }
       
       return handleHttpError(error, router, authService);

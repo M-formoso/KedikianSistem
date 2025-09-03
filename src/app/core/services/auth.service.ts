@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
-// ✅ INTERFACES CORREGIDAS
+// ✅ INTERFACES CORREGIDAS PARA COINCIDIR CON EL BACKEND
 export interface Usuario {
   id: number;
   nombre: string;
@@ -43,7 +43,7 @@ export class AuthService {
   }
 
   private cargarUsuarioDesdeAlmacenamiento(): void {
-    const usuarioAlmacenado = localStorage.getItem(environment.tokenKey);
+    const usuarioAlmacenado = localStorage.getItem(environment.tokenKey || 'usuarioActual');
     if (usuarioAlmacenado) {
       try {
         const usuario = JSON.parse(usuarioAlmacenado);
@@ -55,7 +55,7 @@ export class AuthService {
         }
       } catch (error) {
         console.error('Error al cargar usuario del localStorage:', error);
-        localStorage.removeItem(environment.tokenKey);
+        localStorage.removeItem(environment.tokenKey || 'usuarioActual');
       }
     }
   }
@@ -73,7 +73,7 @@ export class AuthService {
     }
   }
 
-  // ✅ LOGIN CORREGIDO - SIN CODIFICACIÓN BASE64
+  // ✅ LOGIN CORREGIDO - SIN CODIFICACIÓN BASE64, OAUTH2 ESTÁNDAR
   login(username: string, password: string): Observable<Usuario> {
     console.log('🚀 Iniciando autenticación...');
     console.log('🌐 Endpoint:', `${apiUrl}/auth/login`);
@@ -116,7 +116,7 @@ export class AuthService {
               token: loginResponse.access_token
             };
             
-            localStorage.setItem(environment.tokenKey, JSON.stringify(usuarioCompleto));
+            localStorage.setItem(environment.tokenKey || 'usuarioActual', JSON.stringify(usuarioCompleto));
             this.usuarioActualSubject.next(usuarioCompleto);
             
             console.log('✅ Usuario autenticado correctamente');
@@ -167,7 +167,7 @@ export class AuthService {
   }
 
   cerrarSesion(): void {
-    localStorage.removeItem(environment.tokenKey);
+    localStorage.removeItem(environment.tokenKey || 'usuarioActual');
     this.usuarioActualSubject.next(null);
     this.router.navigate(['/login']);
   }
@@ -227,7 +227,7 @@ export class AuthService {
         if (response.access_token) {
           usuario.access_token = response.access_token;
           usuario.token = response.access_token;
-          localStorage.setItem(environment.tokenKey, JSON.stringify(usuario));
+          localStorage.setItem(environment.tokenKey || 'usuarioActual', JSON.stringify(usuario));
           this.usuarioActualSubject.next(usuario);
         }
       }),

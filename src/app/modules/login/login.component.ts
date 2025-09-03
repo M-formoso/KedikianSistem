@@ -20,8 +20,306 @@ import { environment } from '../../../environments/environment';
     RouterModule,
     HttpClientModule
   ],
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.css']
+  template: `
+    <div class="login-container">
+      <div class="login-card">
+        <h2 class="login-title">Sistema de Retroexcavadoras y Áridos</h2>
+        <p class="login-subtitle">Panel del Operario</p>
+
+        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+          <div class="form-group">
+            <label for="username">Usuario</label>
+            <input
+              type="text"
+              id="username"
+              formControlName="username"
+              class="form-control"
+              [class.is-invalid]="submitted && f['username'].errors"
+              placeholder="Ingrese su email o usuario"
+            />
+            <div *ngIf="submitted && f['username'].errors" class="invalid-feedback">
+              <div *ngIf="f['username'].errors['required']">
+                Usuario es requerido
+              </div>
+              <div *ngIf="f['username'].errors['minlength']">
+                Usuario debe tener al menos 3 caracteres
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Contraseña</label>
+            <input
+              type="password"
+              id="password"
+              formControlName="password"
+              class="form-control"
+              [class.is-invalid]="submitted && f['password'].errors"
+              placeholder="Ingrese su contraseña"
+            />
+            <div *ngIf="submitted && f['password'].errors" class="invalid-feedback">
+              <div *ngIf="f['password'].errors['required']">
+                Contraseña es requerida
+              </div>
+              <div *ngIf="f['password'].errors['minlength']">
+                Contraseña debe tener al menos 3 caracteres
+              </div>
+            </div>
+          </div>
+
+          <!-- Estado de conexión -->
+          <div class="connection-status mb-3">
+            <small class="text-muted">
+              Estado: 
+              <span [class]="getConnectionStatusClass()">
+                {{ getConnectionStatusText() }}
+              </span>
+              <button 
+                *ngIf="connectionStatus === 'disconnected'" 
+                type="button" 
+                class="btn btn-sm btn-outline-secondary ms-2" 
+                (click)="retryConnection()">
+                Reintentar
+              </button>
+            </small>
+          </div>
+
+          <div class="form-group">
+            <button 
+              type="submit" 
+              class="btn btn-primary"
+              [disabled]="loading || connectionStatus === 'disconnected'">
+              <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+              {{ loading ? 'Iniciando sesión...' : 'Ingresar' }}
+            </button>
+          </div>
+
+          <div *ngIf="error" class="alert alert-danger mt-3">{{ error }}</div>
+          
+          <div *ngIf="success" class="alert alert-success mt-3">{{ successMessage }}</div>
+          
+          <div class="mt-3 text-center">
+            <p><small class="text-muted">Usuarios de prueba:</small></p>
+            <div class="d-flex gap-2 justify-content-center">
+              <button 
+                type="button" 
+                class="btn btn-sm btn-outline-info" 
+                (click)="fillTestCredentials('operario')"
+                [disabled]="loading">
+                Operario
+              </button>
+              <button 
+                type="button" 
+                class="btn btn-sm btn-outline-warning" 
+                (click)="fillTestCredentials('admin')"
+                [disabled]="loading">
+                Admin
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 2rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .login-title {
+      text-align: center;
+      margin-bottom: 0.5rem;
+      color: #333;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .login-subtitle {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: #666;
+      font-size: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e1e5e9;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .is-invalid {
+      border-color: #dc3545;
+    }
+
+    .invalid-feedback {
+      color: #dc3545;
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+
+    .btn {
+      display: inline-block;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      vertical-align: middle;
+      user-select: none;
+      border: 1px solid transparent;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      line-height: 1.5;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+
+    .btn-primary {
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-sm {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.875rem;
+    }
+
+    .btn-outline-info {
+      color: #17a2b8;
+      border-color: #17a2b8;
+      background: transparent;
+    }
+
+    .btn-outline-warning {
+      color: #ffc107;
+      border-color: #ffc107;
+      background: transparent;
+    }
+
+    .alert {
+      position: relative;
+      padding: 0.75rem 1.25rem;
+      margin-bottom: 1rem;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .alert-danger {
+      color: #721c24;
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+    }
+
+    .alert-success {
+      color: #155724;
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+    }
+
+    .connection-status {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .text-success { color: #28a745 !important; }
+    .text-warning { color: #ffc107 !important; }
+    .text-danger { color: #dc3545 !important; }
+    .text-muted { color: #6c757d !important; }
+
+    .spinner-border {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      vertical-align: text-bottom;
+      border: 0.15em solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spinner-border 0.75s linear infinite;
+    }
+
+    @keyframes spinner-border {
+      to { transform: rotate(360deg); }
+    }
+
+    .d-flex {
+      display: flex !important;
+    }
+
+    .gap-2 {
+      gap: 0.5rem !important;
+    }
+
+    .justify-content-center {
+      justify-content: center !important;
+    }
+
+    .mt-3 {
+      margin-top: 1rem !important;
+    }
+
+    .mb-3 {
+      margin-bottom: 1rem !important;
+    }
+
+    .me-2 {
+      margin-right: 0.5rem !important;
+    }
+
+    .ms-2 {
+      margin-left: 0.5rem !important;
+    }
+
+    .text-center {
+      text-align: center !important;
+    }
+  `]
 })
 export class LoginComponent implements OnInit {
   loginForm: FormGroup;
@@ -95,6 +393,19 @@ export class LoginComponent implements OnInit {
         return 'Sin conexión al servidor';
       default:
         return 'Estado desconocido';
+    }
+  }
+
+  getConnectionStatusClass(): string {
+    switch (this.connectionStatus) {
+      case 'connected':
+        return 'text-success';
+      case 'connecting':
+        return 'text-warning';
+      case 'disconnected':
+        return 'text-danger';
+      default:
+        return 'text-muted';
     }
   }
 
