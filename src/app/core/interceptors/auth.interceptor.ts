@@ -17,47 +17,65 @@ export function AuthInterceptor(
   const router = inject(Router);
   const authService = inject(AuthService);
 
-  // Rutas que no requieren token
-  const publicRoutes = ['/auth/login', '/auth/register', '/auth/refresh'];
+  // ✅ Rutas que no requieren token
+  const publicRoutes = ['/auth/login', '/auth/register', '/usuarios'];
   const isPublicRoute = publicRoutes.some(route => request.url.includes(route));
 
+  // ✅ Para rutas públicas, solo manejar errores
   if (isPublicRoute) {
     return next(request).pipe(
       catchError((error: HttpErrorResponse) => handleHttpError(error, router, authService))
     );
   }
 
-  // Obtener token del servicio de autenticación
+  // ✅ Obtener token del servicio de autenticación
   const token = authService.obtenerTokenAuth();
 
-  // Clonar request con headers
-  let secureRequest = request.clone({
-    setHeaders: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
-  });
+  // ✅ Si no hay token y la ruta no es pública, redirigir al login
+  if (!token) {
+    console.warn('🔐 No hay token disponible, redirigiendo al login');
+    authService.cerrarSesion();
+    return throwError(() => new Error('No autorizado'));
+  }
 
+  // ✅ Clonar request con headers correctos
+  let secureRequest = request;
+  
+  // Solo agregar headers si no los tiene ya
+  if (!request.headers.has('Authorization')) {
+    secureRequest = request.clone({
+      setHeaders: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+  }
+
+  // ✅ Enviar request y manejar errores
   return next(secureRequest).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Si es error 401, intentar refrescar token
-      if (error.status === 401 && token) {
+      // Si es error 401, intentar refrescar token solo una vez
+      if (error.status === 401 && token && !request.url.includes('/auth/refresh')) {
+        console.log('🔄 Intentando refrescar token...');
+        
         return authService.refrescarToken().pipe(
           switchMap((usuario) => {
             // Reintentar con el nuevo token
             const newToken = usuario.access_token;
-            const retryRequest = request.clone({
-              setHeaders: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                Authorization: `Bearer ${newToken}`
-              }
-            });
-            return next(retryRequest);
+            if (newToken) {
+              const retryRequest = request.clone({
+                setHeaders: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Accept': 'application/json'
+                }
+              });
+              return next(retryRequest);
+            }
+            throw error;
           }),
           catchError((refreshError) => {
             // Si falla el refresh, cerrar sesión
+            console.error('❌ Error refrescando token, cerrando sesión');
             authService.cerrarSesion();
             return throwError(() => refreshError);
           })
@@ -74,11 +92,12 @@ function handleHttpError(
   router: Router, 
   authService: AuthService
 ): Observable<never> {
-  console.error('HTTP Error:', {
+  console.error('❌ HTTP Error:', {
     status: error.status,
     statusText: error.statusText,
     url: error.url,
-    message: error.message
+    message: error.message,
+    error: error.error
   });
 
   switch (error.status) {
@@ -95,6 +114,9 @@ function handleHttpError(
       break;
     case 404:
       console.warn('🔍 Recurso no encontrado:', error.url);
+      break;
+    case 422:
+      console.warn('📝 Error de validación:', error.error?.detail || error.message);
       break;
     case 500:
       console.error('🔥 Error interno del servidor');

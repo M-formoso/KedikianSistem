@@ -1,28 +1,33 @@
 // src/environments/environment.ts
 export const environment = {
   production: false,
-  apiUrl: 'http://kedikian.site/api/v1', // ✅ Tu URL actual
-  // apiUrl: 'http://localhost:8000/api/v1', // Para desarrollo local
+  // ✅ URL corregida para tu backend FastAPI
+  apiUrl: 'http://kedikian.site/api/v1', 
+  // Para desarrollo local descomenta esta:
+  // apiUrl: 'http://localhost:8000/api/v1',
+  
   appName: 'Sistema de Retroexcavadoras y Áridos',
   version: '1.0.0',
-  // Configuración adicional
+  
+  // Configuración de autenticación
   tokenKey: 'usuarioActual',
-  sessionTimeout: 8 * 60 * 60 * 1000, // 8 horas en milliseconds
+  sessionTimeout: 8 * 60 * 60 * 1000, // 8 horas
   refreshTokenTime: 30 * 60 * 1000, // 30 minutos
   
-  // Configuración de límites
-  maxWorkHours: 9, // Máximo de horas laborales por día
-  warningHours: 8, // Horas antes de mostrar advertencia
+  // Configuración de límites laborales
+  maxWorkHours: 9,
+  warningHours: 8,
   
-  // Configuración de paginación
+  // Paginación
   defaultPageSize: 10,
   maxPageSize: 100
 };
 
-// src/environments/environment.prod.ts
-export const environmentProd = {
+// src/environments/environment.prod.ts  
+export const environment = {
   production: true,
-  apiUrl: 'http://168.197.50.82/api/v1', // ✅ Tu servidor de producción
+  // ✅ URL de producción
+  apiUrl: 'http://kedikian.site/api/v1', 
   appName: 'Sistema de Retroexcavadoras y Áridos',
   version: '1.0.0',
   tokenKey: 'usuarioActual',

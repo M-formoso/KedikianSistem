@@ -9,6 +9,7 @@ import {
 } from '@angular/forms';
 import { AuthService, Usuario } from '../../core/services/auth.service';
 import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -29,7 +30,7 @@ export class LoginComponent implements OnInit {
   error = '';
   success = false;
   successMessage = '';
-  connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connected';
+  connectionStatus: 'connected' | 'disconnected' | 'connecting' = 'connecting';
 
   constructor(
     private formBuilder: FormBuilder,
@@ -46,6 +47,7 @@ export class LoginComponent implements OnInit {
     // Verificar si ya está autenticado
     if (this.authService.estaAutenticado()) {
       this.redirectToUserDashboard();
+      return;
     }
 
     // Verificar conectividad con el backend
@@ -60,9 +62,8 @@ export class LoginComponent implements OnInit {
     this.connectionStatus = 'connecting';
     
     try {
-      // ✅ CORREGIDO: Usar la URL directa del backend
-      // Usar /auth/me que es más apropiado para verificar el estado del servicio
-      const response = await fetch('http://kedikian.site/api/v1/auth/me', {
+      // ✅ Verificar usando un endpoint simple del backend
+      const response = await fetch(`${environment.apiUrl}/usuarios`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -70,14 +71,16 @@ export class LoginComponent implements OnInit {
         }
       });
       
+      // ✅ 401 o 200 significa que el backend responde
       if (response.status === 401 || response.ok) {
-        // 401 es esperado sin autenticación, pero significa que el backend responde
         this.connectionStatus = 'connected';
+        console.log('✅ Backend conectado');
       } else {
         this.connectionStatus = 'disconnected';
+        console.warn('⚠️ Backend no responde correctamente');
       }
     } catch (error) {
-      console.warn('Backend no disponible:', error);
+      console.error('❌ Backend no disponible:', error);
       this.connectionStatus = 'disconnected';
     }
   }
@@ -115,6 +118,7 @@ export class LoginComponent implements OnInit {
 
     console.log('🔐 Intentando autenticar usuario:', username);
 
+    // ✅ Login directo sin codificación base64
     this.authService.login(username, password).subscribe({
       next: (usuario: Usuario) => {
         this.loading = false;
@@ -128,24 +132,26 @@ export class LoginComponent implements OnInit {
           this.redirectToUserDashboard();
         }, 1500);
       },
-      error: (error: HttpErrorResponse) => {
+      error: (error: any) => {
         this.loading = false;
         this.success = false;
         
         console.error('❌ Error en login:', error);
 
-        // Manejo específico de errores
-        if (error.status === 401) {
+        // ✅ Manejo específico de errores mejorado
+        if (error.message) {
+          this.error = error.message;
+        } else if (error.status === 401) {
           this.error = 'Usuario o contraseña incorrectos. Verifique sus credenciales.';
         } else if (error.status === 0) {
-          this.error = 'Error de conexión. Verifique su conexión a internet y que el servidor esté disponible.';
+          this.error = 'Error de conexión. Verifique que el servidor esté disponible.';
           this.connectionStatus = 'disconnected';
         } else if (error.status >= 500) {
           this.error = 'Error en el servidor. Intente nuevamente en unos momentos.';
         } else if (error.status === 422) {
           this.error = 'Datos de login inválidos. Verifique el formato de sus credenciales.';
         } else {
-          this.error = error.message || 'Error de autenticación. Intente nuevamente.';
+          this.error = 'Error de autenticación. Intente nuevamente.';
         }
 
         // Si hay error, limpiar el formulario de contraseña
@@ -164,7 +170,9 @@ export class LoginComponent implements OnInit {
       return;
     }
 
-    // Redirigir según el rol del usuario
+    console.log('🎯 Redirigiendo usuario:', user.nombre, 'con rol:', user.roles);
+
+    // ✅ Redirigir según el rol del usuario
     if (this.authService.esAdministrador()) {
       console.log('✅ Redirigiendo administrador al dashboard');
       this.router.navigate(['/operator/dashboard']); // Por ahora al mismo dashboard
@@ -184,16 +192,16 @@ export class LoginComponent implements OnInit {
     });
   }
 
-  // Método para llenar automáticamente las credenciales de prueba
+  // ✅ Credenciales de prueba actualizadas
   fillTestCredentials(type: 'operario' | 'admin'): void {
     if (type === 'operario') {
       this.loginForm.patchValue({
-        username: 'operario',
-        password: 'operario123'
+        username: 'admin@kedikian.com', // ✅ Usar email como username
+        password: 'admin123'
       });
     } else if (type === 'admin') {
       this.loginForm.patchValue({
-        username: 'admin',
+        username: 'admin@kedikian.com', // ✅ Usar email como username
         password: 'admin123'
       });
     }
@@ -201,6 +209,11 @@ export class LoginComponent implements OnInit {
 
   // Método para reintentar conexión
   retryConnection(): void {
+    this.checkBackendConnection();
+  }
+
+  // ✅ Método para probar la conexión manualmente
+  testConnection(): void {
     this.checkBackendConnection();
   }
 }

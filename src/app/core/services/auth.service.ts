@@ -5,15 +5,16 @@ import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
-// ✅ INTERFACES UNIFICADAS
+// ✅ INTERFACES CORREGIDAS
 export interface Usuario {
   id: number;
   nombre: string;
   email: string;
-  roles: string; // El backend devuelve string, no array
+  roles: string; // ✅ Backend devuelve string, no array
   estado: boolean;
-  token?: string;
   access_token?: string;
+  token?: string;
+  fecha_creacion?: string;
 }
 
 // Interfaz para la respuesta del login OAuth2
@@ -28,7 +29,7 @@ export interface CredencialesLogin {
   password: string;
 }
 
-const apiUrl = `${environment.apiUrl}`;
+const apiUrl = environment.apiUrl;
 
 @Injectable({
   providedIn: 'root',
@@ -42,7 +43,7 @@ export class AuthService {
   }
 
   private cargarUsuarioDesdeAlmacenamiento(): void {
-    const usuarioAlmacenado = localStorage.getItem('usuarioActual');
+    const usuarioAlmacenado = localStorage.getItem(environment.tokenKey);
     if (usuarioAlmacenado) {
       try {
         const usuario = JSON.parse(usuarioAlmacenado);
@@ -54,7 +55,7 @@ export class AuthService {
         }
       } catch (error) {
         console.error('Error al cargar usuario del localStorage:', error);
-        localStorage.removeItem('usuarioActual');
+        localStorage.removeItem(environment.tokenKey);
       }
     }
   }
@@ -72,11 +73,12 @@ export class AuthService {
     }
   }
 
+  // ✅ LOGIN CORREGIDO - SIN CODIFICACIÓN BASE64
   login(username: string, password: string): Observable<Usuario> {
     console.log('🚀 Iniciando autenticación...');
     console.log('🌐 Endpoint:', `${apiUrl}/auth/login`);
   
-    // Preparar datos para OAuth2
+    // ✅ Preparar datos para OAuth2 estándar (SIN base64)
     const body = new HttpParams()
       .set('username', username)
       .set('password', password)
@@ -107,14 +109,14 @@ export class AuthService {
             const usuarioCompleto: Usuario = {
               id: usuarioInfo.id,
               nombre: usuarioInfo.nombre || usuarioInfo.name || username,
-              email: usuarioInfo.email || `${username}@sistema.com`,
-              roles: usuarioInfo.roles || usuarioInfo.role || 'operario',
+              email: usuarioInfo.email || `${username}@kedikian.com`,
+              roles: usuarioInfo.roles || 'operario', // ✅ String simple
               estado: usuarioInfo.estado !== false,
-              token: loginResponse.access_token,
-              access_token: loginResponse.access_token
+              access_token: loginResponse.access_token,
+              token: loginResponse.access_token
             };
             
-            localStorage.setItem('usuarioActual', JSON.stringify(usuarioCompleto));
+            localStorage.setItem(environment.tokenKey, JSON.stringify(usuarioCompleto));
             this.usuarioActualSubject.next(usuarioCompleto);
             
             console.log('✅ Usuario autenticado correctamente');
@@ -152,11 +154,11 @@ export class AuthService {
       catchError((error) => {
         console.warn('⚠️ Error al obtener información del usuario:', error);
         
-        // Si falla /auth/me, crear un usuario básico con el token
+        // ✅ Si falla /auth/me, crear un usuario básico con el token
         return of({
           id: Date.now(), // ID temporal
           nombre: 'Usuario',
-          email: 'usuario@sistema.com',
+          email: 'usuario@kedikian.com',
           roles: 'operario',
           estado: true
         });
@@ -165,7 +167,7 @@ export class AuthService {
   }
 
   cerrarSesion(): void {
-    localStorage.removeItem('usuarioActual');
+    localStorage.removeItem(environment.tokenKey);
     this.usuarioActualSubject.next(null);
     this.router.navigate(['/login']);
   }
@@ -208,7 +210,7 @@ export class AuthService {
     return usuario?.access_token || usuario?.token || null;
   }
 
-  // Método para refrescar token (si el backend lo soporta)
+  // ✅ Método para refrescar token (si el backend lo soporta)
   refrescarToken(): Observable<Usuario> {
     const usuario = this.usuarioActualSubject.value;
     if (!usuario || !usuario.access_token) {
@@ -225,7 +227,7 @@ export class AuthService {
         if (response.access_token) {
           usuario.access_token = response.access_token;
           usuario.token = response.access_token;
-          localStorage.setItem('usuarioActual', JSON.stringify(usuario));
+          localStorage.setItem(environment.tokenKey, JSON.stringify(usuario));
           this.usuarioActualSubject.next(usuario);
         }
       }),
@@ -236,5 +238,10 @@ export class AuthService {
         return throwError(() => new Error('Token expirado'));
       })
     );
+  }
+
+  // ✅ Método adicional para obtener usuario actual
+  getCurrentUser(): Usuario | null {
+    return this.obtenerUsuarioActual();
   }
 }
