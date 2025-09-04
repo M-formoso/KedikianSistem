@@ -1,0 +1,12 @@
+{
+    "/api/*": {
+      "target": "http://kedikian.site",
+      "secure": false,
+      "changeOrigin": true,
+      "logLevel": "debug",
+      "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      }
+    }
+  }

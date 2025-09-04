@@ -13,6 +13,7 @@ import {
   Operator 
 } from '../../../core/services/entrega-aridos.service';
 import { AuthService } from '../../../core/services/auth.service';
+
 @Component({
   selector: 'app-entrega-aridos',
   standalone: true,
@@ -60,7 +61,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
-    //this.loadCurrentOperator();
+    this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
@@ -100,26 +101,26 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   /**
    * Cargar operador actual desde el servicio de autenticación
    */
-
-  /**
   loadCurrentOperator(): void {
     const currentUser = this.authService.getCurrentUser();
     if (currentUser) {
       // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
-        id: currentUser.id || 999,
-        nombre: currentUser.nombre,
-        name: currentUser.nombre, // Alias para compatibilidad
-        email: currentUser.email,
-        roles: currentUser.roles,
-        estado: currentUser.estado,
-        status: currentUser.estado ? 'active' : 'inactive'
+        id: Number(currentUser.id) || 999,
+        nombre: currentUser.nombreUsuario, // Usar nombreUsuario en lugar de nombre
+        name: currentUser.nombreUsuario, // Alias para compatibilidad
+        email: `${currentUser.nombreUsuario}@temp.com`, // Generar email temporal
+        roles: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : currentUser.roles || 'operario',
+        estado: true, // Por defecto activo
+        status: 'active'
       };
       
       // Establecer el operador en el formulario
       this.aridosDeliveryForm.patchValue({
         operator: this.currentOperator.id
       });
+      
+      console.log('✅ Operador actual cargado:', this.currentOperator);
     } else {
       // Fallback a operador mock
       this.currentOperator = {
@@ -135,6 +136,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       this.aridosDeliveryForm.patchValue({
         operator: this.currentOperator.id
       });
+      
+      console.warn('⚠️ Usuario no encontrado, usando operador mock');
     }
   }
   
@@ -173,6 +176,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
         }
         
         this.loadingMasterData = false;
+        console.log('✅ Datos maestros cargados correctamente');
       },
       error: (error) => {
         this.error = `Error al cargar datos: ${error.message}`;
@@ -192,6 +196,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
         next: (response) => {
           if (response.success && response.data) {
             this.recentRecords = response.data;
+            console.log('✅ Registros recientes cargados:', this.recentRecords.length);
           }
         },
         error: (error) => {
@@ -232,6 +237,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       fecha_entrega: new Date().toISOString() // Fecha actual en formato ISO
     };
 
+    console.log('📤 Enviando entrega de áridos:', deliveryData);
+
     this.entregaAridosService.createDelivery(deliveryData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -241,6 +248,8 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
             this.success = true;
             this.loadRecentRecords(); // Recargar la lista
             this.resetForm();
+            
+            console.log('✅ Entrega registrada exitosamente');
             
             // Ocultar mensaje de éxito después de 5 segundos
             setTimeout(() => {
@@ -485,7 +494,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    */
   editRecord(record: EntregaAridoOut): void {
     console.log('Editando registro:', record);
-    // Implementar lógica de edición
+    // TODO: Implementar lógica de edición
   }
 
   /**
