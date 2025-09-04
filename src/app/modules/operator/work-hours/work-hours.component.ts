@@ -142,7 +142,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     }
 
     // Si no hay en localStorage, verificar en el backend
-    this.workHoursService.getActiveWorkDay(this.currentUser.id)
+    this.workHoursService.getActiveWorkDay(Number(this.currentUser.id))
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
@@ -192,7 +192,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
     const formValues = this.clockInForm.value;
 
-    this.workHoursService.clockIn(this.currentUser.id, formValues.notas)
+    this.workHoursService.clockIn(Number(this.currentUser.id), formValues.notas)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {

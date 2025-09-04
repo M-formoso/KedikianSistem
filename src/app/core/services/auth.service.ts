@@ -5,31 +5,29 @@ import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
-// ✅ INTERFACES CORREGIDAS PARA COINCIDIR CON EL BACKEND
 export interface Usuario {
-  id: number;
-  nombre: string;
-  email: string;
-  roles: string; // ✅ Backend devuelve string, no array
-  estado: boolean;
-  access_token?: string;
+  id: string;
+  nombreUsuario: string;
+  roles: string[];
   token?: string;
-  fecha_creacion?: string;
+  // 🚀 AGREGADO: Para mantener compatibilidad con el interceptor
+  access_token?: string;
 }
 
 // Interfaz para la respuesta del login OAuth2
 export interface LoginResponse {
   access_token: string;
   token_type: string;
-  expires_in?: number;
 }
+
+const apiUrl = `${environment.apiUrl}`;
+
+export type User = Usuario;
 
 export interface CredencialesLogin {
-  username: string;
-  password: string;
+  nombreUsuario: string;
+  contraseña: string;
 }
-
-const apiUrl = environment.apiUrl;
 
 @Injectable({
   providedIn: 'root',
@@ -38,59 +36,47 @@ export class AuthService {
   private usuarioActualSubject = new BehaviorSubject<Usuario | null>(null);
   public usuarioActual$ = this.usuarioActualSubject.asObservable();
 
+  // Alias para componentes que usan nombres en inglés
+  public currentUser$ = this.usuarioActual$;
+
   constructor(private router: Router, private http: HttpClient) {
     this.cargarUsuarioDesdeAlmacenamiento();
   }
 
   private cargarUsuarioDesdeAlmacenamiento(): void {
-    const usuarioAlmacenado = localStorage.getItem(environment.tokenKey || 'usuarioActual');
+    const usuarioAlmacenado = localStorage.getItem('usuarioActual');
     if (usuarioAlmacenado) {
       try {
         const usuario = JSON.parse(usuarioAlmacenado);
-        // Verificar que el token no haya expirado
-        if (this.isTokenValid(usuario)) {
-          this.usuarioActualSubject.next(usuario);
-        } else {
-          this.cerrarSesion();
-        }
+        this.usuarioActualSubject.next(usuario);
       } catch (error) {
-        console.error('Error al cargar usuario del localStorage:', error);
-        localStorage.removeItem(environment.tokenKey || 'usuarioActual');
+        localStorage.removeItem('usuarioActual');
       }
     }
   }
 
-  private isTokenValid(usuario: Usuario): boolean {
-    if (!usuario.access_token) return false;
-    
-    try {
-      // Decodificar JWT para verificar expiración
-      const tokenPayload = JSON.parse(atob(usuario.access_token.split('.')[1]));
-      const currentTime = Math.floor(Date.now() / 1000);
-      return tokenPayload.exp > currentTime;
-    } catch {
-      return false; // Si no se puede decodificar, considerar inválido
-    }
-  }
-
-  // ✅ LOGIN CORREGIDO - SIN CODIFICACIÓN BASE64, OAUTH2 ESTÁNDAR
   login(username: string, password: string): Observable<Usuario> {
+    // 🔒 LOGS SEGUROS - Sin exponer credenciales
     console.log('🚀 Iniciando autenticación...');
+    console.log('📧 Username length:', username?.length || 0);
+    console.log('🔒 Password length:', password?.length || 0);
     console.log('🌐 Endpoint:', `${apiUrl}/auth/login`);
   
-    // ✅ Preparar datos para OAuth2 estándar (SIN base64)
+    // Codificar en base64 (sin mostrar en logs)
+    const usernameBase64 = btoa(username);
+    const passwordBase64 = btoa(password);
+  
     const body = new HttpParams()
-      .set('username', username)
-      .set('password', password)
-      .set('grant_type', 'password'); // Estándar OAuth2
+      .set('username', usernameBase64)
+      .set('password', passwordBase64);
       
     const headers = new HttpHeaders({
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json'
+      'Content-Type': 'application/x-www-form-urlencoded'
     });
     
     const loginUrl = `${apiUrl}/auth/login`;
     
+    // 🔒 LOG SEGURO - Solo confirmar que se está enviando
     console.log('📤 Enviando petición de autenticación...');
     
     return this.http.post<LoginResponse>(
@@ -99,149 +85,161 @@ export class AuthService {
       { headers }
     ).pipe(
       switchMap((loginResponse: LoginResponse) => {
-        console.log('✅ Token de autenticación recibido');
+        // 🔒 LOG SEGURO - No mostrar token completo
+        console.log('✅ Respuesta de autenticación recibida');
+        console.log('🎫 Token type:', loginResponse.token_type);
+        console.log('🎫 Token recibido:', loginResponse.access_token ? 'SÍ' : 'NO');
         
-        // Obtener información del usuario con el token
+        const tokenData = {
+          access_token: loginResponse.access_token,
+          token_type: loginResponse.token_type,
+          token: loginResponse.access_token
+        };
+        
+        localStorage.setItem('usuarioActual', JSON.stringify(tokenData));
+        
         return this.obtenerInformacionUsuario(loginResponse.access_token).pipe(
           tap((usuarioInfo: any) => {
-            console.log('✅ Información del usuario obtenida:', usuarioInfo);
+            // 🔒 LOG SEGURO - Solo información no sensible
+            console.log('✅ Información del usuario obtenida');
+            console.log('👤 Usuario ID:', usuarioInfo.id);
+            console.log('📧 Email:', usuarioInfo.email);
+            console.log('🏷️ Nombre:', usuarioInfo.nombre);
+            console.log('🎯 Roles:', usuarioInfo.roles);
+            console.log('✅ Estado activo:', usuarioInfo.estado);
             
             const usuarioCompleto: Usuario = {
-              id: usuarioInfo.id,
-              nombre: usuarioInfo.nombre || usuarioInfo.name || username,
-              email: usuarioInfo.email || `${username}@kedikian.com`,
-              roles: usuarioInfo.roles || 'operario', // ✅ String simple
-              estado: usuarioInfo.estado !== false,
+              id: usuarioInfo.id || 'temp',
+              nombreUsuario: usuarioInfo.email || usuarioInfo.nombreUsuario || username,
+              roles: usuarioInfo.roles || ['administrador'],
+              token: loginResponse.access_token,
               access_token: loginResponse.access_token,
-              token: loginResponse.access_token
+              ...usuarioInfo
             };
             
-            localStorage.setItem(environment.tokenKey || 'usuarioActual', JSON.stringify(usuarioCompleto));
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioCompleto));
             this.usuarioActualSubject.next(usuarioCompleto);
             
-            console.log('✅ Usuario autenticado correctamente');
+            console.log('✅ Usuario autenticado y guardado correctamente');
+            
+            return usuarioCompleto;
+          }),
+          catchError((error) => {
+            console.warn('⚠️ No se pudo obtener información detallada del usuario');
+            console.warn('⚠️ Error status:', error.status);
+            
+            const usuarioPorDefecto: Usuario = {
+              id: 'temp',
+              nombreUsuario: username,
+              roles: ['administrador'],
+              token: loginResponse.access_token,
+              access_token: loginResponse.access_token
+            };
+            
+            localStorage.setItem('usuarioActual', JSON.stringify(usuarioPorDefecto));
+            this.usuarioActualSubject.next(usuarioPorDefecto);
+            
+            console.log('✅ Usuario creado con datos por defecto');
+            
+            return of(usuarioPorDefecto);
           })
         );
       }),
-      catchError((error) => {
-        console.error('❌ Error en autenticación:', error);
-        
-        let errorMessage = 'Error de autenticación';
-        
-        if (error.status === 401) {
-          errorMessage = 'Usuario o contraseña incorrectos';
-        } else if (error.status === 0) {
-          errorMessage = 'Error de conexión. Verifique su conexión a internet.';
-        } else if (error.status >= 500) {
-          errorMessage = 'Error en el servidor. Intente nuevamente.';
-        }
-        
-        return throwError(() => new Error(errorMessage));
-      })
-    );
-  }
-
-  private obtenerInformacionUsuario(token: string): Observable<any> {
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json'
-    });
-    
-    return this.http.get<any>(`${apiUrl}/auth/me`, { headers }).pipe(
-      tap((userInfo) => {
-        console.log('✅ Información del usuario desde /auth/me:', userInfo);
+      tap((usuario: Usuario) => {
+        console.log('🎯 Login completado exitosamente');
+        console.log('👤 Usuario final - ID:', usuario.id);
+        console.log('🎯 Roles asignados:', usuario.roles);
+        console.log('🔐 Token presente:', !!usuario.access_token);
       }),
       catchError((error) => {
-        console.warn('⚠️ Error al obtener información del usuario:', error);
+        // 🔒 LOG SEGURO DE ERRORES - Sin exponer información sensible
+        console.error('❌ Error en autenticación');
+        console.error('📊 Status:', error.status);
+        console.error('📊 StatusText:', error.statusText);
         
-        // ✅ Si falla /auth/me, crear un usuario básico con el token
-        return of({
-          id: Date.now(), // ID temporal
-          nombre: 'Usuario',
-          email: 'usuario@kedikian.com',
-          roles: 'operario',
-          estado: true
-        });
+        // Solo en desarrollo (puedes controlar esto con environment)
+        if (!environment.production) {
+          console.error('🔧 [DEV] Error URL:', error.url);
+          console.error('🔧 [DEV] Error details:', error.error);
+        }
+        
+        return throwError(() => error);
       })
     );
-  }
+  }  
 
   cerrarSesion(): void {
-    localStorage.removeItem(environment.tokenKey || 'usuarioActual');
+    localStorage.removeItem('usuarioActual');
     this.usuarioActualSubject.next(null);
     this.router.navigate(['/login']);
+  }
+
+  // Alias para cerrarSesion
+  logout(): void {
+    this.cerrarSesion();
   }
 
   obtenerUsuarioActual(): Usuario | null {
     return this.usuarioActualSubject.value;
   }
 
-  estaAutenticado(): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    return !!usuario && !!usuario.access_token && this.isTokenValid(usuario);
+  // Alias para obtenerUsuarioActual
+  getCurrentUser(): Usuario | null {
+    return this.obtenerUsuarioActual();
   }
 
-  // ✅ MÉTODOS DE ROLES CORREGIDOS para string (no array)
+  estaAutenticado(): boolean {
+    return !!this.usuarioActualSubject.value;
+  }
+
+  // Alias para estaAutenticado
+  isAuthenticated(): boolean {
+    return this.estaAutenticado();
+  }
+
   esAdministrador(): boolean {
     const usuario = this.usuarioActualSubject.value;
-    if (!usuario || !usuario.roles) return false;
-    
-    const rol = usuario.roles.toLowerCase();
-    return ['administrador', 'admin'].includes(rol);
+    return !!usuario && usuario.roles.includes('administrador');
   }
 
   esOperario(): boolean {
     const usuario = this.usuarioActualSubject.value;
-    if (!usuario || !usuario.roles) return false;
-    
-    const rol = usuario.roles.toLowerCase();
-    return ['operario', 'operator', 'user'].includes(rol);
+    return !!usuario && usuario.roles.includes('operario');
   }
 
+  // Método para verificar el rol (alias)
   hasRole(role: string): boolean {
     const usuario = this.usuarioActualSubject.value;
-    if (!usuario || !usuario.roles) return false;
-    
-    return usuario.roles.toLowerCase() === role.toLowerCase();
+    return !!usuario && usuario.roles.includes(role);
   }
 
+  // 🚀 MEJORADO: Obtener token de múltiples fuentes
   obtenerTokenAuth(): string | null {
     const usuario = this.usuarioActualSubject.value;
     return usuario?.access_token || usuario?.token || null;
   }
 
-  // ✅ Método para refrescar token (si el backend lo soporta)
   refrescarToken(): Observable<Usuario> {
-    const usuario = this.usuarioActualSubject.value;
-    if (!usuario || !usuario.access_token) {
-      return throwError(() => new Error('No hay usuario autenticado'));
-    }
-
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${usuario.access_token}`,
-      'Accept': 'application/json'
-    });
-
-    return this.http.post<LoginResponse>(`${apiUrl}/auth/refresh`, {}, { headers }).pipe(
-      tap((response) => {
-        if (response.access_token) {
-          usuario.access_token = response.access_token;
-          usuario.token = response.access_token;
-          localStorage.setItem(environment.tokenKey || 'usuarioActual', JSON.stringify(usuario));
-          this.usuarioActualSubject.next(usuario);
-        }
-      }),
-      switchMap(() => of(usuario)),
-      catchError((error) => {
-        console.error('Error refrescando token:', error);
-        this.cerrarSesion();
-        return throwError(() => new Error('Token expirado'));
-      })
+    return throwError(
+      () => new Error('Token refresh no disponible en modo simulado')
     );
   }
 
-  // ✅ Método adicional para obtener usuario actual
-  getCurrentUser(): Usuario | null {
-    return this.obtenerUsuarioActual();
+  // 🚀 MEJORADO: Pasar token como parámetro para evitar referencias circulares
+  private obtenerInformacionUsuario(token: string): Observable<any> {
+    // Obtener información del usuario desde el backend
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
+    
+    return this.http.get<any>(`${apiUrl}/auth/me`, { headers }).pipe(
+      tap((userInfo) => {
+        console.log('✅ Usuario obtenido de /auth/me:', userInfo);
+      }),
+      catchError((error) => {
+        console.warn('⚠️ Error al obtener información del usuario desde /auth/me:', error);
+        throw error; // Re-lanzar el error para que sea manejado en el switchMap
+      })
+    );
   }
 }

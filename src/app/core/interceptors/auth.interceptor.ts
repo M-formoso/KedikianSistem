@@ -1,3 +1,4 @@
+// auth.interceptor.ts
 import {
   HttpRequest,
   HttpHandlerFn,
@@ -5,107 +6,69 @@ import {
   HttpErrorResponse
 } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { AuthService } from '../services/auth.service';
 
 export function AuthInterceptor(
   request: HttpRequest<unknown>, 
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> {
   const router = inject(Router);
-  const authService = inject(AuthService);
 
-  // ✅ Rutas que no requieren token
-  const publicRoutes = ['/auth/login', '/auth/register', '/usuarios'];
-  const isPublicRoute = publicRoutes.some(route => request.url.includes(route));
+  // Rutas que no requieren token
+  const authRoutes = ['/auth/login', '/auth/register', '/auth/refresh'];
+  const isAuthRoute = authRoutes.some(route => request.url.includes(route));
 
-  // ✅ Para rutas públicas, solo manejar errores
-  if (isPublicRoute) {
+  if (isAuthRoute) {
+    // Dejo pasar sin token
     return next(request).pipe(
-      catchError((error: HttpErrorResponse) => handleHttpError(error, router, authService))
+      catchError((error: HttpErrorResponse) => handleHttpError(error, router))
     );
   }
 
-  // ✅ Obtener token del servicio de autenticación
-  const token = authService.obtenerTokenAuth();
+  // Buscar token en localStorage
+  const usuarioActual = localStorage.getItem('usuarioActual');
+  let token: string | null = null;
 
-  // ✅ Si no hay token y la ruta no es pública, redirigir al login
-  if (!token) {
-    console.warn('🔐 No hay token disponible, redirigiendo al login');
-    authService.cerrarSesion();
-    return throwError(() => new Error('No autorizado'));
+  if (usuarioActual) {
+    try {
+      const usuario = JSON.parse(usuarioActual);
+      token = usuario.access_token || usuario.token || null;
+    } catch {
+      localStorage.removeItem('usuarioActual');
+    }
   }
 
-  // ✅ Clonar request con headers correctos
-  let secureRequest = request;
-  
-  // Solo agregar headers si no los tiene ya
-  if (!request.headers.has('Authorization')) {
-    secureRequest = request.clone({
-      setHeaders: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    });
-  }
+  // Clonar request con headers
+  let secureRequest = request.clone({
+    setHeaders: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
 
-  // ✅ Enviar request y manejar errores
   return next(secureRequest).pipe(
-    catchError((error: HttpErrorResponse) => {
-      // Si es error 401, intentar refrescar token solo una vez
-      if (error.status === 401 && token && !request.url.includes('/auth/refresh')) {
-        console.log('🔄 Token inválido, cerrando sesión...');
-        
-        // En lugar de intentar refrescar, cerrar sesión directamente
-        // porque el backend actual no implementa refresh token
-        authService.cerrarSesion();
-        return throwError(() => new Error('Sesión expirada'));
-      }
-      
-      return handleHttpError(error, router, authService);
-    })
+    catchError((error: HttpErrorResponse) => handleHttpError(error, router))
   );
 }
 
-function handleHttpError(
-  error: HttpErrorResponse, 
-  router: Router, 
-  authService: AuthService
-): Observable<never> {
-  console.error('❌ HTTP Error:', {
-    status: error.status,
-    statusText: error.statusText,
-    url: error.url,
-    message: error.message,
-    error: error.error
-  });
-
+// Manejo seguro de errores
+function handleHttpError(error: HttpErrorResponse, router: Router): Observable<never> {
+  // 🚫 No mostramos datos sensibles
   switch (error.status) {
     case 401:
-      console.warn('🔐 Token inválido o expirado');
-      authService.cerrarSesion();
+      localStorage.removeItem('usuarioActual');
+      router.navigate(['/login']);
       break;
     case 403:
-      console.warn('🚫 Acceso prohibido');
-      router.navigate(['/operator/dashboard']);
+      // opcional: redirigir a página de "no autorizado"
       break;
     case 0:
-      console.error('🌐 Error de conexión con el servidor');
-      break;
-    case 404:
-      console.warn('🔍 Recurso no encontrado:', error.url);
-      break;
-    case 422:
-      console.warn('📝 Error de validación:', error.error?.detail || error.message);
-      break;
-    case 500:
-      console.error('🔥 Error interno del servidor');
+      console.error('Error de conexión con el servidor');
       break;
     default:
-      console.error(`❌ Error HTTP ${error.status}: ${error.statusText}`);
+      console.error(`Error HTTP ${error.status}: ${error.statusText}`);
   }
-  
   return throwError(() => error);
 }

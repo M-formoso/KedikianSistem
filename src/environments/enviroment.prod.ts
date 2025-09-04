@@ -1,8 +1,9 @@
 // src/environments/environment.prod.ts  
 export const environment = {
   production: true,
-  // ✅ URL de producción
-  apiUrl: 'http://kedikian.site/api/v1', 
+  // ✅ URL de producción - usar ruta relativa para evitar CORS
+  apiUrl: '/api/v1',  // ⬅️ CAMBIO PRINCIPAL: ruta relativa, no absoluta
+  
   appName: 'Sistema de Retroexcavadoras y Áridos',
   version: '1.0.0',
   tokenKey: 'usuarioActual',
