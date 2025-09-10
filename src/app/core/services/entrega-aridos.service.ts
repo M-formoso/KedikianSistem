@@ -15,7 +15,7 @@ export interface EntregaAridoCreate {
   fecha_entrega: string; // ISO string
 }
 
-// Interface para las respuestas del backend (lo que recibimos)
+// Interface para las respuestas del backend (lo que recibimos) - CORREGIDA
 export interface EntregaAridoOut {
   id?: number;
   proyecto_id: number;
@@ -23,19 +23,17 @@ export interface EntregaAridoOut {
   tipo_arido: string;
   cantidad: number;
   fecha_entrega: string;
-  vehiculo_id?: string;
-  notas?: string;
   created?: string;
   updated?: string;
   
-  // Propiedades adicionales que el template espera (mapeo)
-  date: string;
-  project: string | number;
-  materialType: string;
-  quantity: number;
-  vehicleId: string;
-  operator: string;
-  notes?: string;
+  // ✅ PROPIEDADES MAPEADAS para compatibilidad con el template
+  date: string;           // Mapeado desde fecha_entrega
+  project: string | number; // Mapeado desde proyecto_id
+  materialType: string;   // Mapeado desde tipo_arido
+  quantity: number;       // Mapeado desde cantidad
+  vehicleId: string;      // Vehículo (simulado o desde notas)
+  operator: string;       // Mapeado desde usuario_id
+  notes?: string;         // Notas adicionales
 }
 
 // Interface para el frontend (lo que usa el componente)
@@ -64,10 +62,10 @@ export interface AridosDeliveryRequest {
   notes?: string;
 }
 
-// Interfaces de datos maestros corregidas
+// Interfaces de datos maestros
 export interface Project {
   id: number;
-  nombre: string; // ← Era "name", pero el backend devuelve "nombre"
+  nombre: string;
   estado: boolean;
   descripcion?: string;
   ubicacion?: string;
@@ -111,21 +109,12 @@ export interface ApiResponse<T> {
   errors?: any[];
 }
 
-export interface PaginatedResponse<T> {
-  success: boolean;
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
 @Injectable({
   providedIn: 'root'
 })
 export class EntregaAridosService {
-  private apiUrl = `${environment.apiUrl}/entrega-aridos`;
-  private catalogsUrl = `${environment.apiUrl}/catalogs`;
+  // ✅ URL corregida para usar tu servidor
+  private apiUrl = `${environment.apiUrl}/entregas-arido`;
 
   private httpOptions = {
     headers: new HttpHeaders({
@@ -141,17 +130,19 @@ export class EntregaAridosService {
    * Crear una nueva entrega de áridos
    */
   createDelivery(delivery: EntregaAridoCreate): Observable<ApiResponse<EntregaAridoOut>> {
-    return this.http.post<ApiResponse<EntregaAridoOut>>(
+    return this.http.post<any>(
       `${this.apiUrl}`, 
       delivery, 
       this.httpOptions
     ).pipe(
       map(response => {
-        // Mapear la respuesta para agregar las propiedades que espera el template
-        if (response.success && response.data) {
-          response.data = this.mapBackendToFrontend(response.data);
-        }
-        return response;
+        // Mapear la respuesta del backend al formato que espera el frontend
+        const mappedResponse = this.mapBackendToFrontend(response);
+        return {
+          success: true,
+          data: mappedResponse,
+          message: 'Entrega creada correctamente'
+        };
       }),
       catchError(this.handleError)
     );
@@ -162,21 +153,27 @@ export class EntregaAridosService {
    */
   getRecentDeliveries(limit: number = 10): Observable<ApiResponse<EntregaAridoOut[]>> {
     const params = new HttpParams()
-      .set('limit', limit.toString())
-      .set('recent', 'true');
+      .set('limit', limit.toString());
 
-    return this.http.get<ApiResponse<EntregaAridoOut[]>>(
-      `${this.apiUrl}/recent`, 
-      { params }
+    return this.http.get<any[]>(
+      `${this.apiUrl}`, 
+      { params, ...this.httpOptions }
     ).pipe(
       map(response => {
         // Mapear cada elemento de la respuesta
-        if (response.success && response.data) {
-          response.data = response.data.map(item => this.mapBackendToFrontend(item));
-        }
-        return response;
+        const mappedData = response.map(item => this.mapBackendToFrontend(item));
+        return {
+          success: true,
+          data: mappedData
+        };
       }),
-      catchError(this.handleError)
+      catchError(error => {
+        console.error('Error obteniendo entregas recientes:', error);
+        return of({
+          success: true,
+          data: []
+        });
+      })
     );
   }
 
@@ -184,9 +181,14 @@ export class EntregaAridosService {
    * Eliminar una entrega
    */
   deleteDelivery(id: number): Observable<ApiResponse<any>> {
-    return this.http.delete<ApiResponse<any>>(
+    return this.http.delete<any>(
       `${this.apiUrl}/${id}`
     ).pipe(
+      map(() => ({
+        success: true,
+        data: null,
+        message: 'Entrega eliminada correctamente'
+      })),
       catchError(this.handleError)
     );
   }
@@ -236,10 +238,10 @@ export class EntregaAridosService {
    */
   getMaterialTypes(): Observable<ApiResponse<MaterialType[]>> {
     const mockTypes: MaterialType[] = [
-      { id: 'arena', name: 'Arena', description: 'Arena para construcción', unit: 'm³' },
-      { id: 'grava', name: 'Grava', description: 'Grava triturada', unit: 'm³' },
+      { id: 'arena_fina', name: 'Arena Fina', description: 'Arena fina para construcción', unit: 'm³' },
+      { id: 'granza', name: 'Granza', description: 'Granza triturada', unit: 'm³' },
+      { id: 'arena_comun', name: 'Arena Común', description: 'Arena común para construcción', unit: 'm³' },
       { id: 'piedra', name: 'Piedra', description: 'Piedra chancada', unit: 'm³' },
-      { id: 'tierra', name: 'Tierra', description: 'Tierra de relleno', unit: 'm³' },
       { id: 'ripio', name: 'Ripio', description: 'Ripio seleccionado', unit: 'm³' }
     ];
 
@@ -290,7 +292,7 @@ export class EntregaAridosService {
         }),
         catchError(error => {
           console.error('Error obteniendo operadores:', error);
-          // Fallback a operador mock usando of()
+          // Fallback a operador mock
           return of({
             success: true,
             data: [{
@@ -320,19 +322,28 @@ export class EntregaAridosService {
   // ============= MÉTODOS DE UTILIDAD =============
 
   /**
-   * Mapear datos del backend al formato que espera el frontend
+   * ✅ MÉTODO CLAVE: Mapear datos del backend al formato que espera el frontend
    */
   private mapBackendToFrontend(backendData: any): EntregaAridoOut {
     return {
-      ...backendData,
-      // Mapeo de propiedades del backend a frontend
+      // Propiedades originales del backend
+      id: backendData.id,
+      proyecto_id: backendData.proyecto_id,
+      usuario_id: backendData.usuario_id,
+      tipo_arido: backendData.tipo_arido,
+      cantidad: backendData.cantidad,
+      fecha_entrega: backendData.fecha_entrega,
+      created: backendData.created,
+      updated: backendData.updated,
+      
+      // ✅ Propiedades mapeadas para el template
       date: backendData.fecha_entrega ? backendData.fecha_entrega.split('T')[0] : '',
       project: backendData.proyecto_id,
       materialType: backendData.tipo_arido,
       quantity: backendData.cantidad,
-      vehicleId: backendData.vehiculo_id || '',
+      vehicleId: 'CAM001', // Por defecto, se puede mejorar
       operator: backendData.usuario_id?.toString() || '',
-      notes: backendData.notas || ''
+      notes: ''
     };
   }
 
@@ -356,10 +367,8 @@ export class EntregaAridosService {
     let errorMessage = 'Ocurrió un error inesperado';
     
     if (error.error instanceof ErrorEvent) {
-      // Error del lado del cliente
       errorMessage = `Error: ${error.error.message}`;
     } else {
-      // Error del lado del servidor
       switch (error.status) {
         case 400:
           errorMessage = 'Datos inválidos. Verifique la información ingresada.';

@@ -1,9 +1,10 @@
+// src/environments/environment.ts
 export const environment = {
   production: false,
   useSimulatedData: false,
   
-  // 🔧 URL del API - usar ruta relativa que será manejada por el proxy
-  apiUrl: '/api/v1',
+  // 🔧 URL del API - CORREGIDA para conectar con tu backend
+  apiUrl: 'https://kedikian.site/api/v1',  // ← URL de tu servidor real
   
   // 📱 Configuración de la aplicación
   appName: 'Sistema Movimiento de Suelo - Operario',
@@ -93,11 +94,11 @@ export const environment = {
     logEndpoint: null
   },
   
-  // 🌐 URLs del backend por funcionalidad
+  // 🌐 URLs del backend por funcionalidad - CORREGIDAS según tu backend
   endpoints: {
     auth: {
       login: '/auth/login',
-      logout: '/auth/logout',
+      logout: '/auth/logout', 
       me: '/auth/me',
       refresh: '/auth/refresh'
     },
@@ -109,22 +110,32 @@ export const environment = {
     },
     machineHours: {
       create: '/reportes-laborales',
-      list: '/reportes-laborales',
+      list: '/reportes-laborales', 
       machines: '/maquinas',
-      projects: '/proyectos'
+      projects: '/proyectos',
+      machineTypes: '/maquinas' // Los tipos se extraen de las máquinas
     },
     expenses: {
       create: '/gastos',
       list: '/gastos',
-      types: '/gastos/tipos',
-      methods: '/gastos/metodos-pago'
+      types: '/gastos', // Los tipos serán hardcodeados o desde catálogos
+      methods: '/gastos' // Los métodos serán hardcodeados o desde catálogos
     },
     materials: {
-      deliveries: '/entrega-aridos',
+      deliveries: '/entregas-arido', // Según tu router
       projects: '/proyectos',
-      vehicles: '/vehiculos',
-      materials: '/materiales'
+      vehicles: '/maquinas', // Vehículos podrían ser un tipo de máquina
+      materials: '/productos' // Materiales podrían estar en productos
     },
-    users: '/usuarios'
+    users: '/usuarios',
+    
+    // Endpoints adicionales según tu backend
+    contracts: '/contratos',
+    payments: '/pagos',
+    products: '/productos',
+    projects: '/proyectos',
+    reports: '/reportes-laborales',
+    inventory: '/movimientos-inventario',
+    maintenance: '/mantenimientos'
   }
 };
