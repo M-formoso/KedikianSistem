@@ -70,25 +70,7 @@
           </div>
         </div>
       
-        <!-- Tipo de Máquina -->
-        <div class="form-group">
-          <label for="machineType">Tipo de Máquina *</label>
-          <select 
-            id="machineType" 
-            formControlName="machineType" 
-            class="form-control"
-            [class.error]="hasFieldError('machineType')"
-            [disabled]="isTimerActive"
-            (change)="onMachineTypeChange()">
-            <option value="">Seleccione tipo de máquina</option>
-            <option *ngFor="let type of machineTypes" [value]="type.id">
-              {{ type.name }}
-            </option>
-          </select>
-          <div *ngIf="hasFieldError('machineType')" class="error-message">
-            {{ getFieldError('machineType') }}
-          </div>
-        </div>
+       
         
         <!-- Máquina -->
         <div class="form-group">
@@ -98,7 +80,7 @@
             formControlName="machineId" 
             class="form-control"
             [class.error]="hasFieldError('machineId')"
-            [disabled]="isTimerActive || !machineHoursForm.get('machineType')?.value"
+            [disabled]="isTimerActive"
             (change)="onMachineChange()">
             <option value="">Seleccione una máquina</option>
             <option *ngFor="let machine of activeMachines" [value]="machine.id">
@@ -108,9 +90,7 @@
           <div *ngIf="hasFieldError('machineId')" class="error-message">
             {{ getFieldError('machineId') }}
           </div>
-          <div *ngIf="!machineHoursForm.get('machineType')?.value" class="help-text">
-            Primero seleccione el tipo de máquina
-          </div>
+          
         </div>
       
         <!-- Observaciones -->

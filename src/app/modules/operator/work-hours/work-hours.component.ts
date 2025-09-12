@@ -9,6 +9,8 @@ import {
   ReporteLaboral
 } from '../../../core/services/work-hours.service';
 import { AuthService, Usuario } from '../../../core/services/auth.service';
+import { DebugService } from '../../../core/services/debug.service';
+import { environment } from '../../../../environments/environment';
 
 // Interface para el estado del fichaje activo
 interface ClockStatus {
@@ -330,7 +332,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   hasFieldError(fieldName: string, formGroup: FormGroup = this.clockInForm): boolean {
     const field = formGroup.get(fieldName);
-    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted));
+    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted) && !field.disabled);
   }
 
   /**
@@ -338,6 +340,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   getFieldError(fieldName: string, formGroup: FormGroup = this.clockInForm): string {
     const field = formGroup.get(fieldName);
+    
     if (field?.errors) {
       if (field.errors['required']) {
         return `${this.getFieldLabel(fieldName)} es requerido`;
@@ -349,6 +352,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
       }
     }
+    
     return '';
   }
 
@@ -539,143 +543,141 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     );
   }
 
-  /**
-   * Obtener todos los días del calendario
-   */
-  getCalendarDays(): any[] {
-    const year = this.currentCalendarDate.getFullYear();
-    const month = this.currentCalendarDate.getMonth();
+  
+getCalendarDays(): any[] {
+  const year = this.currentCalendarDate.getFullYear();
+  const month = this.currentCalendarDate.getMonth();
+  
+  // Primer día del mes
+  const firstDay = new Date(year, month, 1);
+  // Último día del mes
+  const lastDay = new Date(year, month + 1, 0);
+  
+  // Primer día de la semana del calendario (lunes = 1, domingo = 0)
+  const firstDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+  
+  // Días del mes anterior necesarios
+  const daysFromPrevMonth = firstDayOfWeek;
+  
+  // Último día del mes anterior
+  const lastDayPrevMonth = new Date(year, month, 0).getDate();
+  
+  const calendarDays: any[] = [];
+  
+  // Agregar días del mes anterior
+  for (let i = daysFromPrevMonth - 1; i >= 0; i--) {
+    calendarDays.push({
+      day: lastDayPrevMonth - i,
+      isCurrentMonth: false,
+      isToday: false,
+      date: new Date(year, month - 1, lastDayPrevMonth - i)
+    });
+  }
+  
+  // Agregar días del mes actual
+  const today = new Date();
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const currentDate = new Date(year, month, day);
+    const isToday = today.getFullYear() === year && 
+                   today.getMonth() === month && 
+                   today.getDate() === day;
     
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
-    const endDate = new Date(lastDay);
-    endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
-    
-    const days = [];
-    const currentDate = new Date(startDate);
-    const today = new Date();
-    
-    while (currentDate <= endDate) {
-      const dayData = {
-        dayNumber: currentDate.getDate(),
-        fullDate: new Date(currentDate),
-        isCurrentMonth: currentDate.getMonth() === month,
-        isToday: this.isSameDay(currentDate, today),
-        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6,
-        hasWorkHours: this.hasWorkHoursForDay(currentDate),
-        workHours: this.getWorkHoursForDay(currentDate),
-        isPaymentDay: this.isPaymentDay(currentDate)
-      };
-      
-      days.push(dayData);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return days;
+    calendarDays.push({
+      day: day,
+      isCurrentMonth: true,
+      isToday: isToday,
+      date: currentDate
+    });
   }
-
-  /**
-   * TrackBy para optimizar el calendario
-   */
-  trackByDay(index: number, day: any): any {
-    return day.fullDate.getTime();
+  
+  // Completar hasta tener 42 días (6 semanas x 7 días)
+  const remainingDays = 42 - calendarDays.length;
+  for (let day = 1; day <= remainingDays; day++) {
+    calendarDays.push({
+      day: day,
+      isCurrentMonth: false,
+      isToday: false,
+      date: new Date(year, month + 1, day)
+    });
   }
+  
+  return calendarDays;
+}
+// ============ MÉTODOS FALTANTES PARA EL TEMPLATE ============
 
-  /**
-   * Obtener fecha del último pago
-   */
-  getLastPaymentDate(): Date {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 0);
+/**
+ * Obtener fecha del último pago
+ */
+getLastPaymentDate(): Date | null {
+  if (this.recentWorkHours.length === 0) return null;
+  
+  // Si no tienes fechaPago, usar la fecha del último registro
+  const lastWork = this.recentWorkHours
+    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+  
+  return lastWork ? new Date(lastWork.fecha) : null;
+}
+
+/**
+ * Obtener horas del mes actual
+ */
+getCurrentMonthHours(): number {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  return this.recentWorkHours
+    .filter(workDay => {
+      const workDate = new Date(workDay.fecha);
+      return workDate.getMonth() === currentMonth && workDate.getFullYear() === currentYear;
+    })
+    .reduce((total, workDay) => total + workDay.totalHoras, 0);
+}
+
+/**
+ * Obtener monto pendiente de pago
+ */
+getPendingAmount(): number {
+  const lastPaymentDate = this.getLastPaymentDate();
+  
+  // Si no hay fecha de último pago, considerar todas las horas como pendientes
+  if (!lastPaymentDate) {
+    const totalHours = this.recentWorkHours
+      .reduce((total, workDay) => total + workDay.totalHoras, 0);
+    const hourlyRate = 6500;
+    return totalHours * hourlyRate;
   }
+  
+  // Calcular horas trabajadas después de la última fecha de pago
+  const pendingHours = this.recentWorkHours
+    .filter(workDay => {
+      const workDate = new Date(workDay.fecha);
+      return workDate > lastPaymentDate;
+    })
+    .reduce((total, workDay) => total + workDay.totalHoras, 0);
+  
+  // Tarifa por hora
+  const hourlyRate = 6500; // Pesos argentinos por hora
+  
+  return pendingHours * hourlyRate;
+}
 
-  /**
-   * Obtener horas trabajadas en el mes actual
-   */
-  getCurrentMonthHours(): number {
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    return this.recentWorkHours
-      .filter(workHours => {
-        const workDate = new Date(workHours.fecha);
-        return workDate.getMonth() === currentMonth && 
-               workDate.getFullYear() === currentYear;
-      })
-      .reduce((total, workHours) => total + workHours.totalHoras, 0);
-  }
+/**
+ * TrackBy function para optimizar la renderización del calendario
+ */
+trackByDay(index: number, day: any): string {
+  return `${day.date.getTime()}-${day.isCurrentMonth}`;
+}
 
-  /**
-   * Obtener monto pendiente de pago
-   */
-  getPendingAmount(): number {
-    const hoursWorked = this.getCurrentMonthHours();
-    const hourlyRate = 5000; // Ejemplo: $5000 por hora
-    return hoursWorked * hourlyRate;
-  }
-
-  /**
-   * Obtener promedio de horas por día
-   */
-  getAverageHoursPerDay(): number {
-    if (this.recentWorkHours.length === 0) return 0;
-    
-    const totalHours = this.getTotalRecentHours();
-    const workingDays = this.getWorkingDaysCount();
-    
-    return workingDays > 0 ? totalHours / workingDays : 0;
-  }
-
-  // ============ MÉTODOS AUXILIARES PRIVADOS ============
-
-  /**
-   * Verificar si dos fechas son el mismo día
-   */
-  private isSameDay(date1: Date, date2: Date): boolean {
-    return date1.getDate() === date2.getDate() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getFullYear() === date2.getFullYear();
-  }
-
-  /**
-   * Verificar si hay horas trabajadas en un día específico
-   */
-  private hasWorkHoursForDay(date: Date): boolean {
-    return this.recentWorkHours.some(workHours => 
-      this.isSameDay(new Date(workHours.fecha), date)
-    );
-  }
-
-  /**
-   * Obtener horas trabajadas en un día específico
-   */
-  private getWorkHoursForDay(date: Date): number {
-    const workHours = this.recentWorkHours.find(workHours => 
-      this.isSameDay(new Date(workHours.fecha), date)
-    );
-    return workHours ? workHours.totalHoras : 0;
-  }
-
-  /**
-   * Verificar si es día de pago
-   */
-  private isPaymentDay(date: Date): boolean {
-    const nextDay = new Date(date);
-    nextDay.setDate(nextDay.getDate() + 1);
-    return nextDay.getDate() === 1;
-  }
-
-  /**
-   * Obtener cantidad de días trabajados únicos
-   */
-  private getWorkingDaysCount(): number {
-    const uniqueDates = new Set(
-      this.recentWorkHours.map(workHours => workHours.fecha)
-    );
-    return uniqueDates.size;
-  }
+/**
+ * Obtener promedio de horas por día trabajado
+ */
+getAverageHoursPerDay(): number {
+  if (this.recentWorkHours.length === 0) return 0;
+  
+  const totalHours = this.recentWorkHours.reduce((total, workDay) => total + workDay.totalHoras, 0);
+  const workingDays = this.recentWorkHours.length;
+  
+  return totalHours / workingDays;
+}
 }

@@ -97,7 +97,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.machineHoursForm = this.formBuilder.group({
       date: [{ value: today, disabled: true }], // Fecha fija, no editable
       project: ['', [Validators.required]],
-      machineType: ['', [Validators.required]],
       machineId: ['', [Validators.required]],
       notes: ['']
     });
@@ -194,7 +193,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Verificar si se puede iniciar el timer
    */
   canStartTimer(): boolean {
-    const requiredFields = ['project', 'machineType', 'machineId'];
+    const requiredFields = ['project', 'machineId'];
     
     for (const field of requiredFields) {
       if (!this.machineHoursForm.get(field)?.value) {
@@ -312,7 +311,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     
     forkJoin({
       projects: this.machineHoursService.getProjects(),
-      machineTypes: this.machineHoursService.getMachineTypes(),
       machines: this.machineHoursService.getMachines()
     })
     .pipe(takeUntil(this.destroy$))
@@ -322,9 +320,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
           this.projects = responses.projects.data || [];
         }
         
-        if (responses.machineTypes.success) {
-          this.machineTypes = responses.machineTypes.data || [];
-        }
         
         if (responses.machines.success) {
           this.machines = responses.machines.data || [];
@@ -361,32 +356,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   /**
    * Manejar cambio de tipo de máquina
    */
-  onMachineTypeChange(): void {
-    const machineTypeId = this.machineHoursForm.get('machineType')?.value;
-    
-    if (machineTypeId) {
-      this.machineHoursService.getMachinesByType(machineTypeId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (response) => {
-            if (response.success) {
-              this.machines = response.data || [];
-            }
-          },
-          error: (error) => {
-            console.error('Error cargando máquinas por tipo:', error);
-          }
-        });
-    }
-    
-    this.machineHoursForm.patchValue({
-      machineId: ''
-    });
-
-    if (this.isTimerActive) {
-      this.stopTimer();
-    }
-  }
+  
   
   /**
    * Validar disponibilidad de máquina para iniciar trabajo
