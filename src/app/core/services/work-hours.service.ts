@@ -4,7 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
-// Interfaces basadas en tu backend
+// ✅ INTERFACES CORREGIDAS según el esquema del backend
 export interface WorkDay {
   id?: number;
   fecha: string;
@@ -20,7 +20,7 @@ export interface WorkDay {
   updatedAt?: Date;
 }
 
-// Interface para crear reportes laborales (según tu schema)
+// ✅ CORREGIDO: Interface según el modelo real del backend
 export interface ReporteLaboralCreate {
   maquina_id?: number;
   usuario_id: number;
@@ -62,15 +62,15 @@ export class WorkHoursService {
   constructor(private http: HttpClient) {}
 
   /**
-   * Fichar entrada - Crear nuevo reporte laboral
-   * 👈 CORREGIDO: horas_turno se inicializa como 0 (entero)
+   * ✅ CORREGIDO: Fichar entrada - Crear nuevo reporte laboral
+   * horas_turno se inicializa como 0 (entero) para indicar que el trabajo está activo
    */
   clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
     const payload: ReporteLaboralCreate = {
       maquina_id: 1, // ID de máquina por defecto (ajustar según necesidad)
       usuario_id: usuarioId,
       fecha_asignacion: new Date().toISOString(),
-      horas_turno: 0 // 👈 CORREGIDO: ENTERO 0 inicial (no un timestamp)
+      horas_turno: 0 // 👈 CORREGIDO: ENTERO 0 inicial para indicar trabajo activo
     };
 
     console.log('✅ Enviando clockIn CORREGIDO:', payload);
@@ -90,8 +90,8 @@ export class WorkHoursService {
   }
 
   /**
-   * Fichar salida - Actualizar reporte laboral existente
-   * 👈 CORREGIDO: Ahora calcula las horas trabajadas como entero
+   * ✅ CORREGIDO: Fichar salida - Actualizar reporte laboral existente
+   * Calcula las horas trabajadas como entero basado en el tiempo transcurrido
    */
   clockOut(reporteId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
     // Calculamos horas trabajadas dinámicamente desde el localStorage
@@ -104,8 +104,19 @@ export class WorkHoursService {
         const startTime = new Date(parsed.startTimestamp);
         const now = new Date();
         const diffMs = now.getTime() - startTime.getTime();
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60)); // 👈 Redondear hacia abajo para entero
-        horasTrabajadasEntero = Math.max(1, diffHours); // Mínimo 1 hora
+        
+        // 👈 CORREGIDO: Calcular horas como entero, considerando tiempo de descanso
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60)); // Horas completas
+        const minutesWorked = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        // Si hay más de 30 minutos, redondear hacia arriba
+        const totalHours = minutesWorked >= 30 ? diffHours + 1 : diffHours;
+        
+        // Restar tiempo de descanso (convertir minutos a horas y redondear)
+        const breakHours = Math.round(tiempoDescanso / 60);
+        horasTrabajadasEntero = Math.max(1, totalHours - breakHours); // Mínimo 1 hora
+        
+        console.log(`Cálculo de horas: ${diffHours}h ${minutesWorked}m - Descanso: ${tiempoDescanso}min = ${horasTrabajadasEntero}h`);
       } catch (error) {
         console.error('Error calculando horas trabajadas:', error);
       }
@@ -132,20 +143,30 @@ export class WorkHoursService {
   }
 
   /**
-   * Fichar salida con cálculo dinámico de horas
-   * 👈 CORREGIDO: Ahora usa enteros para horas_turno
+   * ✅ CORREGIDO: Fichar salida con cálculo dinámico de horas
+   * Usa enteros para horas_turno y calcula correctamente el tiempo trabajado
    */
   clockOutWithDynamicHours(reporteId: number, startTime: Date, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
     // Calcular horas trabajadas dinámicamente
     const now = new Date();
     const diffMs = now.getTime() - startTime.getTime();
-    const hoursWorked = Math.floor(diffMs / (1000 * 60 * 60)); // 👈 Redondear hacia abajo a entero
+    
+    // 👈 CORREGIDO: Calcular horas como entero considerando descanso
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutesWorked = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    // Si hay más de 30 minutos, redondear hacia arriba
+    const totalHours = minutesWorked >= 30 ? diffHours + 1 : diffHours;
+    
+    // Restar tiempo de descanso
+    const breakHours = Math.round(tiempoDescanso / 60);
+    const hoursWorked = Math.max(1, totalHours - breakHours);
     
     const payload: Partial<ReporteLaboralCreate> = {
       horas_turno: hoursWorked // 👈 CORREGIDO: ENTERO de horas calculadas dinámicamente
     };
 
-    console.log('✅ Enviando clockOut dinámico CORREGIDO:', { reporteId, hoursWorked });
+    console.log('✅ Enviando clockOut dinámico CORREGIDO:', { reporteId, hoursWorked, detalles: { diffHours, minutesWorked, totalHours, breakHours } });
 
     return this.http.put<ReporteLaboral>(
       `${this.apiUrl}/${reporteId}`, 
@@ -235,25 +256,8 @@ export class WorkHoursService {
   // ============ MÉTODOS DE UTILIDAD ============
 
   /**
-   * Obtener ID del usuario desde localStorage
-   */
-  private getStoredUserId(): number {
-    const activeClockIn = localStorage.getItem('activeWorkClockIn');
-    if (activeClockIn) {
-      try {
-        const parsed = JSON.parse(activeClockIn);
-        return parsed.usuarioId;
-      } catch (error) {
-        console.error('Error parsing activeClockIn:', error);
-      }
-    }
-    // Fallback: intentar obtener desde auth service o usar valor por defecto
-    return 1; // Valor por defecto, ajustar según tu lógica
-  }
-
-  /**
-   * Mapear reportes del backend a WorkDay del frontend
-   * 👈 CORREGIDO: Ahora maneja horas_turno como entero
+   * ✅ CORREGIDO: Mapear reportes del backend a WorkDay del frontend
+   * Ahora maneja horas_turno como entero correctamente
    */
   private mapReportesToWorkDays(reportes: ReporteLaboral[]): WorkDay[] {
     return reportes.map(reporte => ({
@@ -282,8 +286,8 @@ export class WorkHoursService {
   }
 
   /**
-   * Calcular hora de fin basada en hora de inicio y horas trabajadas (entero)
-   * 👈 CORREGIDO: hoursWorked es ahora un entero de horas
+   * ✅ CORREGIDO: Calcular hora de fin basada en hora de inicio y horas trabajadas (entero)
+   * hoursWorked es ahora un entero de horas, no un timestamp
    */
   private calculateEndTime(startTime: string, hoursWorked: number): string {
     const start = new Date(startTime);
@@ -330,9 +334,9 @@ export class WorkHoursService {
     return `${hours.toFixed(1)}h`;
   }
 
-  // Manejo de errores
+  // ✅ CORREGIDO: Manejo de errores mejorado
   private handleError(error: any): Observable<never> {
-    console.error('Error en WorkHoursService:', error);
+    console.error('❌ Error en WorkHoursService:', error);
     
     let errorMessage = 'Ocurrió un error inesperado';
     
@@ -358,8 +362,15 @@ export class WorkHoursService {
         case 422:
           errorMessage = 'Error de validación. Verifique los datos ingresados.';
           if (error.error && error.error.detail) {
+            // ✅ Manejo específico para errores de validación de Pydantic
             if (Array.isArray(error.error.detail)) {
-              errorMessage = 'Error de validación: ' + error.error.detail.map((e: any) => e.msg || e).join(', ');
+              const validationErrors = error.error.detail.map((e: any) => {
+                if (e.type === 'int_parsing' && e.loc?.includes('horas_turno')) {
+                  return 'El campo horas_turno debe ser un número entero';
+                }
+                return e.msg || e.message || JSON.stringify(e);
+              }).join(', ');
+              errorMessage = 'Error de validación: ' + validationErrors;
             } else {
               errorMessage = 'Error de validación: ' + JSON.stringify(error.error.detail);
             }

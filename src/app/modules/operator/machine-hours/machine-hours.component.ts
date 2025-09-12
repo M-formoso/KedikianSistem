@@ -1,3 +1,5 @@
+// machine-hours.component.ts - CORRECCIÓN COMPLETA
+
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -8,20 +10,17 @@ import {
   MachineHours,
   Project,
   MachineType,
-  Machine,
-  Operator
+  Machine
 } from '../../../core/services/machine-hours.service';
-import { AuthService } from '../../../core/services/auth.service';
-// Interface para los datos del formulario
-interface MachineHoursRequest {
-  date: string;
-  machineType: string;
-  machineId: string;
-  startHour: number;
-  endHour: number;
-  project: string;
-  operator: string;
-  notes?: string;
+import { AuthService, Usuario } from '../../../core/services/auth.service';
+
+// ✅ INTERFACE CORREGIDA - Usar la interface local, no la del servicio
+interface CurrentOperator {
+  id: number;
+  nombre: string;
+  name: string;
+  email: string;
+  roles: string;
 }
 
 @Component({
@@ -55,8 +54,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   machineTypes: MachineType[] = [];
   machines: Machine[] = [];
   
-  // Operador actual (tomado de la sesión)
-  currentOperator: Operator | null = null;
+  // ✅ CORREGIDO - Usar interface local
+  currentOperator: CurrentOperator | null = null;
   
   // Registros recientes
   recentRecords: MachineHours[] = [];
@@ -74,7 +73,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   ngOnInit(): void {
-    //this.loadCurrentOperator();
+    this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentRecords();
     this.setupMobileTable();
@@ -95,7 +94,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const today = new Date().toISOString().split('T')[0];
     
     this.machineHoursForm = this.formBuilder.group({
-      date: [{ value: today, disabled: true }], // Fecha fija, no editable
+      date: [{ value: today, disabled: true }],
       project: ['', [Validators.required]],
       machineId: ['', [Validators.required]],
       notes: ['']
@@ -103,27 +102,38 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Cargar operador actual de la sesión
+   * ✅ MÉTODO CORREGIDO - Cargar operador actual
    */
-
-  /**
   private loadCurrentOperator(): void {
-    const user = this.authService.getCurrentUser();
+    console.log('🔍 Cargando operador actual...');
+    
+    const user: Usuario | null = this.authService.getCurrentUser();
+    console.log('👤 Usuario desde AuthService:', user);
+    
     if (user) {
+      // ✅ CORREGIDO - Mapear correctamente las propiedades
       this.currentOperator = {
-        id: user.id || 999,
-        nombre: user.nombre,
-        email: user.email,
-        roles: user.roles
+        id: Number(user.id) || 999,
+        nombre: user.nombreUsuario || 'Usuario Test',
+        name: user.nombreUsuario || 'Usuario Test',
+        email: user.email || 'test@test.com', // Assuming 'email' is the correct property for email
+        roles: Array.isArray(user.roles) ? user.roles.join(',') : (typeof user.roles === 'string' ? user.roles : 'operario')
       };
+      
+      console.log('✅ Operador cargado correctamente:', this.currentOperator);
     } else {
-      // Fallback a operador mock
+      console.warn('⚠️ No se encontró usuario, usando operador mock');
+      
+      // ✅ FALLBACK - Operador por defecto
       this.currentOperator = {
         id: 999,
         nombre: 'Operario Test',
+        name: 'Operario Test',
         email: 'operario@test.com',
         roles: 'operario'
       };
+      
+      console.log('🔄 Operador mock creado:', this.currentOperator);
     }
   }
 
@@ -156,10 +166,16 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Iniciar contador de tiempo
+   * ✅ MÉTODO CORREGIDO - Iniciar contador de tiempo
    */
   startTimer(): void {
+    console.log('🚀 Intentando iniciar timer...');
+    console.log('📋 Estado del formulario:', this.machineHoursForm.value);
+    console.log('📋 Formulario válido:', this.machineHoursForm.valid);
+    console.log('👤 Operador actual:', this.currentOperator);
+    
     if (!this.canStartTimer()) {
+      console.error('❌ No se puede iniciar el timer');
       return;
     }
 
@@ -171,8 +187,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.success = false;
 
-    // Validar disponibilidad de máquina al iniciar
-    this.validateMachineAvailabilityForStart();
+    console.log('✅ Timer iniciado correctamente en:', this.startTime);
   }
 
   /**
@@ -180,33 +195,75 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    */
   stopTimer(): void {
     if (!this.isTimerActive || !this.startTime) {
+      this.error = 'No hay trabajo activo para finalizar';
       return;
     }
 
     this.isTimerActive = false;
-    
-    // Guardar automáticamente el registro
     this.saveTimerRecord();
   }
 
   /**
-   * Verificar si se puede iniciar el timer
+   * ✅ MÉTODO CORREGIDO - Verificar si se puede iniciar el timer
    */
   canStartTimer(): boolean {
-    const requiredFields = ['project', 'machineId'];
+    console.log('🔍 Verificando condiciones para iniciar timer...');
     
-    for (const field of requiredFields) {
-      if (!this.machineHoursForm.get(field)?.value) {
-        this.error = `Debe seleccionar ${this.getFieldLabel(field).toLowerCase()} antes de iniciar`;
-        return false;
-      }
-    }
-
-    if (!this.currentOperator) {
-      this.error = 'No se pudo cargar la información del operador';
+    // 1. Verificar que no haya timer activo
+    if (this.isTimerActive) {
+      console.log('❌ Timer ya está activo');
+      this.error = 'Ya hay un trabajo en progreso';
       return false;
     }
-
+    
+    // 2. Verificar que no esté cargando
+    if (this.isLoading) {
+      console.log('❌ Está cargando datos');
+      this.error = 'Esperando a que carguen los datos';
+      return false;
+    }
+    
+    // 3. Verificar operador actual
+    if (!this.currentOperator) {
+      console.log('❌ No hay operador actual');
+      this.error = 'No se pudo cargar la información del operador. Recarga la página.';
+      return false;
+    }
+    
+    // 4. Verificar campos requeridos del formulario
+    const project = this.machineHoursForm.get('project')?.value;
+    const machineId = this.machineHoursForm.get('machineId')?.value;
+    
+    console.log('📋 Proyecto seleccionado:', project);
+    console.log('📋 Máquina seleccionada:', machineId);
+    
+    if (!project) {
+      this.error = 'Debe seleccionar un proyecto antes de iniciar';
+      console.log('❌ Falta proyecto');
+      return false;
+    }
+    
+    if (!machineId) {
+      this.error = 'Debe seleccionar una máquina antes de iniciar';
+      console.log('❌ Falta máquina');
+      return false;
+    }
+    
+    // 5. Verificar que hay proyectos y máquinas disponibles
+    if (this.activeProjects.length === 0) {
+      this.error = 'No hay proyectos disponibles. Contacte al administrador.';
+      console.log('❌ No hay proyectos activos');
+      return false;
+    }
+    
+    if (this.activeMachines.length === 0) {
+      this.error = 'No hay máquinas disponibles. Contacte al administrador.';
+      console.log('❌ No hay máquinas activas');
+      return false;
+    }
+    
+    console.log('✅ Todas las validaciones pasaron');
+    this.error = ''; // Limpiar cualquier error previo
     return true;
   }
 
@@ -226,16 +283,21 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const endHour = this.getDecimalHours(endTime);
     
     const formValues = this.machineHoursForm.value;
-    const machineHoursData: MachineHoursRequest = {
+    
+    // ✅ CORREGIDO - Estructura de datos para el backend
+    const machineHoursData = {
       date: new Date().toISOString().split('T')[0],
-      machineType: formValues.machineType,
+      machineType: 'excavadora', // Por defecto
       machineId: formValues.machineId,
       startHour: startHour,
       endHour: endHour,
+      totalHours: Math.round((endHour - startHour) * 100) / 100,
       project: formValues.project,
       operator: this.currentOperator.id.toString(),
       notes: formValues.notes || ''
     };
+
+    console.log('💾 Guardando registro:', machineHoursData);
 
     this.machineHoursService.createMachineHours(machineHoursData)
       .pipe(takeUntil(this.destroy$))
@@ -250,14 +312,17 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
             setTimeout(() => {
               this.success = false;
             }, 5000);
+            
+            console.log('✅ Registro guardado exitosamente');
           } else {
-            this.error = 'Error al guardar el registro de horas';
+            this.error = response.message || 'Error al guardar el registro de horas';
+            console.error('❌ Error en respuesta:', response);
           }
         },
         error: (error) => {
           this.loading = false;
           this.error = error.message || 'Error al procesar la solicitud';
-          console.error('Error guardando registro de horas:', error);
+          console.error('❌ Error guardando registro:', error);
         }
       });
   }
@@ -279,17 +344,18 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.elapsedMinutes = 0;
     this.elapsedSeconds = 0;
     
+    // Mantener el proyecto seleccionado al resetear
     const currentProject = this.machineHoursForm.get('project')?.value;
     
     this.machineHoursForm.reset({
       date: new Date().toISOString().split('T')[0],
-      project: currentProject,
-      machineType: '',
+      project: currentProject, // Mantener proyecto
       machineId: '',
       notes: ''
     });
     
     this.submitted = false;
+    this.error = '';
   }
 
   // Configuración para la tabla responsiva en móviles
@@ -306,6 +372,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Cargar todos los datos maestros necesarios para el formulario
    */
   loadMasterData(): void {
+    console.log('📊 Cargando datos maestros...');
     this.loadingMasterData = true;
     this.error = '';
     
@@ -316,21 +383,35 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (responses) => {
+        console.log('📊 Respuestas de datos maestros:', responses);
+        
         if (responses.projects.success) {
           this.projects = responses.projects.data || [];
+          console.log('✅ Proyectos cargados:', this.projects.length);
+        } else {
+          console.error('❌ Error cargando proyectos:', responses.projects);
         }
-        
         
         if (responses.machines.success) {
           this.machines = responses.machines.data || [];
+          console.log('✅ Máquinas cargadas:', this.machines.length);
+        } else {
+          console.error('❌ Error cargando máquinas:', responses.machines);
         }
         
         this.loadingMasterData = false;
+        
+        // Verificar si hay datos suficientes
+        if (this.activeProjects.length === 0) {
+          this.error = 'No hay proyectos activos disponibles';
+        } else if (this.activeMachines.length === 0) {
+          this.error = 'No hay máquinas activas disponibles';
+        }
       },
       error: (error) => {
         this.error = `Error al cargar datos: ${error.message}`;
         this.loadingMasterData = false;
-        console.error('Error cargando datos maestros:', error);
+        console.error('❌ Error cargando datos maestros:', error);
       }
     });
   }
@@ -345,49 +426,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         next: (response) => {
           if (response.success && response.data) {
             this.recentRecords = response.data;
+            console.log('✅ Registros recientes cargados:', this.recentRecords.length);
           }
         },
         error: (error) => {
-          console.error('Error cargando registros recientes:', error);
+          console.error('❌ Error cargando registros recientes:', error);
         }
       });
-  }
-  
-  /**
-   * Manejar cambio de tipo de máquina
-   */
-  
-  
-  /**
-   * Validar disponibilidad de máquina para iniciar trabajo
-   */
-  validateMachineAvailabilityForStart(): void {
-    const machineId = this.machineHoursForm.get('machineId')?.value;
-    const date = new Date().toISOString().split('T')[0];
-    const currentHour = this.getDecimalHours(new Date());
-    
-    if (machineId && this.currentOperator) {
-      this.machineHoursService.validateMachineAvailability(
-        machineId, 
-        date, 
-        currentHour, 
-        currentHour + 0.1
-      )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          if (!response.success || !response.data) {
-            this.error = 'La máquina no está disponible en este momento';
-            this.stopTimer();
-          }
-        },
-        error: (error) => {
-          console.error('Error validando disponibilidad de máquina:', error);
-          this.error = 'Error al validar disponibilidad de máquina';
-          this.stopTimer();
-        }
-      });
-    }
   }
   
   /**
@@ -419,24 +464,25 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
    * Obtener nombre del proyecto por ID
    */
   getProjectName(projectId: string): string {
-    const project = this.projects.find(p => p.id.toString() === projectId);
-    return project ? project.nombre : 'Proyecto desconocido';
+    if (!projectId) return 'Sin proyecto';
+    const project = this.projects.find(p => p.id.toString() === projectId.toString());
+    return project ? project.nombre : `Proyecto ${projectId}`;
   }
   
   /**
    * Obtener nombre del tipo de máquina por ID
    */
   getMachineTypeName(machineTypeId: string): string {
-    const machineType = this.machineTypes.find(mt => mt.id === machineTypeId);
-    return machineType ? machineType.name : 'Tipo desconocido';
+    return machineTypeId || 'Tipo desconocido';
   }
   
   /**
    * Obtener nombre de la máquina por ID
    */
   getMachineName(machineId: string): string {
-    const machine = this.machines.find(m => m.id.toString() === machineId);
-    return machine ? machine.nombre : 'Máquina desconocida';
+    if (!machineId) return 'Sin máquina';
+    const machine = this.machines.find(m => m.id.toString() === machineId.toString());
+    return machine ? machine.nombre : `Máquina ${machineId}`;
   }
   
   /**
@@ -468,7 +514,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
       'project': 'El proyecto',
-      'machineType': 'El tipo de máquina',
       'machineId': 'La máquina',
       'notes': 'Las observaciones'
     };
@@ -560,9 +605,10 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   getTotalHoursToday(): number {
+    const today = new Date().toISOString().split('T')[0];
     return this.recentRecords
-      .filter(record => record.date === new Date().toISOString().split('T')[0])
-      .reduce((total, record) => total + record.totalHours, 0);
+      .filter(record => record.date === today)
+      .reduce((total, record) => total + (record.totalHours || 0), 0);
   }
   
   getUniqueMachinesToday(): number {

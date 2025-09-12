@@ -6,6 +6,7 @@ import { environment } from '../../../environments/environment';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
 export interface Usuario {
+  email: string;
   id: string;
   nombreUsuario: string;
   roles: string[];
@@ -131,6 +132,7 @@ export class AuthService {
             const usuarioPorDefecto: Usuario = {
               id: 'temp',
               nombreUsuario: username,
+              email: 'default@example.com', // Default email added
               roles: ['administrador'],
               token: loginResponse.access_token,
               access_token: loginResponse.access_token

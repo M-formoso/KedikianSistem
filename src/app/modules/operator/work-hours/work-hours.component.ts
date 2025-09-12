@@ -9,8 +9,6 @@ import {
   ReporteLaboral
 } from '../../../core/services/work-hours.service';
 import { AuthService, Usuario } from '../../../core/services/auth.service';
-import { DebugService } from '../../../core/services/debug.service';
-import { environment } from '../../../../environments/environment';
 
 // Interface para el estado del fichaje activo
 interface ClockStatus {
@@ -67,6 +65,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadCurrentUser();
+    this.debugCurrentUser(); // 🔍 Debug temporal
     this.checkForActiveClockIn();
     this.loadRecentWorkHours();
     this.setupMobileTable();
@@ -94,14 +93,27 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ✅ CORREGIDO: Cargar usuario actual con mejor validación
   private loadCurrentUser(): void {
     this.currentUser = this.authService.obtenerUsuarioActual();
     if (!this.currentUser) {
       this.error = 'No se pudo cargar la información del usuario. Inicie sesión nuevamente.';
       this.authService.cerrarSesion();
     } else {
-      console.log('Usuario actual cargado:', this.currentUser);
+      console.log('✅ Usuario actual cargado:', this.currentUser);
+      console.log('✅ ID del usuario:', this.currentUser.id);
     }
+  }
+
+  // ✅ AÑADIDO: Método para debug del usuario actual
+  debugCurrentUser(): void {
+    console.group('🔍 DEBUG Usuario Actual');
+    console.log('Usuario completo:', this.currentUser);
+    console.log('ID:', this.currentUser?.id);
+    console.log('Tipo de ID:', typeof this.currentUser?.id);
+    console.log('Nombre:', this.currentUser?.nombreUsuario);
+    console.log('Roles:', this.currentUser?.roles);
+    console.groupEnd();
   }
 
   // Configuración para la tabla responsiva en móviles
@@ -122,9 +134,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       });
   }
 
-  // Comprobar si hay un fichaje activo guardado
+  // ✅ CORREGIDO: Comprobar fichaje activo con mejor manejo de IDs
   checkForActiveClockIn(): void {
-    if (!this.currentUser) return;
+    if (!this.currentUser || !this.currentUser.id) {
+      console.warn('⚠️ No hay usuario actual o ID inválido');
+      return;
+    }
 
     // Primero verificar localStorage
     const savedClockIn = localStorage.getItem('activeWorkClockIn');
@@ -135,19 +150,30 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           ...parsed,
           startTimestamp: new Date(parsed.startTimestamp)
         };
-        console.log('Fichaje activo encontrado en localStorage:', this.activeClockIn);
+        console.log('✅ Fichaje activo encontrado en localStorage:', this.activeClockIn);
         return;
       } catch (error) {
-        console.error('Error parsing localStorage clockIn:', error);
+        console.error('❌ Error parsing localStorage clockIn:', error);
         localStorage.removeItem('activeWorkClockIn');
       }
     }
 
     // Si no hay en localStorage, verificar en el backend
-    this.workHoursService.getActiveWorkDay(Number(this.currentUser.id))
+    const usuarioId = typeof this.currentUser.id === 'string' 
+      ? parseInt(this.currentUser.id, 10) 
+      : Number(this.currentUser.id);
+
+    if (isNaN(usuarioId)) {
+      console.error('❌ ID de usuario inválido para verificar fichaje activo');
+      return;
+    }
+
+    this.workHoursService.getActiveWorkDay(usuarioId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
+          console.log('🔍 Respuesta verificación fichaje activo:', response);
+          
           if (response.success && response.data) {
             const reporte = response.data;
             this.activeClockIn = {
@@ -160,11 +186,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             
             // Guardar en localStorage para persistencia
             localStorage.setItem('activeWorkClockIn', JSON.stringify(this.activeClockIn));
-            console.log('Fichaje activo encontrado en backend:', this.activeClockIn);
+            console.log('✅ Fichaje activo encontrado en backend:', this.activeClockIn);
+          } else {
+            console.log('ℹ️ No hay fichaje activo en el backend');
           }
         },
         error: (error) => {
-          console.error('Error verificando fichaje activo:', error);
+          console.error('❌ Error verificando fichaje activo:', error);
         }
       });
   }
@@ -180,11 +208,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Fichar entrada
+   * ✅ CORREGIDO: Fichar entrada con validación mejorada
    */
   clockIn(): void {
-    if (!this.currentUser) {
-      this.error = 'Usuario no disponible';
+    if (!this.currentUser || !this.currentUser.id) {
+      this.error = 'Usuario no disponible o ID de usuario inválido';
       return;
     }
 
@@ -194,11 +222,26 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
     const formValues = this.clockInForm.value;
 
-    this.workHoursService.clockIn(Number(this.currentUser.id), formValues.notas)
+    console.log('🚀 Iniciando fichaje para usuario ID:', this.currentUser.id);
+
+    // ✅ CORREGIDO: Convertir el ID a número si viene como string
+    const usuarioId = typeof this.currentUser.id === 'string' 
+      ? parseInt(this.currentUser.id, 10) 
+      : Number(this.currentUser.id);
+
+    if (isNaN(usuarioId)) {
+      this.error = 'ID de usuario inválido';
+      this.loading = false;
+      return;
+    }
+
+    this.workHoursService.clockIn(usuarioId, formValues.notas)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           this.loading = false;
+          console.log('✅ Respuesta del servidor:', response);
+          
           if (response.success && response.data) {
             const reporte = response.data;
             const now = new Date();
@@ -219,21 +262,29 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             this.clockInForm.reset({ notas: '' });
 
             setTimeout(() => { this.success = false; }, 3000);
-            console.log('Fichaje de entrada registrado:', this.activeClockIn);
+            console.log('✅ Fichaje de entrada registrado:', this.activeClockIn);
           } else {
             this.error = response.message || 'Error al registrar fichaje de entrada';
           }
         },
         error: (error) => {
           this.loading = false;
-          this.error = error.message || 'Error al procesar la solicitud';
-          console.error('Error fichando entrada:', error);
+          console.error('❌ Error completo:', error);
+          
+          // ✅ Manejo específico de errores de validación
+          if (error.message && error.message.includes('horas_turno debe ser un número entero')) {
+            this.error = 'Error en el formato de datos. Contacte al administrador.';
+          } else {
+            this.error = error.message || 'Error al procesar la solicitud';
+          }
+          
+          console.error('❌ Error fichando entrada:', error);
         }
       });
   }
 
   /**
-   * Fichar salida
+   * ✅ CORREGIDO: Fichar salida con mejor manejo de errores
    */
   clockOut(): void {
     if (!this.activeClockIn || !this.currentUser) {
@@ -246,6 +297,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
     const formValues = this.clockOutForm.value;
     
+    console.log('🚀 Finalizando fichaje. Reporte ID:', this.activeClockIn.reporteId);
+    console.log('🚀 Tiempo de descanso:', formValues.tiempoDescanso);
+    
     this.workHoursService.clockOut(
       this.activeClockIn.reporteId, 
       formValues.tiempoDescanso, 
@@ -255,6 +309,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     .subscribe({
       next: (response) => {
         this.loading = false;
+        console.log('✅ Respuesta clockOut:', response);
         
         if (response.success) {
           // Limpiar el estado activo
@@ -271,15 +326,23 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           this.loadRecentWorkHours(); // Recargar registros recientes
 
           setTimeout(() => { this.success = false; }, 3000);
-          console.log('Fichaje de salida registrado correctamente');
+          console.log('✅ Fichaje de salida registrado correctamente');
         } else {
           this.error = response.message || 'Error al finalizar fichaje';
         }
       },
       error: (error) => {
         this.loading = false;
-        this.error = error.message || 'Error al procesar la solicitud';
-        console.error('Error fichando salida:', error);
+        console.error('❌ Error clockOut completo:', error);
+        
+        // ✅ Manejo específico de errores
+        if (error.message && error.message.includes('horas_turno debe ser un número entero')) {
+          this.error = 'Error en el cálculo de horas. Contacte al administrador.';
+        } else {
+          this.error = error.message || 'Error al procesar la solicitud';
+        }
+        
+        console.error('❌ Error fichando salida:', error);
       }
     });
   }
@@ -294,11 +357,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         next: (response) => {
           if (response.success && response.data) {
             this.recentWorkHours = response.data;
-            console.log('Registros recientes cargados:', this.recentWorkHours.length);
+            console.log('✅ Registros recientes cargados:', this.recentWorkHours.length);
           }
         },
         error: (error) => {
-          console.error('Error cargando registros recientes:', error);
+          console.error('❌ Error cargando registros recientes:', error);
           this.recentWorkHours = [];
         }
       });
@@ -543,141 +606,141 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     );
   }
 
-  
-getCalendarDays(): any[] {
-  const year = this.currentCalendarDate.getFullYear();
-  const month = this.currentCalendarDate.getMonth();
-  
-  // Primer día del mes
-  const firstDay = new Date(year, month, 1);
-  // Último día del mes
-  const lastDay = new Date(year, month + 1, 0);
-  
-  // Primer día de la semana del calendario (lunes = 1, domingo = 0)
-  const firstDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-  
-  // Días del mes anterior necesarios
-  const daysFromPrevMonth = firstDayOfWeek;
-  
-  // Último día del mes anterior
-  const lastDayPrevMonth = new Date(year, month, 0).getDate();
-  
-  const calendarDays: any[] = [];
-  
-  // Agregar días del mes anterior
-  for (let i = daysFromPrevMonth - 1; i >= 0; i--) {
-    calendarDays.push({
-      day: lastDayPrevMonth - i,
-      isCurrentMonth: false,
-      isToday: false,
-      date: new Date(year, month - 1, lastDayPrevMonth - i)
-    });
-  }
-  
-  // Agregar días del mes actual
-  const today = new Date();
-  for (let day = 1; day <= lastDay.getDate(); day++) {
-    const currentDate = new Date(year, month, day);
-    const isToday = today.getFullYear() === year && 
-                   today.getMonth() === month && 
-                   today.getDate() === day;
+  getCalendarDays(): any[] {
+    const year = this.currentCalendarDate.getFullYear();
+    const month = this.currentCalendarDate.getMonth();
     
-    calendarDays.push({
-      day: day,
-      isCurrentMonth: true,
-      isToday: isToday,
-      date: currentDate
-    });
+    // Primer día del mes
+    const firstDay = new Date(year, month, 1);
+    // Último día del mes
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Primer día de la semana del calendario (lunes = 1, domingo = 0)
+    const firstDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    
+    // Días del mes anterior necesarios
+    const daysFromPrevMonth = firstDayOfWeek;
+    
+    // Último día del mes anterior
+    const lastDayPrevMonth = new Date(year, month, 0).getDate();
+    
+    const calendarDays: any[] = [];
+    
+    // Agregar días del mes anterior
+    for (let i = daysFromPrevMonth - 1; i >= 0; i--) {
+      calendarDays.push({
+        day: lastDayPrevMonth - i,
+        isCurrentMonth: false,
+        isToday: false,
+        date: new Date(year, month - 1, lastDayPrevMonth - i)
+      });
+    }
+    
+    // Agregar días del mes actual
+    const today = new Date();
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const currentDate = new Date(year, month, day);
+      const isToday = today.getFullYear() === year && 
+                     today.getMonth() === month && 
+                     today.getDate() === day;
+      
+      calendarDays.push({
+        day: day,
+        isCurrentMonth: true,
+        isToday: isToday,
+        date: currentDate
+      });
+    }
+    
+    // Completar hasta tener 42 días (6 semanas x 7 días)
+    const remainingDays = 42 - calendarDays.length;
+    for (let day = 1; day <= remainingDays; day++) {
+      calendarDays.push({
+        day: day,
+        isCurrentMonth: false,
+        isToday: false,
+        date: new Date(year, month + 1, day)
+      });
+    }
+    
+    return calendarDays;
   }
-  
-  // Completar hasta tener 42 días (6 semanas x 7 días)
-  const remainingDays = 42 - calendarDays.length;
-  for (let day = 1; day <= remainingDays; day++) {
-    calendarDays.push({
-      day: day,
-      isCurrentMonth: false,
-      isToday: false,
-      date: new Date(year, month + 1, day)
-    });
+
+  // ============ MÉTODOS FALTANTES PARA EL TEMPLATE ============
+
+  /**
+   * Obtener fecha del último pago
+   */
+  getLastPaymentDate(): Date | null {
+    if (this.recentWorkHours.length === 0) return null;
+    
+    // Si no tienes fechaPago, usar la fecha del último registro
+    const lastWork = this.recentWorkHours
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+    
+    return lastWork ? new Date(lastWork.fecha) : null;
   }
-  
-  return calendarDays;
-}
-// ============ MÉTODOS FALTANTES PARA EL TEMPLATE ============
 
-/**
- * Obtener fecha del último pago
- */
-getLastPaymentDate(): Date | null {
-  if (this.recentWorkHours.length === 0) return null;
-  
-  // Si no tienes fechaPago, usar la fecha del último registro
-  const lastWork = this.recentWorkHours
-    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
-  
-  return lastWork ? new Date(lastWork.fecha) : null;
-}
-
-/**
- * Obtener horas del mes actual
- */
-getCurrentMonthHours(): number {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  
-  return this.recentWorkHours
-    .filter(workDay => {
-      const workDate = new Date(workDay.fecha);
-      return workDate.getMonth() === currentMonth && workDate.getFullYear() === currentYear;
-    })
-    .reduce((total, workDay) => total + workDay.totalHoras, 0);
-}
-
-/**
- * Obtener monto pendiente de pago
- */
-getPendingAmount(): number {
-  const lastPaymentDate = this.getLastPaymentDate();
-  
-  // Si no hay fecha de último pago, considerar todas las horas como pendientes
-  if (!lastPaymentDate) {
-    const totalHours = this.recentWorkHours
+  /**
+   * Obtener horas del mes actual
+   */
+  getCurrentMonthHours(): number {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    return this.recentWorkHours
+      .filter(workDay => {
+        const workDate = new Date(workDay.fecha);
+        return workDate.getMonth() === currentMonth && workDate.getFullYear() === currentYear;
+      })
       .reduce((total, workDay) => total + workDay.totalHoras, 0);
-    const hourlyRate = 6500;
-    return totalHours * hourlyRate;
   }
-  
-  // Calcular horas trabajadas después de la última fecha de pago
-  const pendingHours = this.recentWorkHours
-    .filter(workDay => {
-      const workDate = new Date(workDay.fecha);
-      return workDate > lastPaymentDate;
-    })
-    .reduce((total, workDay) => total + workDay.totalHoras, 0);
-  
-  // Tarifa por hora
-  const hourlyRate = 6500; // Pesos argentinos por hora
-  
-  return pendingHours * hourlyRate;
-}
 
-/**
- * TrackBy function para optimizar la renderización del calendario
- */
-trackByDay(index: number, day: any): string {
-  return `${day.date.getTime()}-${day.isCurrentMonth}`;
-}
+  /**
+   * Obtener monto pendiente de pago
+   */
+  getPendingAmount(): number {
+    const lastPaymentDate = this.getLastPaymentDate();
+    
+    // Si no hay fecha de último pago, considerar todas las horas como pendientes
+    if (!lastPaymentDate) {
+      const totalHours = this.recentWorkHours
+        .reduce((total, workDay) => total + workDay.totalHoras, 0);
+      const hourlyRate = 6500;
+      return totalHours * hourlyRate;
+    }
+    
+    // Calcular horas trabajadas después de la última fecha de pago
+    const pendingHours = this.recentWorkHours
+      .filter(workDay => {
+        const workDate = new Date(workDay.fecha);
+        return workDate > lastPaymentDate;
+      })
+      .reduce((total, workDay) => total + workDay.totalHoras, 0);
+    
+    // Tarifa por hora
+    const hourlyRate = 6500; // Pesos argentinos por hora
+    
+    return pendingHours * hourlyRate;
+  }
 
-/**
- * Obtener promedio de horas por día trabajado
- */
-getAverageHoursPerDay(): number {
-  if (this.recentWorkHours.length === 0) return 0;
-  
-  const totalHours = this.recentWorkHours.reduce((total, workDay) => total + workDay.totalHoras, 0);
-  const workingDays = this.recentWorkHours.length;
-  
-  return totalHours / workingDays;
-}
+  /**
+   * TrackBy function para optimizar la renderización del calendario
+   */
+  trackByDay(index: number, day: any): string {
+    return `${day.date.getTime()}-${day.isCurrentMonth}`;
+  }
+
+  /**
+   * Obtener promedio de horas por día trabajado
+   */
+  getAverageHoursPerDay(): number {
+    if (this.recentWorkHours.length === 0) return 0;
+    
+    const totalHours = this.recentWorkHours.reduce((total, workDay) => total + workDay.totalHoras, 0);
+    const workingDays = this.recentWorkHours.length;
+    
+    return totalHours / workingDays;
+  }
 }
