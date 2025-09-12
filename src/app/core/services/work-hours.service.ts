@@ -25,7 +25,7 @@ export interface ReporteLaboralCreate {
   maquina_id?: number;
   usuario_id: number;
   fecha_asignacion: string; // DateTime ISO string
-  horas_turno: number; // INTEGER - número de horas trabajadas
+  horas_turno: number; // 👈 CORREGIDO: INTEGER - número de horas trabajadas (NO DateTime)
 }
 
 // Interface para la respuesta del backend
@@ -34,7 +34,7 @@ export interface ReporteLaboral {
   maquina_id?: number;
   usuario_id: number;
   fecha_asignacion: string;
-  horas_turno: number; // INTEGER - número de horas trabajadas
+  horas_turno: number; // 👈 CORREGIDO: INTEGER - número de horas trabajadas (NO DateTime)
   created?: string;
   updated?: string;
 }
@@ -63,16 +63,17 @@ export class WorkHoursService {
 
   /**
    * Fichar entrada - Crear nuevo reporte laboral
+   * 👈 CORREGIDO: horas_turno se inicializa como 0 (entero)
    */
   clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
     const payload: ReporteLaboralCreate = {
       maquina_id: 1, // ID de máquina por defecto (ajustar según necesidad)
       usuario_id: usuarioId,
       fecha_asignacion: new Date().toISOString(),
-      horas_turno: 0 // ENTERO: 0 horas iniciales (se actualizará al hacer clockOut)
+      horas_turno: 0 // 👈 CORREGIDO: ENTERO 0 inicial (no un timestamp)
     };
 
-    console.log('Enviando clockIn:', payload);
+    console.log('✅ Enviando clockIn CORREGIDO:', payload);
 
     return this.http.post<ReporteLaboral>(
       this.apiUrl, 
@@ -90,20 +91,31 @@ export class WorkHoursService {
 
   /**
    * Fichar salida - Actualizar reporte laboral existente
+   * 👈 CORREGIDO: Ahora calcula las horas trabajadas como entero
    */
   clockOut(reporteId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
-    // Para calcular horas trabajadas dinámicamente, necesitaríamos la hora de inicio
-    // Por ahora usamos un valor estimado de 8 horas
-    const horasTrabajadasEntero = 8; // ENTERO: número de horas trabajadas
+    // Calculamos horas trabajadas dinámicamente desde el localStorage
+    const activeClockIn = localStorage.getItem('activeWorkClockIn');
+    let horasTrabajadasEntero = 8; // Default fallback
+    
+    if (activeClockIn) {
+      try {
+        const parsed = JSON.parse(activeClockIn);
+        const startTime = new Date(parsed.startTimestamp);
+        const now = new Date();
+        const diffMs = now.getTime() - startTime.getTime();
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60)); // 👈 Redondear hacia abajo para entero
+        horasTrabajadasEntero = Math.max(1, diffHours); // Mínimo 1 hora
+      } catch (error) {
+        console.error('Error calculando horas trabajadas:', error);
+      }
+    }
 
-    const payload: ReporteLaboralCreate = {
-      maquina_id: 1,
-      usuario_id: this.getStoredUserId(), // Obtener ID del usuario del localStorage
-      fecha_asignacion: new Date().toISOString(),
-      horas_turno: horasTrabajadasEntero // ENTERO: número de horas trabajadas
+    const payload: Partial<ReporteLaboralCreate> = {
+      horas_turno: horasTrabajadasEntero // 👈 CORREGIDO: ENTERO de horas trabajadas
     };
 
-    console.log('Enviando clockOut para reporte:', reporteId, payload);
+    console.log('✅ Enviando clockOut CORREGIDO:', { reporteId, payload });
 
     return this.http.put<ReporteLaboral>(
       `${this.apiUrl}/${reporteId}`, 
@@ -113,7 +125,7 @@ export class WorkHoursService {
       map(response => ({
         success: true,
         data: response,
-        message: 'Fichaje de salida registrado correctamente'
+        message: `Fichaje de salida registrado correctamente. Horas trabajadas: ${horasTrabajadasEntero}`
       })),
       catchError(this.handleError)
     );
@@ -121,21 +133,19 @@ export class WorkHoursService {
 
   /**
    * Fichar salida con cálculo dinámico de horas
+   * 👈 CORREGIDO: Ahora usa enteros para horas_turno
    */
   clockOutWithDynamicHours(reporteId: number, startTime: Date, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
     // Calcular horas trabajadas dinámicamente
     const now = new Date();
     const diffMs = now.getTime() - startTime.getTime();
-    const hoursWorked = Math.floor(diffMs / (1000 * 60 * 60)); // Redondear hacia abajo
+    const hoursWorked = Math.floor(diffMs / (1000 * 60 * 60)); // 👈 Redondear hacia abajo a entero
     
-    const payload: ReporteLaboralCreate = {
-      maquina_id: 1,
-      usuario_id: this.getStoredUserId(),
-      fecha_asignacion: startTime.toISOString(), // Mantener fecha original de entrada
-      horas_turno: hoursWorked // ENTERO: horas calculadas dinámicamente
+    const payload: Partial<ReporteLaboralCreate> = {
+      horas_turno: hoursWorked // 👈 CORREGIDO: ENTERO de horas calculadas dinámicamente
     };
 
-    console.log('Enviando clockOut dinámico para reporte:', reporteId, 'Horas trabajadas:', hoursWorked);
+    console.log('✅ Enviando clockOut dinámico CORREGIDO:', { reporteId, hoursWorked });
 
     return this.http.put<ReporteLaboral>(
       `${this.apiUrl}/${reporteId}`, 
@@ -243,6 +253,7 @@ export class WorkHoursService {
 
   /**
    * Mapear reportes del backend a WorkDay del frontend
+   * 👈 CORREGIDO: Ahora maneja horas_turno como entero
    */
   private mapReportesToWorkDays(reportes: ReporteLaboral[]): WorkDay[] {
     return reportes.map(reporte => ({
@@ -251,7 +262,7 @@ export class WorkHoursService {
       horaInicio: this.extractTime(reporte.fecha_asignacion),
       horaFin: reporte.horas_turno > 0 ? this.calculateEndTime(reporte.fecha_asignacion, reporte.horas_turno) : undefined,
       tiempoDescanso: 60, // Valor por defecto
-      totalHoras: reporte.horas_turno, // Usar directamente el entero del backend
+      totalHoras: reporte.horas_turno, // 👈 CORREGIDO: Usar directamente el entero del backend
       usuarioId: reporte.usuario_id,
       notas: '',
       estado: reporte.horas_turno > 0 ? 'completado' : 'activo',
@@ -272,10 +283,11 @@ export class WorkHoursService {
 
   /**
    * Calcular hora de fin basada en hora de inicio y horas trabajadas (entero)
+   * 👈 CORREGIDO: hoursWorked es ahora un entero de horas
    */
   private calculateEndTime(startTime: string, hoursWorked: number): string {
     const start = new Date(startTime);
-    const end = new Date(start.getTime() + (hoursWorked * 60 * 60 * 1000));
+    const end = new Date(start.getTime() + (hoursWorked * 60 * 60 * 1000)); // 👈 Multiplicar por horas enteras
     return this.extractTime(end.toISOString());
   }
 
