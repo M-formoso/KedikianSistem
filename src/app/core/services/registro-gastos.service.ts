@@ -7,6 +7,19 @@ import { environment } from '../../../environments/environment';
 
 // ============= INTERFACES CORREGIDAS =============
 
+// Interface para crear entregas (envío al backend)
+export interface ExpenseRequest {
+  date: string;
+  expenseType: string;
+  amount: number;
+  operator: string;
+  paymentMethod?: string;
+  receiptNumber?: string;
+  description?: string;
+  status?: string;
+}
+
+// Interface para las respuestas del backend (lo que recibimos) - CORREGIDA
 export interface ExpenseRecord {
   id?: number;
   date: string;
@@ -43,17 +56,6 @@ export interface GastoOut {
   imagen?: string;
   created?: string;
   updated?: string;
-}
-
-export interface ExpenseRequest {
-  date: string;
-  expenseType: string;
-  amount: number;
-  operator: string;
-  paymentMethod?: string;
-  receiptNumber?: string;
-  description?: string;
-  status?: string;
 }
 
 export interface ExpenseType {
@@ -93,21 +95,44 @@ export class ExpenseService {
   // CORREGIDA: URL correcta del backend
   private apiUrl = `${environment.apiUrl}/gastos`;
   
-  private httpOptions = {
-    headers: new HttpHeaders({
-      'Content-Type': 'application/json'
-    })
-  };
+  // ✅ CRÍTICO: Se eliminó Content-Type manual porque FormData lo maneja automáticamente
+  private getHttpOptions() {
+    // ✅ CORREGIDO: El token se obtiene dinámicamente cada vez
+    const usuarioActual = localStorage.getItem('usuarioActual');
+    let token: string | null = null;
+
+    if (usuarioActual) {
+      try {
+        const usuario = JSON.parse(usuarioActual);
+        token = usuario.access_token || usuario.token || null;
+      } catch {
+        console.error('Error parsing usuario actual');
+      }
+    }
+
+    const headers: any = {
+      'Accept': 'application/json'
+    };
+
+    // ✅ CRÍTICO: Solo agregar Authorization si hay token
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return { headers: new HttpHeaders(headers) };
+  }
 
   constructor(private http: HttpClient) {}
 
   // ============= MÉTODOS PRINCIPALES CORREGIDOS =============
 
   /**
-   * Crear un nuevo registro de gasto - CORREGIDO para usar FormData
+   * ✅ CORREGIDO: Crear un nuevo registro de gasto - Usando FormData para que funcione con el backend
    */
   createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-    // Convertir ExpenseRequest al formato del backend
+    console.log('📤 CreatingExpense con datos:', expense);
+    
+    // ✅ CRÍTICO: Convertir ExpenseRequest al formato FormData que espera el backend
     const formData = new FormData();
     formData.append('usuario_id', expense.operator);
     formData.append('maquina_id', '1'); // Por defecto, debería venir del contexto
@@ -116,10 +141,27 @@ export class ExpenseService {
     formData.append('fecha', expense.date);
     formData.append('descripcion', expense.description || '');
     
+    console.log('📤 FormData enviado al backend:', {
+      usuario_id: expense.operator,
+      maquina_id: '1',
+      tipo: expense.expenseType,
+      importe_total: expense.amount.toString(),
+      fecha: expense.date,
+      descripcion: expense.description || ''
+    });
+    
+    // ✅ CRÍTICO: No usar Content-Type header para FormData - el navegador lo maneja automáticamente
+    const httpOptions = this.getHttpOptions();
+    // ✅ Remover Content-Type para FormData
+    if (httpOptions.headers.has('Content-Type')) {
+      httpOptions.headers = httpOptions.headers.delete('Content-Type');
+    }
+
     // El backend espera FormData para los gastos
     return this.http.post<GastoOut>(
       `${this.apiUrl}/`, 
-      formData
+      formData,
+      httpOptions
     ).pipe(
       map(response => ({
         success: true,
@@ -139,7 +181,7 @@ export class ExpenseService {
 
     return this.http.get<GastoOut[]>(
       `${this.apiUrl}/`, 
-      { params }
+      { params, ...this.getHttpOptions() }
     ).pipe(
       map(gastos => ({
         success: true,
@@ -154,7 +196,7 @@ export class ExpenseService {
    * Obtener un registro específico por ID
    */
   getExpenseById(id: number): Observable<ApiResponse<ExpenseRecord>> {
-    return this.http.get<GastoOut>(`${this.apiUrl}/${id}`).pipe(
+    return this.http.get<GastoOut>(`${this.apiUrl}/${id}`, this.getHttpOptions()).pipe(
       map(gasto => ({
         success: true,
         data: this.mapGastoToExpenseRecord(gasto),
@@ -168,7 +210,7 @@ export class ExpenseService {
    * Eliminar un registro
    */
   deleteExpense(id: number): Observable<ApiResponse<any>> {
-    return this.http.delete<any>(`${this.apiUrl}/${id}`).pipe(
+    return this.http.delete<any>(`${this.apiUrl}/${id}`, this.getHttpOptions()).pipe(
       map(() => ({
         success: true,
         data: null,
@@ -220,7 +262,7 @@ export class ExpenseService {
    * Obtener lista de operadores - USA EL ENDPOINT DE USUARIOS
    */
   getOperators(): Observable<ApiResponse<Operator[]>> {
-    return this.http.get<any[]>(`${environment.apiUrl}/usuarios`).pipe(
+    return this.http.get<any[]>(`${environment.apiUrl}/usuarios`, this.getHttpOptions()).pipe(
       map(usuarios => {
         const operators = usuarios
           .filter(u => u.estado === true)
@@ -323,9 +365,9 @@ export class ExpenseService {
     return method ? method.name : 'No especificado';
   }
 
-  // Manejo de errores
+  // ============= MANEJO DE ERRORES MEJORADO =============
   private handleError(error: any): Observable<never> {
-    console.error('Error en ExpenseService:', error);
+    console.error('❌ Error en ExpenseService:', error);
     
     let errorMessage = 'Ocurrió un error inesperado';
     
@@ -337,7 +379,10 @@ export class ExpenseService {
           errorMessage = 'Datos inválidos. Verifique la información ingresada.';
           break;
         case 401:
-          errorMessage = 'No autorizado. Inicie sesión nuevamente.';
+          errorMessage = 'No autorizado. Su sesión puede haber expirado. Inicie sesión nuevamente.';
+          // ✅ CRÍTICO: Limpiar localStorage si hay error 401
+          localStorage.removeItem('usuarioActual');
+          window.location.href = '/login';
           break;
         case 403:
           errorMessage = 'No tiene permisos para realizar esta acción.';

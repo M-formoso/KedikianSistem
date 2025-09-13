@@ -96,10 +96,23 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
    */
   private loadCurrentOperator(): void {
     const currentUser = this.authService.getCurrentUser();
+    console.log('🔍 Usuario obtenido del AuthService:', currentUser);
+    
     if (currentUser) {
+      // ✅ CRÍTICO: Verificar que el usuario tenga un ID válido
+      const userId = typeof currentUser.id === 'string' 
+        ? parseInt(currentUser.id, 10) 
+        : Number(currentUser.id);
+
+      if (isNaN(userId)) {
+        console.error('❌ ID de usuario inválido:', currentUser.id);
+        this.error = 'Error: ID de usuario inválido. Inicie sesión nuevamente.';
+        return;
+      }
+
       // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
-        id: currentUser.id?.toString() || '999',
+        id: userId.toString(),
         name: currentUser.nombreUsuario || 'Usuario Test',
         position: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : (currentUser.roles || 'operario'),
         isActive: true
@@ -112,19 +125,13 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       
       console.log('✅ Operador actual cargado:', this.currentOperator);
     } else {
-      // Fallback a operador mock
-      this.currentOperator = {
-        id: '999',
-        name: 'Operario Test',
-        position: 'operario',
-        isActive: true
-      };
+      console.error('❌ No se encontró usuario autenticado');
+      this.error = 'No se pudo cargar la información del usuario. Inicie sesión nuevamente.';
       
-      this.expenseForm.patchValue({
-        operator: this.currentOperator.id
-      });
-      
-      console.warn('⚠️ Usuario no encontrado, usando operador mock');
+      // Redirigir al login si no hay usuario
+      setTimeout(() => {
+        this.authService.cerrarSesion();
+      }, 2000);
     }
   }
 
@@ -208,6 +215,44 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       values: this.expenseForm.value,
       errors: this.expenseForm.errors
     });
+
+    // ✅ CRÍTICO: Verificar autenticación antes de enviar
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser || !currentUser.id) {
+      this.error = 'Su sesión ha expirado. Inicie sesión nuevamente.';
+      setTimeout(() => {
+        this.authService.cerrarSesion();
+      }, 2000);
+      return;
+    }
+
+    // ✅ CRÍTICO: Verificar que hay token válido
+    const usuarioActual = localStorage.getItem('usuarioActual');
+    if (!usuarioActual) {
+      this.error = 'No se encontró información de autenticación. Inicie sesión nuevamente.';
+      setTimeout(() => {
+        this.authService.cerrarSesion();
+      }, 2000);
+      return;
+    }
+
+    let token: string | null = null;
+    try {
+      const usuario = JSON.parse(usuarioActual);
+      token = usuario.access_token || usuario.token || null;
+    } catch (error) {
+      console.error('❌ Error parsing usuario actual:', error);
+      this.error = 'Error en la información de autenticación. Inicie sesión nuevamente.';
+      return;
+    }
+
+    if (!token) {
+      this.error = 'Token de autenticación no válido. Inicie sesión nuevamente.';
+      setTimeout(() => {
+        this.authService.cerrarSesion();
+      }, 2000);
+      return;
+    }
     
     if (this.expenseForm.invalid) {
       this.markFormGroupTouched();
@@ -242,6 +287,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     };
 
     console.log('📤 Enviando gasto:', expenseData);
+    console.log('🎫 Token disponible:', !!token);
 
     this.expenseService.createExpense(expenseData)
       .pipe(takeUntil(this.destroy$))
@@ -267,7 +313,18 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         },
         error: (error: any) => {
           this.loading = false;
-          this.error = error.message || error || 'Error al procesar la solicitud';
+          console.error('❌ Error completo:', error);
+          
+          // ✅ MANEJO ESPECÍFICO DE ERROR 401
+          if (error.message && error.message.includes('Su sesión ha expirado')) {
+            this.error = 'Su sesión ha expirado. Será redirigido al login.';
+            setTimeout(() => {
+              this.authService.cerrarSesion();
+            }, 2000);
+          } else {
+            this.error = error.message || error || 'Error al procesar la solicitud';
+          }
+          
           console.error('❌ Error creando registro de gasto:', error);
         }
       });
