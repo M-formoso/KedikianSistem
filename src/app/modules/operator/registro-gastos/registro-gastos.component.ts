@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { 
@@ -11,6 +11,7 @@ import {
   PaymentMethod,
   Operator
 } from '../../../core/services/registro-gastos.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-registro-gastos',
@@ -41,18 +42,23 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   // Fecha formateada para mostrar
   formattedCurrentDate: string = '';
   
+  // Operador actual
+  currentOperator: Operator | null = null;
+  
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
   
   constructor(
     private formBuilder: FormBuilder,
-    private expenseService: ExpenseService
+    private expenseService: ExpenseService,
+    private authService: AuthService
   ) {
     this.initializeForm();
     this.setFormattedCurrentDate();
   }
   
   ngOnInit(): void {
+    this.loadCurrentOperator();
     this.loadMasterData();
     this.loadRecentExpenses();
     this.setupMobileTable();
@@ -63,26 +69,68 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  // ✅ CRÍTICO: Getter para acceder a los controles del formulario
+  get f() { 
+    return this.expenseForm.controls; 
+  }
+
+  /**
+   * ✅ CORREGIDO: Inicializar formulario con validaciones correctas
+   */
   private initializeForm(): void {
     this.expenseForm = this.formBuilder.group({
-      date: [new Date().toISOString().split('T')[0], Validators.required],
+      // La fecha se establece automáticamente como hoy y es readonly
+      date: [{ value: new Date().toISOString().split('T')[0], disabled: true }],
       expenseType: ['', Validators.required],
       amount: ['', [Validators.required, Validators.min(0.01)]],
-      paymentMethod: ['', Validators.required],
+      paymentMethod: [''],
       receiptNumber: [''],
-      operator: ['', Validators.required],
-      description: ['', Validators.maxLength(500)]
+      // El operador se carga automáticamente desde la sesión
+      operator: [{ value: '', disabled: true }],
+      description: ['']
     });
   }
   
+  /**
+   * ✅ CORREGIDO: Cargar operador actual desde el servicio de autenticación
+   */
+  private loadCurrentOperator(): void {
+    const currentUser = this.authService.getCurrentUser();
+    if (currentUser) {
+      // Crear objeto Operator basado en el usuario actual
+      this.currentOperator = {
+        id: currentUser.id?.toString() || '999',
+        name: currentUser.nombreUsuario || 'Usuario Test',
+        position: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : (currentUser.roles || 'operario'),
+        isActive: true
+      };
+      
+      // Establecer el operador en el formulario
+      this.expenseForm.patchValue({
+        operator: this.currentOperator.id
+      });
+      
+      console.log('✅ Operador actual cargado:', this.currentOperator);
+    } else {
+      // Fallback a operador mock
+      this.currentOperator = {
+        id: '999',
+        name: 'Operario Test',
+        position: 'operario',
+        isActive: true
+      };
+      
+      this.expenseForm.patchValue({
+        operator: this.currentOperator.id
+      });
+      
+      console.warn('⚠️ Usuario no encontrado, usando operador mock');
+    }
+  }
+
   // Configuración para la tabla responsiva en móviles
   setupMobileTable(): void {
     // Implementar lógica para tabla responsiva si es necesario
-  }
-  
-  // Getter para acceder más fácilmente a los campos del formulario
-  get f() { 
-    return this.expenseForm.controls; 
   }
   
   /**
@@ -115,11 +163,12 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         }
         
         this.loadingMasterData = false;
+        console.log('✅ Datos maestros cargados correctamente');
       },
       error: (error: any) => {
         this.error = `Error al cargar datos: ${error.message || error}`;
         this.loadingMasterData = false;
-        console.error('Error cargando datos maestros:', error);
+        console.error('❌ Error cargando datos maestros:', error);
       }
     });
   }
@@ -134,50 +183,79 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         next: (response: any) => {
           if (response && response.success && response.data) {
             this.recentExpenses = response.data;
+            console.log('✅ Registros recientes cargados:', this.recentExpenses.length);
           }
         },
         error: (error: any) => {
-          console.error('Error cargando registros recientes:', error);
+          console.error('❌ Error cargando registros recientes:', error);
           // No mostrar error al usuario para registros recientes
         }
       });
   }
   
   /**
-   * Enviar formulario
+   * ✅ CORREGIDO: Enviar formulario
    */
   onSubmit(): void {
     this.submitted = true;
     this.success = false;
     this.error = '';
     
+    console.log('🚀 onSubmit llamado');
+    console.log('📋 Estado del formulario:', {
+      valid: this.expenseForm.valid,
+      invalid: this.expenseForm.invalid,
+      values: this.expenseForm.value,
+      errors: this.expenseForm.errors
+    });
+    
     if (this.expenseForm.invalid) {
       this.markFormGroupTouched();
+      console.log('❌ Formulario inválido, errores por campo:');
+      Object.keys(this.expenseForm.controls).forEach(key => {
+        const control = this.expenseForm.get(key);
+        if (control && control.errors) {
+          console.log(`   ${key}:`, control.errors);
+        }
+      });
+      return;
+    }
+
+    if (!this.currentOperator) {
+      this.error = 'No se pudo cargar la información del operador';
       return;
     }
 
     this.loading = true;
     
     const formValues = this.expenseForm.value;
+    
+    // ✅ CORREGIDO: Crear objeto de gasto según las interfaces del backend
     const expenseData: ExpenseRequest = {
-      date: formValues.date,
+      date: new Date().toISOString().split('T')[0], // Fecha actual
       expenseType: formValues.expenseType,
       amount: parseFloat(formValues.amount),
-      paymentMethod: formValues.paymentMethod,
+      paymentMethod: formValues.paymentMethod || '',
       receiptNumber: formValues.receiptNumber || '',
-      operator: formValues.operator,
+      operator: this.currentOperator.id,
       description: formValues.description || ''
     };
+
+    console.log('📤 Enviando gasto:', expenseData);
 
     this.expenseService.createExpense(expenseData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response: any) => {
           this.loading = false;
+          console.log('📥 Respuesta recibida:', response);
+          
           if (response && response.success) {
             this.success = true;
             this.loadRecentExpenses(); // Recargar la lista
             this.resetForm();
+            
+            console.log('✅ Gasto registrado exitosamente');
             
             // Ocultar mensaje de éxito después de 5 segundos
             setTimeout(() => {
@@ -190,25 +268,31 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         error: (error: any) => {
           this.loading = false;
           this.error = error.message || error || 'Error al procesar la solicitud';
-          console.error('Error creando registro de gasto:', error);
+          console.error('❌ Error creando registro de gasto:', error);
         }
       });
   }
 
   /**
-   * Resetear formulario
+   * ✅ CORREGIDO: Resetear formulario
    */
   resetForm(): void {
     this.submitted = false;
     this.expenseForm.reset({
+      // La fecha siempre se mantiene como hoy
       date: new Date().toISOString().split('T')[0],
       expenseType: '',
       amount: '',
       paymentMethod: '',
       receiptNumber: '',
-      operator: '',
+      // Mantener el operador actual
+      operator: this.currentOperator?.id || '',
       description: ''
     });
+    
+    // Deshabilitar nuevamente los campos que deben estar deshabilitados
+    this.expenseForm.get('date')?.disable();
+    this.expenseForm.get('operator')?.disable();
   }
   
   /**
@@ -217,8 +301,67 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   private markFormGroupTouched(): void {
     Object.keys(this.expenseForm.controls).forEach(key => {
       const control = this.expenseForm.get(key);
-      control?.markAsTouched();
+      // Solo marcar como tocados los campos que están habilitados
+      if (control && !control.disabled) {
+        control.markAsTouched();
+      }
     });
+  }
+  
+  /**
+   * ✅ CORREGIDO: Verificar si un campo del formulario tiene errores
+   */
+  hasFieldError(fieldName: string): boolean {
+    const field = this.expenseForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted) && !field.disabled);
+  }
+  
+  /**
+   * ✅ CORREGIDO: Obtener mensaje de error para un campo específico
+   */
+  getFieldError(fieldName: string): string {
+    const field = this.expenseForm.get(fieldName);
+    
+    if (field?.errors) {
+      if (field.errors['required']) {
+        return `${this.getFieldLabel(fieldName)} es requerido`;
+      }
+      if (field.errors['min']) {
+        return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
+      }
+      if (field.errors['maxlength']) {
+        return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
+      }
+      if (field.errors['duplicate']) {
+        return `Este número de recibo ya existe en el sistema`;
+      }
+    }
+    
+    return '';
+  }
+  
+  /**
+   * Obtener etiqueta del campo para mensajes de error
+   */
+  private getFieldLabel(fieldName: string): string {
+    const labels: { [key: string]: string } = {
+      'date': 'La fecha',
+      'expenseType': 'El tipo de gasto',
+      'amount': 'El monto',
+      'paymentMethod': 'El método de pago',
+      'receiptNumber': 'El número de recibo',
+      'operator': 'El operador',
+      'description': 'La descripción'
+    };
+    
+    return labels[fieldName] || fieldName;
+  }
+  
+  /**
+   * Obtener estado de carga general
+   */
+  get isLoading(): boolean {
+    return this.loading || this.loadingMasterData;
   }
   
   /**
@@ -315,62 +458,11 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     const operator = this.operators.find(o => o.id === operatorId);
     return operator ? operator.name : 'Operador desconocido';
   }
-  
-  /**
-   * Verificar si un campo del formulario tiene errores
-   */
-  hasFieldError(fieldName: string): boolean {
-    const field = this.expenseForm.get(fieldName);
-    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted));
-  }
-  
-  /**
-   * Obtener mensaje de error para un campo específico
-   */
-  getFieldError(fieldName: string): string {
-    const field = this.expenseForm.get(fieldName);
-    
-    if (field?.errors) {
-      if (field.errors['required']) {
-        return `${this.getFieldLabel(fieldName)} es requerido`;
-      }
-      if (field.errors['min']) {
-        return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
-      }
-      if (field.errors['maxlength']) {
-        return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
-      }
-      if (field.errors['duplicate']) {
-        return `Este número de recibo ya existe en el sistema`;
-      }
-    }
-    
-    return '';
-  }
-  
-  /**
-   * Obtener etiqueta del campo para mensajes de error
-   */
-  private getFieldLabel(fieldName: string): string {
-    const labels: { [key: string]: string } = {
-      'date': 'La fecha',
-      'expenseType': 'El tipo de gasto',
-      'amount': 'El monto',
-      'paymentMethod': 'El método de pago',
-      'receiptNumber': 'El número de recibo',
-      'operator': 'El operador',
-      'description': 'La descripción'
-    };
-    
-    return labels[fieldName] || fieldName;
-  }
-  
-  /**
-   * Obtener estado de carga general
-   */
-  get isLoading(): boolean {
-    return this.loading || this.loadingMasterData;
-  }
+
+  // Agregar este método en el archivo .ts
+trackByExpenseId(index: number, expense: ExpenseRecord): string {
+  return expense.id?.toString() || index.toString();
+}
   
   /**
    * Manejar cambio de número de recibo
