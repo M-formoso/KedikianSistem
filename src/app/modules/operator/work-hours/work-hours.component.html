@@ -8,20 +8,46 @@
 
   <!-- Mensajes de éxito y error -->
   <div *ngIf="success" class="alert alert-success">
-    ¡Operación realizada exitosamente!
+    ✅ ¡Operación realizada exitosamente!
   </div>
   
   <div *ngIf="error" class="alert alert-danger">
-    {{ error }}
+    ❌ {{ error }}
   </div>
 
-  <!-- Alerta de límite de 9 horas -->
-  <div *ngIf="activeClockIn && isNearingLimit()" class="alert alert-warning">
+  <!-- ✅ NUEVO: Diálogo de confirmación de horas extras -->
+  <div *ngIf="showOvertimeDialog" class="alert alert-warning overtime-dialog">
+    <div class="overtime-content">
+      <h4>🕘 Límite de 9 horas alcanzado</h4>
+      <p>Has completado tu jornada laboral regular de 9 horas.</p>
+      <p><strong>¿Deseas continuar con horas extras?</strong></p>
+      <div class="overtime-buttons">
+        <button class="btn btn-primary" (click)="confirmOvertime()" [disabled]="loading">
+          ✅ Sí, continuar con horas extras
+        </button>
+        <button type="button" 
+                class="btn btn-secondary" 
+                (click)="declineOvertime()" 
+                [disabled]="loading">
+          ❌ No, finalizar jornada
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerta de límite de horas regulares -->
+  <div *ngIf="activeClockIn && isNearingLimit() && !isInOvertimeMode" class="alert alert-warning">
     ⚠️ Atención: Se acerca el límite de 9 horas de jornada laboral
   </div>
 
+  <!-- Alerta de horas extras -->
+  <div *ngIf="activeClockIn && isInOvertimeMode && isNearingLimit()" class="alert alert-danger">
+    🚨 Atención: Se acerca el límite de horas extras (4h)
+  </div>
+
+  <!-- Alerta de límite superado -->
   <div *ngIf="activeClockIn && hasExceededLimit()" class="alert alert-danger">
-    🚨 Ha superado el límite de 9 horas. La jornada se cerrará automáticamente.
+    🚨 Límite máximo alcanzado. La jornada se finalizará automáticamente.
   </div>
   
   <!-- Panel de fichaje de entrada -->
@@ -30,11 +56,21 @@
     
     <form [formGroup]="clockInForm" (ngSubmit)="clockIn()">
       <div class="form-compact">
+        <div class="form-group">
+          <label for="notas">Notas (opcional)</label>
+          <textarea id="notas" 
+                    formControlName="notas" 
+                    class="form-control" 
+                    rows="2"
+                    placeholder="Observaciones sobre el inicio de jornada"
+                    maxlength="200"></textarea>
+        </div>
+        
         <div class="form-group clock-in-action">
           <button type="submit" 
                   class="btn btn-primary btn-clock-in" 
                   [disabled]="!canClockIn()">
-            <span *ngIf="loading">Procesando...</span>
+            <span *ngIf="loading">⏳ Procesando...</span>
             <span *ngIf="!loading">
               <span class="clock-icon">⏱️</span> Fichar Entrada
             </span>
@@ -45,8 +81,20 @@
   </div>
   
   <!-- Panel de jornada activa -->
-  <div class="form-card active-work-day" *ngIf="activeClockIn">
-    <h3 class="form-title">Jornada Activa</h3>
+  <div class="form-card active-work-day" *ngIf="activeClockIn" 
+       [ngClass]="getWorkStatusClass()">
+    
+    <!-- ✅ MEJORADO: Header con estado actual -->
+    <div class="work-status-header">
+      <h3 class="form-title">
+        {{ getCurrentWorkStatus() }}
+        <span class="work-status-indicator" [ngClass]="getWorkStatusClass()">
+          <span *ngIf="!activeClockIn.isActive && activeClockIn.autoStoppedAt9Hours">⏸️</span>
+          <span *ngIf="activeClockIn.isActive && !isInOvertimeMode">⏱️</span>
+          <span *ngIf="activeClockIn.isActive && isInOvertimeMode">🕐</span>
+        </span>
+      </h3>
+    </div>
     
     <div class="active-session-info">
       <div class="active-info-row">
@@ -55,10 +103,23 @@
           <span class="info-value">{{ activeClockIn.startTime }}</span>
         </div>
         
-        <div class="active-info-item">
-          <span class="info-label">Tiempo transcurrido:</span>
+        <!-- ✅ NUEVO: Mostrar tiempo separado por regular/extras -->
+        <div class="active-info-item" *ngIf="!isInOvertimeMode">
+          <span class="info-label">Tiempo regular:</span>
           <span class="info-value" [ngClass]="{'text-warning': isNearingLimit(), 'text-danger': hasExceededLimit()}">
             {{ getElapsedTime() }}
+          </span>
+        </div>
+        
+        <div class="active-info-item" *ngIf="isInOvertimeMode">
+          <span class="info-label">Tiempo regular:</span>
+          <span class="info-value">9h 0m (completado)</span>
+        </div>
+        
+        <div class="active-info-item" *ngIf="isInOvertimeMode">
+          <span class="info-label">Horas extras:</span>
+          <span class="info-value text-warning">
+            {{ getOvertimeDisplay() }}
           </span>
         </div>
 
@@ -70,15 +131,34 @@
         </div>
       </div>
 
-      <!-- Barra de progreso de jornada -->
+      <!-- ✅ MEJORADO: Barra de progreso con modo horas extras -->
       <div class="progress-container">
         <div class="progress-bar">
           <div class="progress-fill" 
                [style.width.%]="getWorkDayProgress()"
-               [ngClass]="{'progress-warning': isNearingLimit(), 'progress-danger': hasExceededLimit()}">
+               [ngClass]="{
+                 'progress-warning': isNearingLimit() && !isInOvertimeMode,
+                 'progress-danger': hasExceededLimit() || isInOvertimeMode,
+                 'progress-overtime': isInOvertimeMode
+               }">
           </div>
         </div>
-        <span class="progress-text">{{ getWorkDayProgress() }}% de la jornada</span>
+        <span class="progress-text">
+          <span *ngIf="!isInOvertimeMode">{{ getWorkDayProgress() }}% de la jornada regular</span>
+          <span *ngIf="isInOvertimeMode">{{ getWorkDayProgress() }}% de horas extras utilizadas</span>
+        </span>
+      </div>
+
+      <!-- ✅ NUEVO: Indicador visual de horas extras -->
+      <div class="overtime-indicator" *ngIf="isInOvertimeMode">
+        <div class="overtime-badge">
+          <span class="overtime-icon">🕐</span>
+          <span class="overtime-text">HORAS EXTRAS ACTIVAS</span>
+        </div>
+        <div class="overtime-summary">
+          Total trabajado: {{ getTotalWorkedDisplay() }} 
+          ({{ getRegularHoursDisplay() }} regulares + {{ getOvertimeDisplay() }} extras)
+        </div>
       </div>
     </div>
     
@@ -90,18 +170,21 @@
                  id="tiempoDescanso" 
                  formControlName="tiempoDescanso" 
                  class="form-control"
-                 min="0">
+                 min="0"
+                 max="120">
+          <small class="form-text">Tiempo total de descansos tomados durante la jornada</small>
           <div *ngIf="hasFieldError('tiempoDescanso', clockOutForm)" class="error-message">
             {{ getFieldError('tiempoDescanso', clockOutForm) }}
           </div>
         </div>
         
         <div class="form-group">
-          <label for="notas">Notas</label>
+          <label for="notas">Notas de finalización</label>
           <textarea id="notas" 
                     formControlName="notas" 
                     class="form-control" 
-                    rows="2"
+                    rows="3"
+                    placeholder="Observaciones sobre la jornada, trabajos realizados, incidencias, etc."
                     maxlength="500"></textarea>
           <div *ngIf="hasFieldError('notas', clockOutForm)" class="error-message">
             {{ getFieldError('notas', clockOutForm) }}
@@ -110,16 +193,40 @@
       </div>
       
       <div class="form-actions">
+        <!-- ✅ Botón principal de finalizar -->
         <button type="submit" 
-                class="btn btn-danger"
-                [disabled]="!canClockOut()">
-          <span *ngIf="loading">Procesando...</span>
+                class="btn btn-danger btn-finish-work"
+                [disabled]="!canClockOut()"
+                *ngIf="!showOvertimeDialog">
+          <span *ngIf="loading">⏳ Procesando...</span>
           <span *ngIf="!loading">
-            <span class="clock-icon">⏱️</span> Fichar Salida
+            <span class="clock-icon">⏹️</span> 
+            {{ isInOvertimeMode ? 'Finalizar Horas Extras' : 'Fichar Salida' }}
           </span>
+        </button>
+
+        <!-- ✅ NUEVO: Botón de finalización forzosa (solo en casos especiales) -->
+        <button type="button" 
+                class="btn btn-warning btn-force-finish"
+                (click)="forceFinishWork()"
+                [disabled]="!canForceFinish()"
+                *ngIf="activeClockIn && activeClockIn.isActive && !showOvertimeDialog"
+                title="Usar solo en emergencias">
+          🚨 Finalizar Forzosamente
         </button>
       </div>
     </form>
+  </div>
+
+  <!-- ✅ NUEVO: Panel de información sobre límites -->
+  <div class="info-panel" *ngIf="!activeClockIn">
+    <h4>ℹ️ Información sobre Jornada Laboral</h4>
+    <ul class="info-list">
+      <li><strong>Jornada regular:</strong> Máximo 9 horas</li>
+      <li><strong>Advertencia:</strong> A partir de las 8 horas</li>
+      <li><strong>Horas extras:</strong> Máximo 4 horas adicionales</li>
+      <li><strong>Descansos:</strong> Registra el tiempo total de pausas</li>
+    </ul>
   </div>
 
   <!-- Calendario de pagos -->
@@ -199,7 +306,7 @@
   <!-- Sección de registros recientes -->
   <div class="recent-records">
     <div class="section-header">
-      <h3 class="section-title">Registros Recientes</h3>
+      <h3 class="section-title">📋 Registros Recientes</h3>
       <div class="section-actions">
         <button class="btn btn-secondary btn-sm" 
                 (click)="refreshRecentWorkHours()"
@@ -241,8 +348,18 @@
             <td [attr.data-label]="'Salida'">{{ workHours.horaFin || 'En curso' }}</td>
             <td [attr.data-label]="'Descanso'">{{ workHours.tiempoDescanso }} min</td>
             <td [attr.data-label]="'Total Horas'" 
-                [ngClass]="{'text-warning': workHours.totalHoras > 8, 'text-danger': workHours.totalHoras > 9}">
-              {{ formatHours(workHours.totalHoras) }}
+                [ngClass]="{
+                  'text-success': workHours.totalHoras <= 8,
+                  'text-warning': workHours.totalHoras > 8 && workHours.totalHoras <= 9, 
+                  'text-danger': workHours.totalHoras > 9,
+                  'text-overtime': workHours.totalHoras > 13
+                }">
+              <span *ngIf="workHours.totalHoras <= 9">
+                {{ formatHours(workHours.totalHoras) }}
+              </span>
+              <span *ngIf="workHours.totalHoras > 9">
+                {{ formatHours(9) }} + {{ formatHours(workHours.totalHoras - 9) }} extra
+              </span>
             </td>
             <td [attr.data-label]="'Estado'">
               <span class="badge" [ngClass]="getStatusClass(workHours.estado)">
@@ -265,7 +382,13 @@
             </td>
           </tr>
           <tr *ngIf="recentWorkHours.length === 0">
-            <td colspan="7" class="empty-table">No hay registros recientes</td>
+            <td colspan="7" class="empty-table">
+              <div class="empty-state">
+                <span class="empty-icon">📋</span>
+                <p>No hay registros recientes</p>
+                <p class="empty-subtitle">Los registros aparecerán aquí después de fichar</p>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>

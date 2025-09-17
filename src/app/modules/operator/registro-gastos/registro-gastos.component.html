@@ -124,9 +124,11 @@
         <tbody>
           <tr *ngFor="let record of recentExpenses; trackBy: trackByExpenseId">
             <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
-            <td data-label="Tipo:">{{ getExpenseTypeName(record.expenseType) }}</td>
+            <!-- ✅ CRÍTICO: Uso del operador seguro de navegación -->
+            <td data-label="Tipo:">{{ record.expenseType ? getExpenseTypeName(record.expenseType) : 'Tipo no especificado' }}</td>
             <td data-label="Monto:">{{ record.amount | currency:'ARS':'symbol':'1.0-0' }}</td>
-            <td data-label="Método de Pago:">{{ record.paymentMethod ? getPaymentMethodName(record.paymentMethod!) : 'N/A' }}</td>
+            <!-- ✅ CRÍTICO: Uso del operador seguro de navegación -->
+            <td data-label="Método de Pago:">{{ record.paymentMethod ? getPaymentMethodName(record.paymentMethod) : 'No especificado' }}</td>
             <td data-label="Estado:">
               <span class="status-badge" [ngClass]="'status-' + getExpenseStatus(record)">
                 {{ getExpenseStatus(record) }}

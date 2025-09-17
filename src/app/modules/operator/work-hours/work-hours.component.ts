@@ -1,3 +1,5 @@
+// work-hours.component.ts - CORREGIDO CON LÓGICA DE HORAS EXTRAS
+
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -10,7 +12,7 @@ import {
 } from '../../../core/services/work-hours.service';
 import { AuthService, Usuario } from '../../../core/services/auth.service';
 
-// Interface para el estado del fichaje activo
+// ✅ MEJORADO: Interface para el estado del fichaje activo con horas extras
 interface ClockStatus {
   isActive: boolean;
   startTime: string;
@@ -18,6 +20,13 @@ interface ClockStatus {
   usuarioId: number;
   reporteId: number;
   notas?: string;
+  
+  // ✅ NUEVO: Control de horas extras
+  isOvertimeMode: boolean;
+  overtimeStartTimestamp?: Date;
+  regularHoursCompleted: boolean;
+  showOvertimeDialog: boolean;
+  autoStoppedAt9Hours: boolean;
 }
 
 @Component({
@@ -39,9 +48,15 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   loading = false;
   loadingMasterData = false;
   
-  // Estado de fichaje
+  // ✅ MEJORADO: Estado de fichaje con horas extras
   activeClockIn: ClockStatus | null = null;
   elapsedTimeInterval: any;
+  
+  // ✅ NUEVO: Control de horas extras
+  showOvertimeDialog = false;
+  isOvertimeActive = false;
+  regularHours = 0;
+  overtimeHours = 0;
   
   // Usuario actual
   currentUser: Usuario | null = null;
@@ -54,6 +69,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
+  
+  // ✅ NUEVO: Constantes de configuración
+  private readonly MAX_REGULAR_HOURS = 9;
+  private readonly WARNING_HOURS = 8;
+  private readonly MAX_OVERTIME_HOURS = 4; // Máximo 4 horas extras
+  private readonly CLOCK_STORAGE_KEY = 'activeWorkClockIn';
 
   constructor(
     private formBuilder: FormBuilder,
@@ -65,7 +86,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadCurrentUser();
-    this.debugCurrentUser(); // 🔍 Debug temporal
     this.checkForActiveClockIn();
     this.loadRecentWorkHours();
     this.setupMobileTable();
@@ -93,7 +113,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ✅ CORREGIDO: Cargar usuario actual con mejor validación
+  /**
+   * ✅ CORREGIDO: Cargar usuario actual con mejor validación
+   */
   private loadCurrentUser(): void {
     this.currentUser = this.authService.obtenerUsuarioActual();
     if (!this.currentUser) {
@@ -101,19 +123,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       this.authService.cerrarSesion();
     } else {
       console.log('✅ Usuario actual cargado:', this.currentUser);
-      console.log('✅ ID del usuario:', this.currentUser.id);
     }
-  }
-
-  // ✅ AÑADIDO: Método para debug del usuario actual
-  debugCurrentUser(): void {
-    console.group('🔍 DEBUG Usuario Actual');
-    console.log('Usuario completo:', this.currentUser);
-    console.log('ID:', this.currentUser?.id);
-    console.log('Tipo de ID:', typeof this.currentUser?.id);
-    console.log('Nombre:', this.currentUser?.nombreUsuario);
-    console.log('Roles:', this.currentUser?.roles);
-    console.groupEnd();
   }
 
   // Configuración para la tabla responsiva en móviles
@@ -122,46 +132,203 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Actualizar reloj en tiempo real
+   * ✅ MEJORADO: Actualizar reloj en tiempo real con control de límites
    */
   private startClockUpdate(): void {
     interval(1000)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        if (this.activeClockIn) {
-          this.activeClockIn = { ...this.activeClockIn }; // Trigger change detection
+        if (this.activeClockIn && this.activeClockIn.isActive) {
+          this.updateElapsedTime();
+          this.checkTimeConstraints();
         }
       });
   }
 
-  // ✅ CORREGIDO: Comprobar fichaje activo con mejor manejo de IDs
+  /**
+   * ✅ NUEVO: Actualizar tiempo transcurrido y calcular horas regulares/extras
+   */
+  private updateElapsedTime(): void {
+    if (!this.activeClockIn) return;
+
+    const now = new Date();
+    const startTime = this.activeClockIn.startTimestamp;
+    const totalElapsedMs = now.getTime() - startTime.getTime();
+    const totalElapsedHours = totalElapsedMs / (1000 * 60 * 60);
+
+    // Calcular horas regulares y extras
+    if (totalElapsedHours <= this.MAX_REGULAR_HOURS) {
+      this.regularHours = totalElapsedHours;
+      this.overtimeHours = 0;
+      this.isOvertimeActive = false;
+    } else {
+      this.regularHours = this.MAX_REGULAR_HOURS;
+      this.overtimeHours = totalElapsedHours - this.MAX_REGULAR_HOURS;
+      this.isOvertimeActive = true;
+    }
+
+    // Actualizar estado para change detection
+    this.activeClockIn = { ...this.activeClockIn };
+  }
+
+  /**
+   * ✅ NUEVO: Verificar límites de tiempo y manejar paradas automáticas
+   */
+  private checkTimeConstraints(): void {
+    if (!this.activeClockIn) return;
+
+    const totalHours = this.regularHours + this.overtimeHours;
+
+    // Si alcanzó las 9 horas y no está en modo overtime, mostrar diálogo
+    if (this.regularHours >= this.MAX_REGULAR_HOURS && 
+        !this.activeClockIn.regularHoursCompleted && 
+        !this.showOvertimeDialog) {
+      
+      this.activeClockIn.regularHoursCompleted = true;
+      this.activeClockIn.autoStoppedAt9Hours = true;
+      this.pauseTimer();
+      this.showOvertimeConfirmation();
+      this.saveClockStatusToStorage();
+    }
+
+    // Si supera las horas extras máximas, finalizar automáticamente
+    if (this.isOvertimeActive && this.overtimeHours >= this.MAX_OVERTIME_HOURS) {
+      this.autoFinishWork('Se alcanzó el límite máximo de horas extras (4h)');
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Pausar el timer (no finalizar, solo pausar)
+   */
+  private pauseTimer(): void {
+    if (this.activeClockIn) {
+      this.activeClockIn.isActive = false;
+      console.log('⏸️ Timer pausado automáticamente a las 9 horas');
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Reanudar el timer para horas extras
+   */
+  private resumeTimer(): void {
+    if (this.activeClockIn) {
+      this.activeClockIn.isActive = true;
+      this.activeClockIn.isOvertimeMode = true;
+      this.activeClockIn.overtimeStartTimestamp = new Date();
+      console.log('▶️ Timer reanudado para horas extras');
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar diálogo de confirmación de horas extras
+   */
+  private showOvertimeConfirmation(): void {
+    this.showOvertimeDialog = true;
+    this.success = false;
+    this.error = '';
+  }
+
+  /**
+   * ✅ NUEVO: Confirmar horas extras
+   */
+  confirmOvertime(): void {
+    if (this.activeClockIn) {
+      this.showOvertimeDialog = false;
+      this.resumeTimer();
+      this.saveClockStatusToStorage();
+      console.log('✅ Horas extras confirmadas');
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Rechazar horas extras y finalizar trabajo
+   */
+  declineOvertime(): void {
+    this.showOvertimeDialog = false;
+    
+    // ✅ CRÍTICO: Completar el formulario antes de finalizar
+    this.clockOutForm.patchValue({
+      tiempoDescanso: this.clockOutForm.get('tiempoDescanso')?.value || 60,
+      notas: (this.clockOutForm.get('notas')?.value || '') + ' - Finalizado al completar 9 horas regulares'
+    });
+    
+    this.finishWork('Trabajo finalizado al completar 9 horas regulares');
+  }
+
+  /**
+   * ✅ NUEVO: Finalizar trabajo automáticamente
+   */
+  private autoFinishWork(reason: string): void {
+    if (this.activeClockIn) {
+      console.log('🛑 Finalizando trabajo automáticamente:', reason);
+      this.finishWork(reason);
+    }
+  }
+
+  /**
+   * ✅ MEJORADO: Comprobar fichaje activo con restauración completa
+   */
   checkForActiveClockIn(): void {
     if (!this.currentUser || !this.currentUser.id) {
       console.warn('⚠️ No hay usuario actual o ID inválido');
       return;
     }
 
-    // Primero verificar localStorage
-    const savedClockIn = localStorage.getItem('activeWorkClockIn');
+    // Verificar localStorage primero
+    const savedClockIn = localStorage.getItem(this.CLOCK_STORAGE_KEY);
     if (savedClockIn) {
       try {
         const parsed = JSON.parse(savedClockIn);
-        this.activeClockIn = {
-          ...parsed,
-          startTimestamp: new Date(parsed.startTimestamp)
-        };
-        console.log('✅ Fichaje activo encontrado en localStorage:', this.activeClockIn);
+        this.restoreClockInFromStorage(parsed);
         return;
       } catch (error) {
         console.error('❌ Error parsing localStorage clockIn:', error);
-        localStorage.removeItem('activeWorkClockIn');
+        localStorage.removeItem(this.CLOCK_STORAGE_KEY);
       }
     }
 
     // Si no hay en localStorage, verificar en el backend
-    const usuarioId = typeof this.currentUser.id === 'string' 
-      ? parseInt(this.currentUser.id, 10) 
-      : Number(this.currentUser.id);
+    this.checkActiveWorkDayInBackend();
+  }
+
+  /**
+   * ✅ NUEVO: Restaurar estado completo desde localStorage
+   */
+  private restoreClockInFromStorage(saved: any): void {
+    this.activeClockIn = {
+      isActive: saved.isActive !== false, // Por defecto true si no está definido
+      startTime: saved.startTime,
+      startTimestamp: new Date(saved.startTimestamp),
+      usuarioId: saved.usuarioId,
+      reporteId: saved.reporteId,
+      notas: saved.notas,
+      
+      // Estados de horas extras
+      isOvertimeMode: saved.isOvertimeMode || false,
+      overtimeStartTimestamp: saved.overtimeStartTimestamp ? new Date(saved.overtimeStartTimestamp) : undefined,
+      regularHoursCompleted: saved.regularHoursCompleted || false,
+      showOvertimeDialog: false, // Nunca mostrar el diálogo al restaurar
+      autoStoppedAt9Hours: saved.autoStoppedAt9Hours || false
+    };
+
+    console.log('✅ Estado de fichaje restaurado:', this.activeClockIn);
+
+    // Si estaba pausado por las 9 horas, verificar si necesita mostrar diálogo
+    if (this.activeClockIn.autoStoppedAt9Hours && !this.activeClockIn.isOvertimeMode) {
+      // Solo mostrar si no había decidido sobre overtime
+      setTimeout(() => {
+        this.showOvertimeConfirmation();
+      }, 1000);
+    }
+  }
+
+  /**
+   * ✅ MEJORADO: Verificar trabajo activo en backend
+   */
+  private checkActiveWorkDayInBackend(): void {
+    const usuarioId = typeof this.currentUser!.id === 'string' 
+      ? parseInt(this.currentUser!.id, 10) 
+      : Number(this.currentUser!.id);
 
     if (isNaN(usuarioId)) {
       console.error('❌ ID de usuario inválido para verificar fichaje activo');
@@ -172,8 +339,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          console.log('🔍 Respuesta verificación fichaje activo:', response);
-          
           if (response.success && response.data) {
             const reporte = response.data;
             this.activeClockIn = {
@@ -181,20 +346,43 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
               startTime: this.extractTime(reporte.fecha_asignacion),
               startTimestamp: new Date(reporte.fecha_asignacion),
               usuarioId: reporte.usuario_id,
-              reporteId: reporte.id!
+              reporteId: reporte.id!,
+              
+              // Estados de horas extras (nuevos por defecto)
+              isOvertimeMode: false,
+              regularHoursCompleted: false,
+              showOvertimeDialog: false,
+              autoStoppedAt9Hours: false
             };
             
-            // Guardar en localStorage para persistencia
-            localStorage.setItem('activeWorkClockIn', JSON.stringify(this.activeClockIn));
-            console.log('✅ Fichaje activo encontrado en backend:', this.activeClockIn);
-          } else {
-            console.log('ℹ️ No hay fichaje activo en el backend');
+            this.saveClockStatusToStorage();
+            console.log('✅ Fichaje activo encontrado en backend');
           }
         },
         error: (error) => {
           console.error('❌ Error verificando fichaje activo:', error);
         }
       });
+  }
+
+  /**
+   * ✅ NUEVO: Guardar estado en localStorage
+   */
+  private saveClockStatusToStorage(): void {
+    if (this.activeClockIn) {
+      localStorage.setItem(this.CLOCK_STORAGE_KEY, JSON.stringify({
+        ...this.activeClockIn,
+        startTimestamp: this.activeClockIn.startTimestamp.toISOString(),
+        overtimeStartTimestamp: this.activeClockIn.overtimeStartTimestamp?.toISOString()
+      }));
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Limpiar estado de localStorage
+   */
+  private clearClockStatusFromStorage(): void {
+    localStorage.removeItem(this.CLOCK_STORAGE_KEY);
   }
 
   /**
@@ -208,7 +396,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CORREGIDO: Fichar entrada con validación mejorada
+   * ✅ MEJORADO: Fichar entrada
    */
   clockIn(): void {
     if (!this.currentUser || !this.currentUser.id) {
@@ -216,15 +404,18 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // ✅ CRÍTICO: Limpiar errores previos y estado
     this.loading = true;
     this.success = false;
     this.error = '';
+    this.showOvertimeDialog = false;
+    
+    // ✅ Resetear contadores
+    this.regularHours = 0;
+    this.overtimeHours = 0;
+    this.isOvertimeActive = false;
 
     const formValues = this.clockInForm.value;
-
-    console.log('🚀 Iniciando fichaje para usuario ID:', this.currentUser.id);
-
-    // ✅ CORREGIDO: Convertir el ID a número si viene como string
     const usuarioId = typeof this.currentUser.id === 'string' 
       ? parseInt(this.currentUser.id, 10) 
       : Number(this.currentUser.id);
@@ -235,58 +426,70 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       return;
     }
 
+    console.log('🚀 Iniciando fichaje para usuario ID:', usuarioId);
+
     this.workHoursService.clockIn(usuarioId, formValues.notas)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           this.loading = false;
-          console.log('✅ Respuesta del servidor:', response);
           
           if (response.success && response.data) {
             const reporte = response.data;
-            const now = new Date();
             
-            // Crear estado de fichaje activo
+            // ✅ CREAR estado inicial completo
             this.activeClockIn = {
               isActive: true,
               startTime: this.extractTime(reporte.fecha_asignacion),
               startTimestamp: new Date(reporte.fecha_asignacion),
               usuarioId: reporte.usuario_id,
               reporteId: reporte.id!,
-              notas: formValues.notas
+              notas: formValues.notas,
+              
+              // Estados iniciales de horas extras
+              isOvertimeMode: false,
+              regularHoursCompleted: false,
+              showOvertimeDialog: false,
+              autoStoppedAt9Hours: false
             };
 
-            localStorage.setItem('activeWorkClockIn', JSON.stringify(this.activeClockIn));
-            
+            this.saveClockStatusToStorage();
             this.success = true;
+            
+            // ✅ Solo resetear el formulario de entrada
             this.clockInForm.reset({ notas: '' });
+            
+            // ✅ Resetear también el formulario de salida para valores por defecto
+            this.clockOutForm.reset({
+              tiempoDescanso: 60,
+              notas: ''
+            });
 
             setTimeout(() => { this.success = false; }, 3000);
-            console.log('✅ Fichaje de entrada registrado:', this.activeClockIn);
+            console.log('✅ Fichaje de entrada registrado');
           } else {
             this.error = response.message || 'Error al registrar fichaje de entrada';
           }
         },
         error: (error) => {
           this.loading = false;
-          console.error('❌ Error completo:', error);
-          
-          // ✅ Manejo específico de errores de validación
-          if (error.message && error.message.includes('horas_turno debe ser un número entero')) {
-            this.error = 'Error en el formato de datos. Contacte al administrador.';
-          } else {
-            this.error = error.message || 'Error al procesar la solicitud';
-          }
-          
+          this.error = error.message || 'Error al procesar la solicitud';
           console.error('❌ Error fichando entrada:', error);
         }
       });
   }
 
   /**
-   * ✅ CORREGIDO: Fichar salida con mejor manejo de errores
+   * ✅ MEJORADO: Fichar salida (manual o automática)
    */
   clockOut(): void {
+    this.finishWork('Fichaje manual de salida');
+  }
+
+  /**
+   * ✅ NUEVO: Finalizar trabajo (unificado)
+   */
+  private finishWork(reason: string): void {
     if (!this.activeClockIn || !this.currentUser) {
       this.error = 'No hay fichaje activo';
       return;
@@ -294,57 +497,112 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
     this.loading = true;
     this.error = '';
+    this.showOvertimeDialog = false; // Cerrar cualquier diálogo
+
+    // ✅ CRÍTICO: Validar formulario antes de enviar
+    if (this.clockOutForm.invalid) {
+      // Si el formulario es inválido, establecer valores por defecto
+      this.clockOutForm.patchValue({
+        tiempoDescanso: 60,
+        notas: reason
+      });
+    }
 
     const formValues = this.clockOutForm.value;
     
-    console.log('🚀 Finalizando fichaje. Reporte ID:', this.activeClockIn.reporteId);
-    console.log('🚀 Tiempo de descanso:', formValues.tiempoDescanso);
+    console.log('🚀 Finalizando trabajo:', reason);
+    console.log('📊 Horas regulares:', this.regularHours.toFixed(2));
+    console.log('📊 Horas extras:', this.overtimeHours.toFixed(2));
+    console.log('📋 Valores del formulario:', formValues);
     
     this.workHoursService.clockOut(
       this.activeClockIn.reporteId, 
-      formValues.tiempoDescanso, 
-      formValues.notas
+      formValues.tiempoDescanso || 60, 
+      `${formValues.notas || ''} - ${reason}`
     )
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
         this.loading = false;
-        console.log('✅ Respuesta clockOut:', response);
         
         if (response.success) {
-          // Limpiar el estado activo
-          localStorage.removeItem('activeWorkClockIn');
+          // ✅ LIMPIAR COMPLETAMENTE el estado
+          this.clearClockStatusFromStorage();
           this.activeClockIn = null;
+          this.regularHours = 0;
+          this.overtimeHours = 0;
+          this.isOvertimeActive = false;
+          this.showOvertimeDialog = false;
 
-          // Resetear el formulario de salida
-          this.clockOutForm.reset({
-            tiempoDescanso: 60,
-            notas: ''
-          });
+          // ✅ CRÍTICO: Resetear formularios completamente
+          this.resetAllForms();
 
           this.success = true;
-          this.loadRecentWorkHours(); // Recargar registros recientes
+          this.loadRecentWorkHours();
 
-          setTimeout(() => { this.success = false; }, 3000);
-          console.log('✅ Fichaje de salida registrado correctamente');
+          setTimeout(() => { 
+            this.success = false; 
+          }, 5000);
+          
+          console.log('✅ Trabajo finalizado correctamente');
         } else {
           this.error = response.message || 'Error al finalizar fichaje';
         }
       },
       error: (error) => {
         this.loading = false;
-        console.error('❌ Error clockOut completo:', error);
+        this.error = error.message || 'Error al procesar la solicitud';
+        console.error('❌ Error finalizando trabajo:', error);
         
-        // ✅ Manejo específico de errores
-        if (error.message && error.message.includes('horas_turno debe ser un número entero')) {
-          this.error = 'Error en el cálculo de horas. Contacte al administrador.';
-        } else {
-          this.error = error.message || 'Error al procesar la solicitud';
-        }
-        
-        console.error('❌ Error fichando salida:', error);
+        // ✅ CRÍTICO: En caso de error, también limpiar el estado local
+        // para permitir nuevo fichaje
+        this.clearLocalStateOnError();
       }
     });
+  }
+
+  /**
+   * ✅ NUEVO: Limpiar estado local en caso de error
+   */
+  private clearLocalStateOnError(): void {
+    console.log('⚠️ Limpiando estado local debido a error');
+    
+    setTimeout(() => {
+      this.clearClockStatusFromStorage();
+      this.activeClockIn = null;
+      this.regularHours = 0;
+      this.overtimeHours = 0;
+      this.isOvertimeActive = false;
+      this.showOvertimeDialog = false;
+      this.resetAllForms();
+      
+      console.log('🧹 Estado local limpiado - listo para nuevo fichaje');
+    }, 3000); // Esperar 3 segundos para que el usuario vea el error
+  }
+
+  /**
+   * ✅ NUEVO: Resetear todos los formularios
+   */
+  private resetAllForms(): void {
+    // Resetear formulario de entrada
+    this.clockInForm.reset({
+      notas: ''
+    });
+    
+    // Resetear formulario de salida
+    this.clockOutForm.reset({
+      tiempoDescanso: 60,
+      notas: ''
+    });
+    
+    // Limpiar estado de validación
+    this.submitted = false;
+    
+    // Marcar formularios como pristine
+    this.clockInForm.markAsPristine();
+    this.clockInForm.markAsUntouched();
+    this.clockOutForm.markAsPristine();
+    this.clockOutForm.markAsUntouched();
   }
 
   /**
@@ -367,40 +625,101 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       });
   }
 
-  // Calcular tiempo transcurrido desde el fichaje de entrada
+  // ============ MÉTODOS DE CÁLCULO DE TIEMPO ============
+
+  /**
+   * ✅ MEJORADO: Calcular tiempo transcurrido con separación regular/extras
+   */
   getElapsedTime(): string {
     if (!this.activeClockIn) return '';
 
-    const now = new Date();
-    const start = this.activeClockIn.startTimestamp;
-    const diffMs = now.getTime() - start.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
+    const totalHours = this.regularHours + this.overtimeHours;
+    const hours = Math.floor(totalHours);
+    const minutes = Math.floor((totalHours - hours) * 60);
 
-    return `${hours}h ${mins}m`;
+    if (this.isOvertimeActive) {
+      const regularHoursStr = Math.floor(this.regularHours) + 'h ' + Math.floor((this.regularHours - Math.floor(this.regularHours)) * 60) + 'm';
+      const overtimeHoursStr = Math.floor(this.overtimeHours) + 'h ' + Math.floor((this.overtimeHours - Math.floor(this.overtimeHours)) * 60) + 'm';
+      return `${regularHoursStr} + ${overtimeHoursStr} extra`;
+    }
+
+    return `${hours}h ${minutes}m`;
   }
 
   /**
-   * Refrescar registros recientes
+   * ✅ NUEVO: Obtener tiempo restante hasta el próximo límite
    */
-  refreshRecentWorkHours(): void {
-    this.loadRecentWorkHours();
+  getRemainingTime(): string {
+    if (!this.activeClockIn) return '';
+    
+    if (!this.isOvertimeActive) {
+      const remaining = this.MAX_REGULAR_HOURS - this.regularHours;
+      if (remaining <= 0) return 'Límite alcanzado';
+      
+      const hours = Math.floor(remaining);
+      const minutes = Math.floor((remaining - hours) * 60);
+      return `${hours}h ${minutes}m hasta las 9h`;
+    } else {
+      const remaining = this.MAX_OVERTIME_HOURS - this.overtimeHours;
+      if (remaining <= 0) return 'Límite extras alcanzado';
+      
+      const hours = Math.floor(remaining);
+      const minutes = Math.floor((remaining - hours) * 60);
+      return `${hours}h ${minutes}m de extras restantes`;
+    }
+  }
+
+  /**
+   * ✅ MEJORADO: Progreso de la jornada con horas extras
+   */
+  getWorkDayProgress(): number {
+    if (!this.activeClockIn) return 0;
+    
+    if (!this.isOvertimeActive) {
+      return Math.min(100, Math.round((this.regularHours / this.MAX_REGULAR_HOURS) * 100));
+    } else {
+      // En overtime, mostrar progreso de horas extras
+      return Math.min(100, Math.round((this.overtimeHours / this.MAX_OVERTIME_HOURS) * 100));
+    }
+  }
+
+  /**
+   * ✅ MEJORADO: Verificar si se acerca al límite
+   */
+  isNearingLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    if (!this.isOvertimeActive) {
+      return this.regularHours >= this.WARNING_HOURS;
+    } else {
+      return this.overtimeHours >= (this.MAX_OVERTIME_HOURS - 1); // Advertir 1 hora antes
+    }
+  }
+
+  /**
+   * ✅ MEJORADO: Verificar si ha superado el límite
+   */
+  hasExceededLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    if (!this.isOvertimeActive) {
+      return this.regularHours >= this.MAX_REGULAR_HOURS;
+    } else {
+      return this.overtimeHours >= this.MAX_OVERTIME_HOURS;
+    }
   }
 
   // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
 
-  /**
-   * Verificar si un campo del formulario tiene errores
-   */
+  refreshRecentWorkHours(): void {
+    this.loadRecentWorkHours();
+  }
+
   hasFieldError(fieldName: string, formGroup: FormGroup = this.clockInForm): boolean {
     const field = formGroup.get(fieldName);
     return !!(field && field.invalid && (field.dirty || field.touched || this.submitted) && !field.disabled);
   }
 
-  /**
-   * Obtener mensaje de error para un campo específico
-   */
   getFieldError(fieldName: string, formGroup: FormGroup = this.clockInForm): string {
     const field = formGroup.get(fieldName);
     
@@ -419,9 +738,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return '';
   }
 
-  /**
-   * Obtener etiqueta del campo para mensajes de error
-   */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
       'tiempoDescanso': 'El tiempo de descanso',
@@ -430,23 +746,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return labels[fieldName] || fieldName;
   }
 
-  /**
-   * Obtener estado de carga general
-   */
   get isLoading(): boolean {
     return this.loading || this.loadingMasterData;
   }
 
-  /**
-   * Formatear horas para mostrar
-   */
   formatHours(hours: number): string {
     return `${hours.toFixed(1)}h`;
   }
 
-  /**
-   * Obtener clase CSS para el estado
-   */
   getStatusClass(status: string): string {
     const statusClasses: { [key: string]: string } = {
       'activo': 'badge-success',
@@ -457,45 +764,27 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return statusClasses[status] || 'badge-secondary';
   }
 
-  /**
-   * Calcular total de horas recientes
-   */
   getTotalRecentHours(): number {
     return this.recentWorkHours.reduce((total, workHours) => total + workHours.totalHoras, 0);
   }
 
-  /**
-   * Verificar si puede fichar entrada
-   */
   canClockIn(): boolean {
     return !this.activeClockIn && !this.isLoading && !!this.currentUser;
   }
 
-  /**
-   * Verificar si puede fichar salida
-   */
   canClockOut(): boolean {
-    return !!this.activeClockIn && !this.isLoading;
+    return !!this.activeClockIn && !this.isLoading && !this.showOvertimeDialog;
   }
 
-  /**
-   * TrackBy function para optimizar la renderización de la tabla
-   */
   trackByWorkHours(index: number, workHours: WorkDay): string {
     return workHours.id?.toString() || index.toString();
   }
 
-  /**
-   * Editar registro de horas trabajadas
-   */
   editWorkHours(workHours: WorkDay): void {
     console.log('Editando registro:', workHours);
     // TODO: Implementar lógica de edición
   }
 
-  /**
-   * Eliminar registro de horas trabajadas
-   */
   deleteWorkHours(workHours: WorkDay): void {
     if (!workHours.id) return;
     
@@ -507,7 +796,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         .subscribe({
           next: (response) => {
             if (response.success) {
-              this.loadRecentWorkHours(); // Recargar la lista
+              this.loadRecentWorkHours();
               this.success = true;
               setTimeout(() => { this.success = false; }, 3000);
             } else {
@@ -524,57 +813,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ============ MÉTODOS DE CONTROL DE LÍMITE DE 9 HORAS ============
-
-  /**
-   * Verificar si se acerca al límite de 9 horas
-   */
-  isNearingLimit(): boolean {
-    if (!this.activeClockIn) return false;
-    return this.workHoursService.isNearingLimit(this.activeClockIn.startTimestamp);
-  }
-
-  /**
-   * Verificar si ha superado el límite de 9 horas
-   */
-  hasExceededLimit(): boolean {
-    if (!this.activeClockIn) return false;
-    return this.workHoursService.hasExceededLimit(this.activeClockIn.startTimestamp);
-  }
-
-  /**
-   * Obtener tiempo restante hasta el límite
-   */
-  getRemainingTime(): string {
-    if (!this.activeClockIn) return '';
-    
-    const elapsed = this.workHoursService.calculateElapsedTime(this.activeClockIn.startTimestamp);
-    const totalHours = elapsed.hours + (elapsed.minutes / 60);
-    
-    const remainingHours = Math.max(0, 9 - totalHours);
-    const hours = Math.floor(remainingHours);
-    const minutes = Math.floor((remainingHours - hours) * 60);
-    
-    return remainingHours <= 0 ? 'Límite superado' : `${hours}h ${minutes}m restantes`;
-  }
-
-  /**
-   * Obtener progreso de la jornada laboral
-   */
-  getWorkDayProgress(): number {
-    if (!this.activeClockIn) return 0;
-    
-    const elapsed = this.workHoursService.calculateElapsedTime(this.activeClockIn.startTimestamp);
-    const totalHours = elapsed.hours + (elapsed.minutes / 60);
-    
-    return Math.min(100, Math.round((totalHours / 9) * 100));
-  }
-
   // ============ MÉTODOS DE CALENDARIO ============
 
-  /**
-   * Obtener mes y año actual del calendario
-   */
   getCurrentMonthYear(): string {
     const months = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -584,9 +824,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return `${months[this.currentCalendarDate.getMonth()]} ${this.currentCalendarDate.getFullYear()}`;
   }
 
-  /**
-   * Navegar al mes anterior
-   */
   previousMonth(): void {
     this.currentCalendarDate = new Date(
       this.currentCalendarDate.getFullYear(),
@@ -595,9 +832,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     );
   }
 
-  /**
-   * Navegar al mes siguiente
-   */
   nextMonth(): void {
     this.currentCalendarDate = new Date(
       this.currentCalendarDate.getFullYear(),
@@ -607,36 +841,29 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   getCalendarDays(): any[] {
+    // Implementación existente del calendario
     const year = this.currentCalendarDate.getFullYear();
     const month = this.currentCalendarDate.getMonth();
     
-    // Primer día del mes
     const firstDay = new Date(year, month, 1);
-    // Último día del mes
     const lastDay = new Date(year, month + 1, 0);
-    
-    // Primer día de la semana del calendario (lunes = 1, domingo = 0)
     const firstDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    
-    // Días del mes anterior necesarios
     const daysFromPrevMonth = firstDayOfWeek;
-    
-    // Último día del mes anterior
     const lastDayPrevMonth = new Date(year, month, 0).getDate();
     
     const calendarDays: any[] = [];
     
-    // Agregar días del mes anterior
+    // Días del mes anterior
     for (let i = daysFromPrevMonth - 1; i >= 0; i--) {
       calendarDays.push({
-        day: lastDayPrevMonth - i,
+        dayNumber: lastDayPrevMonth - i,
         isCurrentMonth: false,
         isToday: false,
         date: new Date(year, month - 1, lastDayPrevMonth - i)
       });
     }
     
-    // Agregar días del mes actual
+    // Días del mes actual
     const today = new Date();
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const currentDate = new Date(year, month, day);
@@ -645,18 +872,21 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
                      today.getDate() === day;
       
       calendarDays.push({
-        day: day,
+        dayNumber: day,
         isCurrentMonth: true,
         isToday: isToday,
-        date: currentDate
+        date: currentDate,
+        hasWorkHours: false, // TODO: Implementar verificación
+        isPaymentDay: day === 15 || day === 30, // Ejemplo
+        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6
       });
     }
     
-    // Completar hasta tener 42 días (6 semanas x 7 días)
+    // Completar hasta 42 días
     const remainingDays = 42 - calendarDays.length;
     for (let day = 1; day <= remainingDays; day++) {
       calendarDays.push({
-        day: day,
+        dayNumber: day,
         isCurrentMonth: false,
         isToday: false,
         date: new Date(year, month + 1, day)
@@ -666,24 +896,15 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     return calendarDays;
   }
 
-  // ============ MÉTODOS FALTANTES PARA EL TEMPLATE ============
-
-  /**
-   * Obtener fecha del último pago
-   */
   getLastPaymentDate(): Date | null {
     if (this.recentWorkHours.length === 0) return null;
     
-    // Si no tienes fechaPago, usar la fecha del último registro
     const lastWork = this.recentWorkHours
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
     
     return lastWork ? new Date(lastWork.fecha) : null;
   }
 
-  /**
-   * Obtener horas del mes actual
-   */
   getCurrentMonthHours(): number {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -697,13 +918,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       .reduce((total, workDay) => total + workDay.totalHoras, 0);
   }
 
-  /**
-   * Obtener monto pendiente de pago
-   */
   getPendingAmount(): number {
     const lastPaymentDate = this.getLastPaymentDate();
     
-    // Si no hay fecha de último pago, considerar todas las horas como pendientes
     if (!lastPaymentDate) {
       const totalHours = this.recentWorkHours
         .reduce((total, workDay) => total + workDay.totalHoras, 0);
@@ -711,7 +928,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       return totalHours * hourlyRate;
     }
     
-    // Calcular horas trabajadas después de la última fecha de pago
     const pendingHours = this.recentWorkHours
       .filter(workDay => {
         const workDate = new Date(workDay.fecha);
@@ -719,22 +935,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       })
       .reduce((total, workDay) => total + workDay.totalHoras, 0);
     
-    // Tarifa por hora
-    const hourlyRate = 6500; // Pesos argentinos por hora
-    
+    const hourlyRate = 6500;
     return pendingHours * hourlyRate;
   }
 
-  /**
-   * TrackBy function para optimizar la renderización del calendario
-   */
   trackByDay(index: number, day: any): string {
     return `${day.date.getTime()}-${day.isCurrentMonth}`;
   }
 
-  /**
-   * Obtener promedio de horas por día trabajado
-   */
   getAverageHoursPerDay(): number {
     if (this.recentWorkHours.length === 0) return 0;
     
@@ -742,5 +950,91 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const workingDays = this.recentWorkHours.length;
     
     return totalHours / workingDays;
+  }
+
+  // ============ MÉTODOS NUEVOS PARA HORAS EXTRAS ============
+
+  /**
+   * ✅ NUEVO: Verificar si está en modo horas extras
+   */
+  get isInOvertimeMode(): boolean {
+    return this.activeClockIn?.isOvertimeMode || false;
+  }
+
+  /**
+   * ✅ NUEVO: Obtener texto del estado actual
+   */
+  getCurrentWorkStatus(): string {
+    if (!this.activeClockIn) return 'Sin fichaje';
+    
+    if (!this.activeClockIn.isActive && this.activeClockIn.autoStoppedAt9Hours) {
+      return 'Pausado - Límite 9h alcanzado';
+    }
+    
+    if (this.isInOvertimeMode) {
+      return 'Horas extras activas';
+    }
+    
+    return 'Jornada regular activa';
+  }
+
+  /**
+   * ✅ NUEVO: Obtener clase CSS para el estado
+   */
+  getWorkStatusClass(): string {
+    if (!this.activeClockIn) return '';
+    
+    if (!this.activeClockIn.isActive) return 'status-paused';
+    if (this.isInOvertimeMode) return 'status-overtime';
+    if (this.hasExceededLimit()) return 'status-danger';
+    if (this.isNearingLimit()) return 'status-warning';
+    
+    return 'status-active';
+  }
+
+  /**
+   * ✅ NUEVO: Forzar finalización de trabajo (para emergencias)
+   */
+  forceFinishWork(): void {
+    if (confirm('¿Está seguro de que desea finalizar forzosamente el trabajo? Esta acción no se puede deshacer.')) {
+      this.finishWork('Finalización forzosa por el usuario');
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si se puede mostrar el botón de finalizar forzoso
+   */
+  canForceFinish(): boolean {
+    return !!this.activeClockIn && !this.loading;
+  }
+
+  // ============ MÉTODOS DE DISPLAY PARA EL TEMPLATE ============
+
+  /**
+   * ✅ NUEVO: Mostrar horas extras formateadas
+   */
+  getOvertimeDisplay(): string {
+    const hours = Math.floor(this.overtimeHours);
+    const minutes = Math.floor((this.overtimeHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar horas regulares formateadas
+   */
+  getRegularHoursDisplay(): string {
+    const hours = Math.floor(this.regularHours);
+    const minutes = Math.floor((this.regularHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar total de horas trabajadas
+   */
+  getTotalWorkedDisplay(): string {
+    const total = this.regularHours + this.overtimeHours;
+    const hours = Math.floor(total);
+    const minutes = Math.floor((total - hours) * 60);
+    return `${hours}h ${minutes}m`;
   }
 }

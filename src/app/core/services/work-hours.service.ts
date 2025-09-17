@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 // ✅ INTERFACES CORREGIDAS según el esquema del backend
@@ -62,32 +62,93 @@ export class WorkHoursService {
   constructor(private http: HttpClient) {}
 
   /**
+ * ✅ NUEVO: Obtener primera máquina disponible
+ */
+private getFirstAvailableMachine(): Observable<number> {
+  return this.http.get<any[]>(`${environment.apiUrl}/maquinas`, this.httpOptions).pipe(
+    map(maquinas => {
+      console.log('📋 Máquinas disponibles:', maquinas);
+      
+      if (!maquinas || maquinas.length === 0) {
+        throw new Error('No hay máquinas disponibles en el sistema');
+      }
+      
+      // Usar la primera máquina activa
+      const primeraMatera = maquinas.find(m => m.estado === true) || maquinas[0];
+      const maquinaId = primeraMatera.id;
+      
+      console.log('✅ Usando máquina ID:', maquinaId, 'Nombre:', primeraMatera.nombre);
+      return maquinaId;
+    })
+  );
+}
+  /**
    * ✅ CORREGIDO: Fichar entrada - Crear nuevo reporte laboral
    * horas_turno se inicializa como 0 (entero) para indicar que el trabajo está activo
    */
-  clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
-    const payload: ReporteLaboralCreate = {
-      maquina_id: 1, // ID de máquina por defecto (ajustar según necesidad)
-      usuario_id: usuarioId,
-      fecha_asignacion: new Date().toISOString(),
-      horas_turno: 0 // 👈 CORREGIDO: ENTERO 0 inicial para indicar trabajo activo
-    };
+  /**
+ * ✅ CORREGIDO: Fichar entrada con máquina real del backend
+ */
+clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
+  console.log('🚀 Iniciando fichaje para usuario ID:', usuarioId);
 
-    console.log('✅ Enviando clockIn CORREGIDO:', payload);
+  // Paso 1: Obtener máquina disponible
+  return this.getFirstAvailableMachine().pipe(
+    switchMap((maquinaId: number) => {
+      // Paso 2: Crear reporte con máquina real
+      const payload: ReporteLaboralCreate = {
+        maquina_id: maquinaId, // ✅ Máquina real del backend
+        usuario_id: usuarioId,
+        fecha_asignacion: new Date().toISOString(),
+        horas_turno: 0 // ✅ 0 = trabajo activo
+      };
 
-    return this.http.post<ReporteLaboral>(
-      this.apiUrl, 
-      payload, 
-      this.httpOptions
-    ).pipe(
-      map(response => ({
-        success: true,
-        data: response,
-        message: 'Fichaje de entrada registrado correctamente'
-      })),
-      catchError(this.handleError)
-    );
-  }
+      console.log('✅ Enviando clockIn con máquina real:', payload);
+
+      return this.http.post<ReporteLaboral>(
+        this.apiUrl, 
+        payload, 
+        this.httpOptions
+      );
+    }),
+    map((response: ReporteLaboral) => ({
+      success: true,
+      data: response,
+      message: 'Fichaje de entrada registrado correctamente'
+    })),
+    catchError(error => {
+      console.error('❌ Error en clockIn:', error);
+      
+      // Si falla con máquina, intentar sin máquina
+      if (error.message?.includes('maquina_id')) {
+        console.warn('⚠️ Falló con máquina, intentando sin máquina...');
+        
+        const payloadSinMaquina = {
+          usuario_id: usuarioId,
+          fecha_asignacion: new Date().toISOString(),
+          horas_turno: 0
+        };
+
+        console.log('📤 Enviando clockIn SIN máquina:', payloadSinMaquina);
+
+        return this.http.post<ReporteLaboral>(
+          this.apiUrl, 
+          payloadSinMaquina, 
+          this.httpOptions
+        ).pipe(
+          map(response => ({
+            success: true,
+            data: response,
+            message: 'Fichaje de entrada registrado correctamente'
+          })),
+          catchError(this.handleError)
+        );
+      }
+      
+      return this.handleError(error);
+    })
+  );
+}
 
   /**
    * ✅ CORREGIDO: Fichar salida - Actualizar reporte laboral existente

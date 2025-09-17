@@ -1,4 +1,6 @@
-/* Estilos base */
+/* ✅ ESTILOS ACTUALIZADOS CON HORAS EXTRAS */
+
+/* Estilos base existentes */
 .work-hours-container {
   width: 100%;
   max-width: 100%;
@@ -23,10 +25,72 @@
   margin: 0 auto 1rem auto;
   max-width: 100%;
   overflow-x: hidden;
+  transition: all 0.3s ease;
 }
 
 .active-work-day {
   border-left: 4px solid #28a745;
+}
+
+/* ✅ NUEVOS: Estados de trabajo con colores específicos */
+.form-card.status-active {
+  border-left: 4px solid #28a745;
+  background-color: #f8fff9;
+}
+
+.form-card.status-warning {
+  border-left: 4px solid #ffc107;
+  background-color: #fffef8;
+}
+
+.form-card.status-danger {
+  border-left: 4px solid #dc3545;
+  background-color: #fff8f8;
+}
+
+.form-card.status-overtime {
+  border-left: 4px solid #6f42c1;
+  background-color: #faf9ff;
+  box-shadow: 0 4px 12px rgba(111, 66, 193, 0.15);
+}
+
+.form-card.status-paused {
+  border-left: 4px solid #6c757d;
+  background-color: #f8f9fa;
+  opacity: 0.9;
+}
+
+/* ✅ NUEVO: Header de estado de trabajo */
+.work-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.work-status-indicator {
+  margin-left: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.work-status-indicator.status-paused {
+  color: #6c757d;
+}
+
+.work-status-indicator.status-active {
+  color: #28a745;
+}
+
+.work-status-indicator.status-overtime {
+  color: #6f42c1;
+  animation: pulse-overtime 2s infinite;
+}
+
+@keyframes pulse-overtime {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .form-title {
@@ -113,11 +177,18 @@ textarea.form-control {
   resize: vertical;
 }
 
+.form-text {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
 .form-actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -171,6 +242,29 @@ textarea.form-control {
   border-color: #ccc;
 }
 
+/* ✅ NUEVO: Botón de finalización forzosa */
+.btn-force-finish {
+  background-color: #fd7e14;
+  border-color: #fd7e14;
+  color: white;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  flex: 0 0 auto;
+}
+
+.btn-force-finish:hover:not(:disabled) {
+  background-color: #e66a00;
+  border-color: #dc6002;
+}
+
+/* ✅ NUEVO: Botón principal de finalizar trabajo */
+.btn-finish-work {
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.75rem 1rem;
+  flex: 1;
+}
+
 .btn-sm {
   padding: 0.25rem 0.5rem;
   font-size: 0.8rem;
@@ -181,7 +275,116 @@ textarea.form-control {
   cursor: not-allowed;
 }
 
-/* Alertas */
+/* ✅ NUEVO: Diálogo de horas extras */
+.overtime-dialog {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+.overtime-content h4 {
+  margin: 0 0 1rem 0;
+  color: #856404;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.overtime-content p {
+  margin: 0.5rem 0;
+  color: #856404;
+  text-align: center;
+}
+
+.overtime-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.overtime-buttons .btn {
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  min-width: 180px;
+}
+
+/* ✅ NUEVO: Indicador de horas extras */
+.overtime-indicator {
+  background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(111, 66, 193, 0.3);
+}
+
+.overtime-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.overtime-icon {
+  font-size: 1.5rem;
+}
+
+.overtime-text {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+
+.overtime-summary {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* ✅ NUEVO: Panel de información */
+.info-panel {
+  background-color: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem auto;
+  max-width: 100%;
+}
+
+.info-panel h4 {
+  margin: 0 0 1rem 0;
+  color: #0d47a1;
+  font-size: 1rem;
+}
+
+.info-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info-list li {
+  margin-bottom: 0.5rem;
+  padding-left: 1rem;
+  position: relative;
+  color: #1565c0;
+  font-size: 0.9rem;
+}
+
+.info-list li:before {
+  content: "•";
+  color: #2196f3;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+
+/* Alertas existentes mejoradas */
 .alert {
   position: relative;
   padding: 0.75rem 1rem;
@@ -222,7 +425,7 @@ textarea.form-control {
   font-size: 1rem;
 }
 
-/* Barra de progreso */
+/* Barra de progreso mejorada */
 .progress-container {
   margin-top: 1rem;
 }
@@ -238,9 +441,13 @@ textarea.form-control {
 
 .progress-fill {
   height: 100%;
-  background-color: #28a745;
   border-radius: 10px;
   transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* ✅ Estados de progreso mejorados */
+.progress-fill:not(.progress-warning):not(.progress-danger):not(.progress-overtime) {
+  background-color: #28a745;
 }
 
 .progress-fill.progress-warning {
@@ -249,6 +456,17 @@ textarea.form-control {
 
 .progress-fill.progress-danger {
   background-color: #dc3545;
+}
+
+/* ✅ NUEVO: Progreso para horas extras */
+.progress-fill.progress-overtime {
+  background: linear-gradient(90deg, #6f42c1 0%, #5a32a3 100%);
+  animation: progress-shimmer 2s infinite;
+}
+
+@keyframes progress-shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
 .progress-text {
@@ -268,7 +486,17 @@ textarea.form-control {
   color: #dc3545 !important;
 }
 
-/* Calendario de pagos */
+.text-success {
+  color: #28a745 !important;
+}
+
+/* ✅ NUEVO: Texto para horas extras */
+.text-overtime {
+  color: #6f42c1 !important;
+  font-weight: 600;
+}
+
+/* Calendario de pagos existente */
 .calendar-card {
   background-color: white;
   border-radius: 8px;
@@ -336,7 +564,7 @@ textarea.form-control {
   font-size: 0.9rem;
 }
 
-/* Calendario */
+/* Calendario existente */
 .calendar-grid {
   width: 100%;
 }
@@ -491,6 +719,23 @@ textarea.form-control {
   white-space: normal;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.empty-subtitle {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 .actions-cell {
   white-space: nowrap;
 }
@@ -550,7 +795,7 @@ textarea.form-control {
   background-color: #6c757d;
 }
 
-/* Media Queries para mejor responsividad */
+/* ✅ NUEVOS: Media queries mejorados con soporte para horas extras */
 @media screen and (max-width: 768px) {
   .work-hours-container {
     padding: 0 5px;
@@ -582,6 +827,30 @@ textarea.form-control {
     font-size: 0.85rem;
   }
   
+  /* ✅ Ajustes para diálogo de horas extras en móvil */
+  .overtime-dialog {
+    padding: 1rem;
+  }
+  
+  .overtime-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .overtime-buttons .btn {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .overtime-indicator {
+    padding: 0.75rem;
+  }
+  
+  .overtime-badge {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
   .section-header {
     flex-direction: column;
     align-items: stretch;
@@ -610,7 +879,6 @@ textarea.form-control {
     font-size: 0.7rem;
   }
   
-  /* Ajustes específicos para la tabla en tablets */
   .data-table {
     min-width: 100%;
     table-layout: auto;
@@ -645,15 +913,6 @@ textarea.form-control {
     padding: 0.75rem;
   }
   
-  .active-info-row {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .active-info-item {
-    margin-bottom: 0.15rem;
-  }
-  
   .form-group label {
     font-size: 0.85rem;
     margin-bottom: 0.15rem;
@@ -664,8 +923,12 @@ textarea.form-control {
     font-size: 0.8rem;
   }
   
-  textarea.form-control {
-    height: 50px;
+  .info-panel {
+    padding: 0.75rem;
+  }
+  
+  .info-list li {
+    font-size: 0.8rem;
   }
   
   .current-month {
@@ -704,7 +967,7 @@ textarea.form-control {
     font-size: 0.6rem;
   }
   
-  /* Ajustes específicos para la tabla en móviles */
+  /* ✅ Tabla responsive para móviles */
   .data-table {
     display: block;
     width: 100%;
@@ -741,6 +1004,18 @@ textarea.form-control {
     float: left;
     font-weight: 600;
     color: #495057;
+  }
+  
+  .actions-cell:before {
+    content: "Acciones: ";
+  }
+  
+  .empty-state {
+    padding: 1rem;
+  }
+  
+  .empty-icon {
+    font-size: 1.5rem;
   }
   
   /* Forzar el ancho completo en dispositivos pequeños */
