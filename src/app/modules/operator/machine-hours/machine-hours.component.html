@@ -92,6 +92,111 @@
           </div>
           
         </div>
+        <!-- 🆕 SECCIÓN DE HORAS DE MÁQUINA - AGREGAR ESTA SECCIÓN COMPLETA -->
+        <div class="machine-hours-section">
+          <h4 class="section-subtitle">
+            🔧 Registro de Operación de Máquina
+            <small>Horómetro y tiempo real de funcionamiento</small>
+          </h4>
+          
+          <div class="form-row">
+            <!-- Horómetro inicial -->
+            <div class="form-group half-width">
+              <label for="hourMeterStart">
+                Horómetro Inicial *
+                <span class="help-icon" title="Horas que muestra el horómetro al iniciar">ℹ️</span>
+              </label>
+              <input type="number" 
+                     id="hourMeterStart" 
+                     formControlName="hourMeterStart" 
+                     class="form-control" 
+                     step="0.1"
+                     placeholder="ej: 1250.5"
+                     [disabled]="isTimerActive">
+              <small class="form-text">Lectura del horómetro al arrancar la máquina</small>
+              <div *ngIf="hasFieldError('hourMeterStart')" class="error-message">
+                Horómetro inicial es requerido
+              </div>
+            </div>
+            
+            <!-- Horómetro final -->
+            <div class="form-group half-width">
+              <label for="hourMeterEnd">
+                Horómetro Final *
+                <span class="help-icon" title="Horas que muestra el horómetro al finalizar">ℹ️</span>
+              </label>
+              <input type="number" 
+                     id="hourMeterEnd" 
+                     formControlName="hourMeterEnd" 
+                     class="form-control" 
+                     step="0.1"
+                     placeholder="ej: 1257.3"
+                     [disabled]="!isTimerActive"
+                     (blur)="calculateOperatingHours()">
+              <small class="form-text">Lectura del horómetro al apagar la máquina</small>
+              <div *ngIf="machineHoursForm.errors?.['invalidHourMeter']" class="error-message">
+                Horómetro final debe ser mayor al inicial
+              </div>
+            </div>
+          </div>
+
+          <!-- Horas operativas calculadas -->
+          <div class="calculated-hours" *ngIf="operatingHours > 0">
+            <div class="hours-display">
+              <span class="hours-label">Horas de Operación:</span>
+              <span class="hours-value">{{ operatingHours.toFixed(1) }} hrs</span>
+              <span class="hours-subtext">(Calculado automáticamente)</span>
+            </div>
+          </div>
+
+          <!-- Nivel de combustible (opcional) -->
+          <div class="form-group">
+            <label for="fuelLevel">Nivel de Combustible Final (opcional)</label>
+            <select id="fuelLevel" formControlName="fuelLevel" class="form-control">
+              <option value="">Seleccione nivel</option>
+              <option value="100">Lleno (100%)</option>
+              <option value="75">3/4 (75%)</option>
+              <option value="50">1/2 (50%)</option>
+              <option value="25">1/4 (25%)</option>
+              <option value="10">Reserva (10%)</option>
+            </select>
+            <small class="form-text">Ayuda a calcular consumo de combustible</small>
+          </div>
+
+          <!-- Análisis de eficiencia -->
+          <div class="analysis-panel" *ngIf="showAnalysis">
+            <h4 class="section-subtitle">📊 Análisis de Eficiencia</h4>
+            
+            <div class="analysis-grid">
+              <div class="analysis-item">
+                <span class="analysis-label">Eficiencia:</span>
+                <span class="analysis-value" [ngClass]="getEfficiencyClass()">
+                  {{ efficiency.toFixed(1) }}%
+                </span>
+              </div>
+              
+              <div class="analysis-item">
+                <span class="analysis-label">Tiempo inactivo:</span>
+                <span class="analysis-value">{{ idleTime.toFixed(1) }} hrs</span>
+              </div>
+              
+              <div class="analysis-item" *ngIf="fuelConsumption > 0">
+                <span class="analysis-label">Consumo estimado:</span>
+                <span class="analysis-value">{{ fuelConsumption.toFixed(1) }} L</span>
+              </div>
+            </div>
+
+            <!-- Alertas de eficiencia -->
+            <div class="efficiency-alerts">
+              <div class="alert alert-warning" *ngIf="efficiency < 60">
+                ⚠️ Eficiencia baja. La máquina estuvo inactiva {{ idleTime.toFixed(1) }} horas.
+              </div>
+              <div class="alert alert-success" *ngIf="efficiency >= 80">
+                ✅ Excelente eficiencia. Uso óptimo de la máquina.
+              </div>
+            </div>
+          </div>
+        </div>
       
         <!-- Observaciones -->
         <div class="form-group compact-notes">
@@ -187,9 +292,9 @@
             <th>Fecha</th>
             <th>Proyecto</th>
             <th>Máquina</th>
-            <th>Inicio</th>
-            <th>Fin</th>
-            <th>Total Horas</th>
+            <th>Horas Trabajo</th>
+            <th>Horas Máquina</th>
+            <th>Eficiencia</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -207,29 +312,40 @@
                 <div class="machine-type">{{ getMachineTypeName(record.machineType) }}</div>
               </div>
             </td>
-            <td [attr.data-label]="'Inicio'">
-              {{ record.startHour | number:'1.2-2' }}h
+            <!-- 🆕 COLUMNA DE HORAS DE TRABAJO -->
+            <td [attr.data-label]="'Horas Trabajo'">
+              <div class="hours-breakdown">
+                <span class="hours-main">{{ record.totalHours | number:'1.1-1' }}h</span>
+                <small class="hours-detail">{{ record.startHour | number:'1.1-1' }}h - {{ record.endHour | number:'1.1-1' }}h</small>
+              </div>
             </td>
-            <td [attr.data-label]="'Fin'">
-              {{ record.endHour | number:'1.2-2' }}h
+            <!-- 🆕 COLUMNA DE HORAS DE MÁQUINA -->
+            <td [attr.data-label]="'Horas Máquina'">
+              <div class="machine-hours-breakdown">
+                <span class="hours-main" *ngIf="record.operatingHours; else noMachineHours">{{ record.operatingHours | number:'1.1-1' }}h</span>
+                <ng-template #noMachineHours>
+                  <span class="hours-main text-muted">No registrado</span>
+                </ng-template>
+                <small class="hours-detail" *ngIf="record.hourMeterStart && record.hourMeterEnd">
+                  {{ record.hourMeterStart }} - {{ record.hourMeterEnd }}
+                </small>
+              </div>
             </td>
-            <td [attr.data-label]="'Total Horas'">
-              <span class="hours-badge">{{ record.totalHours | number:'1.2-2' }} hrs</span>
+            <!-- 🆕 COLUMNA DE EFICIENCIA -->
+            <td [attr.data-label]="'Eficiencia'">
+              <span class="efficiency-badge" 
+                    [ngClass]="getEfficiencyBadgeClass(record.efficiency)"
+                    *ngIf="record.efficiency; else noEfficiency">
+                {{ record.efficiency | number:'1.0-0' }}%
+              </span>
+              <ng-template #noEfficiency>
+                <span class="text-muted">-</span>
+              </ng-template>
             </td>
             <td [attr.data-label]="'Estado'" class="status-cell">
               <span class="status-badge status-completed">Completado</span>
             </td>
           </tr>
-          <tr *ngIf="recentRecords.length === 0">
-            <td colspan="7" class="empty-table">
-              <div class="empty-state">
-                <span class="empty-icon">📋</span>
-                <p>No hay registros recientes</p>
-                <p class="empty-subtitle">Los registros aparecerán aquí una vez que complete trabajos</p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
       </table>
     </div>
   </div>
@@ -251,4 +367,58 @@
       <div class="stat-label">Máquinas Usadas</div>
     </div>
   </div>
+  <!-- 🆕 Agregar estos estilos inline para elementos específicos -->
+<style>
+  .hours-breakdown,
+  .machine-hours-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .hours-main {
+    font-weight: 600;
+    color: #495057;
+    font-size: 1rem;
+  }
+  
+  .hours-detail {
+    color: #6c757d;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+  
+  .efficiency-badge {
+    display: inline-block;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-align: center;
+    min-width: 60px;
+  }
+  
+  .badge-success {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  
+  .badge-warning {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+  
+  .badge-danger {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  .text-muted {
+    color: #6c757d !important;
+    font-style: italic;
+  }
+  </style>
 </div>

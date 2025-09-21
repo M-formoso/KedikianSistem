@@ -11,9 +11,20 @@ export interface MachineHours {
   date: string;
   machineType: string;
   machineId: string;
+  
+  // Horas de trabajo (existente)
   startHour: number;
   endHour: number;
   totalHours: number;
+  
+  // 🆕 Horas de máquina (nuevo)
+  hourMeterStart?: number;
+  hourMeterEnd?: number;
+  operatingHours?: number;
+  efficiency?: number;
+  idleTime?: number;
+  fuelLevel?: number;
+  
   project: string;
   operator: string;
   notes?: string;

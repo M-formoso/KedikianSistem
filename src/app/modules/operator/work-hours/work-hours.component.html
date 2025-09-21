@@ -1,9 +1,11 @@
+<!-- work-hours.component.html - CONECTADO CON JORNADA LABORAL BACKEND -->
+
 <div class="work-hours-container">
   <h2 class="page-title">Registro de Jornada Laboral</h2>
   
   <!-- Panel de carga de datos maestros -->
   <div *ngIf="loadingMasterData" class="loading-message">
-    Cargando datos...
+    🔄 Cargando datos...
   </div>
 
   <!-- Mensajes de éxito y error -->
@@ -64,6 +66,10 @@
                     rows="2"
                     placeholder="Observaciones sobre el inicio de jornada"
                     maxlength="200"></textarea>
+          <small class="form-text">Máximo 200 caracteres</small>
+          <div *ngIf="hasFieldError('notas', clockInForm)" class="error-message">
+            {{ getFieldError('notas', clockInForm) }}
+          </div>
         </div>
         
         <div class="form-group clock-in-action">
@@ -186,6 +192,7 @@
                     rows="3"
                     placeholder="Observaciones sobre la jornada, trabajos realizados, incidencias, etc."
                     maxlength="500"></textarea>
+          <small class="form-text">Máximo 500 caracteres</small>
           <div *ngIf="hasFieldError('notas', clockOutForm)" class="error-message">
             {{ getFieldError('notas', clockOutForm) }}
           </div>
@@ -226,13 +233,14 @@
       <li><strong>Advertencia:</strong> A partir de las 8 horas</li>
       <li><strong>Horas extras:</strong> Máximo 4 horas adicionales</li>
       <li><strong>Descansos:</strong> Registra el tiempo total de pausas</li>
+      <li><strong>Control automático:</strong> El sistema pausará automáticamente al alcanzar las 9 horas</li>
     </ul>
   </div>
 
   <!-- Calendario de pagos -->
   <div class="calendar-card">
     <div class="section-header">
-      <h3 class="section-title">📅 Calendario de Pagos</h3>
+      <h3 class="section-title">📅 Calendario de Jornadas</h3>
       <div class="section-actions">
         <button class="btn btn-secondary btn-sm" 
                 (click)="previousMonth()"
@@ -248,18 +256,42 @@
       </div>
     </div>
 
-    <!-- Resumen de pagos -->
-    <div class="payment-summary">
+    <!-- Resumen de estadísticas del mes -->
+    <div class="payment-summary" *ngIf="monthlyStats">
       <div class="summary-item">
-        <span class="summary-label">Último pago:</span>
+        <span class="summary-label">Jornadas trabajadas:</span>
+        <span class="summary-value">{{ monthlyStats.total_jornadas }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Horas regulares:</span>
+        <span class="summary-value">{{ formatHours(monthlyStats.total_horas_regulares) }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Horas extras:</span>
+        <span class="summary-value">{{ formatHours(monthlyStats.total_horas_extras) }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Total horas:</span>
+        <span class="summary-value">{{ formatHours(monthlyStats.total_horas) }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Promedio diario:</span>
+        <span class="summary-value">{{ formatHours(monthlyStats.promedio_horas_dia) }}</span>
+      </div>
+    </div>
+
+    <!-- Resumen de pagos (fallback si no hay estadísticas) -->
+    <div class="payment-summary" *ngIf="!monthlyStats">
+      <div class="summary-item">
+        <span class="summary-label">Último registro:</span>
         <span class="summary-value">{{ getLastPaymentDate() | date:'dd/MM/yyyy' }}</span>
       </div>
       <div class="summary-item">
-        <span class="summary-label">Horas trabajadas este mes:</span>
+        <span class="summary-label">Horas este mes:</span>
         <span class="summary-value">{{ formatHours(getCurrentMonthHours()) }}</span>
       </div>
       <div class="summary-item">
-        <span class="summary-label">Monto pendiente:</span>
+        <span class="summary-label">Monto estimado:</span>
         <span class="summary-value">{{ getPendingAmount() | currency:'ARS':'symbol':'1.2-2' }}</span>
       </div>
     </div>
@@ -295,8 +327,8 @@
               💰
             </span>
           </div>
-          <div class="day-hours" *ngIf="day.hasWorkHours">
-            {{ day.workHours }}h
+          <div class="day-hours" *ngIf="day.hasWorkHours && day.workHours">
+            {{ day.workHours | number:'1.1-1' }}h
           </div>
         </div>
       </div>
@@ -326,6 +358,10 @@
         <span class="summary-label">Promedio diario:</span>
         <span class="summary-value">{{ formatHours(getAverageHoursPerDay()) }}</span>
       </div>
+      <div class="summary-item">
+        <span class="summary-label">Registros:</span>
+        <span class="summary-value">{{ recentWorkHours.length }}</span>
+      </div>
     </div>
     
     <div class="table-responsive">
@@ -336,9 +372,10 @@
             <th>Entrada</th>
             <th>Salida</th>
             <th>Descanso</th>
-            <th>Total Horas</th>
+            <th>Horas Regulares</th>
+            <th>Horas Extras</th>
+            <th>Total</th>
             <th>Estado</th>
-            <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -347,42 +384,34 @@
             <td [attr.data-label]="'Entrada'">{{ workHours.horaInicio }}</td>
             <td [attr.data-label]="'Salida'">{{ workHours.horaFin || 'En curso' }}</td>
             <td [attr.data-label]="'Descanso'">{{ workHours.tiempoDescanso }} min</td>
-            <td [attr.data-label]="'Total Horas'" 
+            <td [attr.data-label]="'Horas Regulares'">
+              <span class="text-success">{{ formatHours(workHours.horasRegulares || 0) }}</span>
+            </td>
+            <td [attr.data-label]="'Horas Extras'">
+              <span *ngIf="workHours.horasExtras > 0" class="text-warning">
+                {{ formatHours(workHours.horasExtras) }}
+              </span>
+              <span *ngIf="!workHours.horasExtras || workHours.horasExtras === 0" class="text-muted">
+                --
+              </span>
+            </td>
+            <td [attr.data-label]="'Total'" 
                 [ngClass]="{
                   'text-success': workHours.totalHoras <= 8,
                   'text-warning': workHours.totalHoras > 8 && workHours.totalHoras <= 9, 
                   'text-danger': workHours.totalHoras > 9,
                   'text-overtime': workHours.totalHoras > 13
                 }">
-              <span *ngIf="workHours.totalHoras <= 9">
-                {{ formatHours(workHours.totalHoras) }}
-              </span>
-              <span *ngIf="workHours.totalHoras > 9">
-                {{ formatHours(9) }} + {{ formatHours(workHours.totalHoras - 9) }} extra
-              </span>
+              {{ formatHours(workHours.totalHoras || 0) }}
             </td>
             <td [attr.data-label]="'Estado'">
               <span class="badge" [ngClass]="getStatusClass(workHours.estado)">
                 {{ workHours.estado }}
               </span>
             </td>
-            <td [attr.data-label]="'Acciones'" class="actions-cell">
-              <button class="action-btn edit-btn" 
-                      title="Editar" 
-                      *ngIf="!activeClockIn && workHours.estado !== 'completado'"
-                      (click)="editWorkHours(workHours)">
-                ✏️
-              </button>
-              <button class="action-btn delete-btn" 
-                      title="Eliminar" 
-                      *ngIf="!activeClockIn"
-                      (click)="deleteWorkHours(workHours)">
-                ❌
-              </button>
-            </td>
           </tr>
           <tr *ngIf="recentWorkHours.length === 0">
-            <td colspan="7" class="empty-table">
+            <td colspan="8" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">📋</span>
                 <p>No hay registros recientes</p>
