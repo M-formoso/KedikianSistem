@@ -1,4 +1,4 @@
-// work-hours.component.ts - COMPLETAMENTE CORREGIDO
+// work-hours.component.ts - COMPLETAMENTE CORREGIDO CON TODOS LOS MÉTODOS
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -579,6 +579,22 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * ✅ Finalización forzosa
+   */
+  forceFinishWork(): void {
+    if (!this.activeClockIn) return;
+
+    const confirmed = confirm(
+      '¿Está seguro de que desea finalizar forzosamente la jornada?\n\n' +
+      'Esta acción debe usarse solo en casos de emergencia.'
+    );
+
+    if (!confirmed) return;
+
+    this.autoFinishJornada('Finalización forzosa solicitada por el usuario');
+  }
+
+  /**
    * ✅ Mostrar diálogo de confirmación de horas extras
    */
   private showOvertimeConfirmation(): void {
@@ -785,10 +801,155 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     // Implementación futura para tabla responsiva
   }
 
-  // ============ MÉTODOS PARA EL TEMPLATE ============
+  // ============ MÉTODOS PARA EL TEMPLATE - AGREGADOS/CORREGIDOS ============
 
   /**
-   * ✅ Calcular tiempo transcurrido para mostrar
+   * ✅ NUEVO: Verificar si un campo del formulario tiene errores
+   */
+  hasFieldError(fieldName: string, form: FormGroup): boolean {
+    const field = form.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched || this.submitted));
+  }
+
+  /**
+   * ✅ NUEVO: Obtener mensaje de error para un campo específico
+   */
+  getFieldError(fieldName: string, form: FormGroup): string {
+    const field = form.get(fieldName);
+    
+    if (field?.errors) {
+      if (field.errors['required']) {
+        return `${this.getFieldLabel(fieldName)} es requerido`;
+      }
+      if (field.errors['maxlength']) {
+        return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
+      }
+      if (field.errors['min']) {
+        return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
+      }
+      if (field.errors['max']) {
+        return `${this.getFieldLabel(fieldName)} no puede ser mayor a ${field.errors['max'].max}`;
+      }
+    }
+    
+    return '';
+  }
+
+  /**
+   * ✅ NUEVO: Obtener etiqueta del campo para mensajes de error
+   */
+  private getFieldLabel(fieldName: string): string {
+    const labels: { [key: string]: string } = {
+      'notas': 'Las notas',
+      'tiempoDescanso': 'El tiempo de descanso'
+    };
+    return labels[fieldName] || fieldName;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si se puede fichar entrada
+   */
+  canClockIn(): boolean {
+    return !this.activeClockIn && !this.loading && !this.loadingMasterData && !!this.currentUser;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si se puede fichar salida
+   */
+  canClockOut(): boolean {
+    return !!this.activeClockIn && !this.loading && this.clockOutForm.valid;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si se puede finalizar forzosamente
+   */
+  canForceFinish(): boolean {
+    return !!this.activeClockIn && this.activeClockIn.isActive && !this.loading;
+  }
+
+  /**
+   * ✅ NUEVO: Obtener estado de trabajo actual para mostrar
+   */
+  getCurrentWorkStatus(): string {
+    if (!this.activeClockIn) return '';
+    
+    if (this.activeClockIn.autoStoppedAt9Hours && !this.activeClockIn.isActive) {
+      return '⏸️ Jornada Pausada - Límite de 9h Alcanzado';
+    }
+    
+    if (this.activeClockIn.isOvertimeMode) {
+      return '🕐 Horas Extras Activas';
+    }
+    
+    if (this.activeClockIn.isActive) {
+      return '⏱️ Jornada Laboral Activa';
+    }
+    
+    return '⏸️ Jornada Pausada';
+  }
+
+  /**
+   * ✅ NUEVO: Obtener clase CSS para el estado de trabajo
+   */
+  getWorkStatusClass(): string {
+    if (!this.activeClockIn) return '';
+    
+    if (this.activeClockIn.autoStoppedAt9Hours && !this.activeClockIn.isActive) {
+      return 'status-paused';
+    }
+    
+    if (this.activeClockIn.isOvertimeMode) {
+      return 'status-overtime';
+    }
+    
+    if (this.activeClockIn.isActive) {
+      if (this.isNearingLimit()) {
+        return 'status-warning';
+      }
+      if (this.hasExceededLimit()) {
+        return 'status-danger';
+      }
+      return 'status-active';
+    }
+    
+    return 'status-paused';
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si está en modo horas extras
+   */
+  get isInOvertimeMode(): boolean {
+    return this.activeClockIn?.isOvertimeMode || false;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si está cerca del límite
+   */
+  isNearingLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    if (this.isInOvertimeMode) {
+      return this.overtimeHours >= 3; // Advertencia a partir de 3h extras
+    }
+    
+    return this.regularHours >= this.WARNING_HOURS;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si ha excedido el límite
+   */
+  hasExceededLimit(): boolean {
+    if (!this.activeClockIn) return false;
+    
+    if (this.isInOvertimeMode) {
+      return this.overtimeHours >= this.MAX_OVERTIME_HOURS;
+    }
+    
+    return this.regularHours >= this.MAX_REGULAR_HOURS;
+  }
+
+  /**
+   * ✅ NUEVO: Calcular tiempo transcurrido para mostrar
    */
   getElapsedTime(): string {
     if (!this.activeClockIn) return '';
@@ -802,4 +963,298 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         Math.floor((this.regularHours - Math.floor(this.regularHours)) * 60) + 'm';
       const overtimeHoursStr = Math.floor(this.overtimeHours) + 'h ' + 
         Math.floor((this.overtimeHours - Math.floor(this.overtimeHours)) * 60) + 'm';
-      return
+      return `${regularHoursStr} (${overtimeHoursStr} extras)`;
+    }
+
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar tiempo restante
+   */
+  getRemainingTime(): string {
+    if (!this.activeClockIn) return '';
+
+    if (this.isInOvertimeMode) {
+      const remainingOvertime = this.MAX_OVERTIME_HOURS - this.overtimeHours;
+      if (remainingOvertime <= 0) return 'Límite alcanzado';
+      
+      const hours = Math.floor(remainingOvertime);
+      const minutes = Math.floor((remainingOvertime - hours) * 60);
+      return `${hours}h ${minutes}m extras restantes`;
+    }
+
+    const remainingRegular = this.MAX_REGULAR_HOURS - this.regularHours;
+    if (remainingRegular <= 0) return 'Jornada regular completada';
+    
+    const hours = Math.floor(remainingRegular);
+    const minutes = Math.floor((remainingRegular - hours) * 60);
+    return `${hours}h ${minutes}m restantes`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar progreso de la jornada
+   */
+  getWorkDayProgress(): number {
+    if (!this.activeClockIn) return 0;
+
+    if (this.isInOvertimeMode) {
+      return Math.min(100, (this.overtimeHours / this.MAX_OVERTIME_HOURS) * 100);
+    }
+
+    return Math.min(100, (this.regularHours / this.MAX_REGULAR_HOURS) * 100);
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar horas extras
+   */
+  getOvertimeDisplay(): string {
+    const hours = Math.floor(this.overtimeHours);
+    const minutes = Math.floor((this.overtimeHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar total trabajado
+   */
+  getTotalWorkedDisplay(): string {
+    const hours = Math.floor(this.totalHours);
+    const minutes = Math.floor((this.totalHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Mostrar horas regulares
+   */
+  getRegularHoursDisplay(): string {
+    const hours = Math.floor(this.regularHours);
+    const minutes = Math.floor((this.regularHours - hours) * 60);
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Refrescar registros recientes
+   */
+  refreshRecentWorkHours(): void {
+    this.loadRecentJornadas();
+  }
+
+  /**
+   * ✅ NUEVO: Formatear horas para mostrar
+   */
+  formatHours(hours: number): string {
+    if (!hours || hours === 0) return '0h';
+    
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    
+    if (m === 0) {
+      return `${h}h`;
+    }
+    
+    return `${h}h ${m}m`;
+  }
+
+  /**
+   * ✅ NUEVO: Obtener clase CSS para el estado
+   */
+  getStatusClass(estado: string): string {
+    const statusMap: { [key: string]: string } = {
+      'Activa': 'badge-warning',
+      'Pausada': 'badge-secondary',
+      'Completada': 'badge-success',
+      'Cancelada': 'badge-danger'
+    };
+    return statusMap[estado] || 'badge-secondary';
+  }
+
+  /**
+   * ✅ NUEVO: TrackBy para optimizar rendimiento
+   */
+  trackByWorkHours(index: number, workHour: any): any {
+    return workHour.id || index;
+  }
+
+  /**
+   * ✅ NUEVO: TrackBy para calendario
+   */
+  trackByDay(index: number, day: CalendarDay): string {
+    return `${day.date.getTime()}-${day.dayNumber}`;
+  }
+
+  /**
+   * ✅ NUEVO: Obtener total de horas recientes
+   */
+  getTotalRecentHours(): number {
+    return this.recentWorkHours.reduce((total, workHour) => total + (workHour.totalHoras || 0), 0);
+  }
+
+  /**
+   * ✅ NUEVO: Obtener promedio de horas por día
+   */
+  getAverageHoursPerDay(): number {
+    if (this.recentWorkHours.length === 0) return 0;
+    return this.getTotalRecentHours() / this.recentWorkHours.length;
+  }
+
+  // ============ MÉTODOS PARA EL CALENDARIO ============
+
+  /**
+   * ✅ NUEVO: Obtener mes y año actual
+   */
+  getCurrentMonthYear(): string {
+    return this.currentCalendarDate.toLocaleDateString('es-ES', {
+      month: 'long',
+      year: 'numeric'
+    });
+  }
+
+  /**
+   * ✅ NUEVO: Ir al mes anterior
+   */
+  previousMonth(): void {
+    this.currentCalendarDate = new Date(
+      this.currentCalendarDate.getFullYear(),
+      this.currentCalendarDate.getMonth() - 1,
+      1
+    );
+    this.loadMonthlyStats();
+  }
+
+  /**
+   * ✅ NUEVO: Ir al mes siguiente
+   */
+  nextMonth(): void {
+    this.currentCalendarDate = new Date(
+      this.currentCalendarDate.getFullYear(),
+      this.currentCalendarDate.getMonth() + 1,
+      1
+    );
+    this.loadMonthlyStats();
+  }
+
+  /**
+   * ✅ NUEVO: Generar días del calendario
+   */
+  getCalendarDays(): CalendarDay[] {
+    const year = this.currentCalendarDate.getFullYear();
+    const month = this.currentCalendarDate.getMonth();
+    const today = new Date();
+    
+    // Primer día del mes
+    const firstDay = new Date(year, month, 1);
+    // Último día del mes
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Días a mostrar (incluyendo días del mes anterior y siguiente)
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const endDate = new Date(lastDay);
+    endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
+    
+    const days: CalendarDay[] = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      const dayData = this.findWorkHoursForDate(currentDate);
+      
+      days.push({
+        dayNumber: currentDate.getDate(),
+        isCurrentMonth: currentDate.getMonth() === month,
+        isToday: this.isSameDay(currentDate, today),
+        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6,
+        date: new Date(currentDate),
+        hasWorkHours: dayData.hasWorkHours,
+        workHours: dayData.workHours,
+        isPaymentDay: this.isPaymentDay(currentDate)
+      });
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return days;
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si es el mismo día
+   */
+  private isSameDay(date1: Date, date2: Date): boolean {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  }
+
+  /**
+   * ✅ NUEVO: Buscar horas trabajadas para una fecha
+   */
+  private findWorkHoursForDate(date: Date): { hasWorkHours: boolean; workHours?: number } {
+    const dateString = date.toISOString().split('T')[0];
+    
+    // Buscar en estadísticas mensuales si están disponibles
+    if (this.monthlyStats?.jornadas) {
+      const jornada = this.monthlyStats.jornadas.find(j => j.fecha === dateString);
+      if (jornada) {
+        return {
+          hasWorkHours: true,
+          workHours: jornada.total_horas
+        };
+      }
+    }
+    
+    // Buscar en registros recientes como fallback
+    const workHour = this.recentWorkHours.find(wh => wh.fecha === dateString);
+    if (workHour) {
+      return {
+        hasWorkHours: true,
+        workHours: workHour.totalHoras
+      };
+    }
+    
+    return { hasWorkHours: false };
+  }
+
+  /**
+   * ✅ NUEVO: Verificar si es día de pago (ejemplo: día 30 de cada mes)
+   */
+  private isPaymentDay(date: Date): boolean {
+    return date.getDate() === 30; // Ejemplo: día 30 es día de pago
+  }
+
+  /**
+   * ✅ NUEVO: Obtener fecha del último pago
+   */
+  getLastPaymentDate(): Date {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 30);
+  }
+
+  /**
+   * ✅ NUEVO: Obtener horas del mes actual
+   */
+  getCurrentMonthHours(): number {
+    if (this.monthlyStats) {
+      return this.monthlyStats.total_horas;
+    }
+    
+    // Fallback: calcular desde registros recientes
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    return this.recentWorkHours
+      .filter(wh => {
+        const workDate = new Date(wh.fecha);
+        return workDate.getMonth() === currentMonth && workDate.getFullYear() === currentYear;
+      })
+      .reduce((total, wh) => total + (wh.totalHoras || 0), 0);
+  }
+
+  /**
+   * ✅ NUEVO: Obtener monto pendiente estimado
+   */
+  getPendingAmount(): number {
+    const hoursWorked = this.getCurrentMonthHours();
+    const hourlyRate = 5000; // Ejemplo: $5000 por hora
+    return hoursWorked * hourlyRate;
+  }
+}
