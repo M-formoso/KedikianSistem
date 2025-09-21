@@ -1,7 +1,9 @@
-// src/app/core/services/jornada-laboral.service.ts
+// src/app/core/services/jornada-laboral.service.ts - COMPLETAMENTE CORREGIDO
+
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError, map, retry } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 // ===== INTERFACES PARA JORNADA LABORAL =====
@@ -87,10 +89,36 @@ export class JornadaLaboralService {
 
   constructor(private http: HttpClient) {}
 
+  // ✅ Obtener headers HTTP con token dinámico
+  private getHttpOptions() {
+    const usuarioActual = localStorage.getItem('usuarioActual');
+    let token: string | null = null;
+
+    if (usuarioActual) {
+      try {
+        const usuario = JSON.parse(usuarioActual);
+        token = usuario.access_token || usuario.token || null;
+      } catch {
+        console.error('❌ Error parsing usuario actual');
+      }
+    }
+
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return { headers: new HttpHeaders(headers) };
+  }
+
   // ============ MÉTODOS DE FICHAJE ============
 
   /**
-   * Fichar entrada - Iniciar jornada laboral
+   * ✅ CORREGIDO: Fichar entrada - Iniciar jornada laboral
    */
   ficharEntrada(
     usuario_id: number, 
@@ -103,17 +131,35 @@ export class JornadaLaboralService {
       ubicacion
     };
 
-    return this.http.post<ApiResponse<JornadaLaboralResponse>>(
+    console.log('📤 Enviando fichaje de entrada:', body);
+
+    return this.http.post<any>(
       `${this.API_URL}/fichar-entrada`, 
       body,
-      {
-        params: { usuario_id: usuario_id.toString() }
-      }
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta fichaje entrada:', response);
+        
+        // ✅ CRÍTICO: Verificar si la respuesta ya tiene el formato ApiResponse
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        // Si no, crear el wrapper
+        return {
+          success: true,
+          data: response,
+          message: 'Entrada fichada correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * Finalizar jornada laboral
+   * ✅ CORREGIDO: Finalizar jornada laboral
    */
   finalizarJornada(
     jornada_id: number,
@@ -129,14 +175,33 @@ export class JornadaLaboralService {
       forzado
     };
 
-    return this.http.put<ApiResponse<JornadaLaboralResponse>>(
+    console.log('📤 Enviando finalización de jornada:', body);
+
+    return this.http.put<any>(
       `${this.API_URL}/finalizar/${jornada_id}`, 
-      body
+      body,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta finalización jornada:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Jornada finalizada correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * Confirmar horas extras
+   * ✅ CORREGIDO: Confirmar horas extras
    */
   confirmarHorasExtras(
     jornada_id: number,
@@ -146,14 +211,33 @@ export class JornadaLaboralService {
       notas_overtime
     };
 
-    return this.http.put<ApiResponse<JornadaLaboralResponse>>(
+    console.log('📤 Enviando confirmación horas extras:', body);
+
+    return this.http.put<any>(
       `${this.API_URL}/confirmar-overtime/${jornada_id}`, 
-      body
+      body,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta confirmación horas extras:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Horas extras confirmadas'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * Rechazar horas extras
+   * ✅ CORREGIDO: Rechazar horas extras
    */
   rechazarHorasExtras(
     jornada_id: number,
@@ -165,25 +249,84 @@ export class JornadaLaboralService {
       notas_fin
     };
 
-    return this.http.put<ApiResponse<JornadaLaboralResponse>>(
+    console.log('📤 Enviando rechazo horas extras:', body);
+
+    return this.http.put<any>(
       `${this.API_URL}/rechazar-overtime/${jornada_id}`, 
-      body
+      body,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta rechazo horas extras:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Horas extras rechazadas y jornada finalizada'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   // ============ MÉTODOS DE CONSULTA ============
 
   /**
-   * Obtener jornada activa de un usuario
+   * ✅ CORREGIDO: Obtener jornada activa de un usuario
    */
   obtenerJornadaActiva(usuario_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
-    return this.http.get<ApiResponse<JornadaLaboralResponse>>(
-      `${this.API_URL}/activa/${usuario_id}`
+    console.log('📤 Consultando jornada activa para usuario:', usuario_id);
+
+    return this.http.get<any>(
+      `${this.API_URL}/activa/${usuario_id}`,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta jornada activa:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        // Si response es null o undefined, no hay jornada activa
+        if (!response) {
+          return {
+            success: true,
+            data: undefined,
+            message: 'No hay jornada activa'
+          } as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Jornada activa encontrada'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(error => {
+        // ✅ CRÍTICO: Si es 404, no es error, simplemente no hay jornada activa
+        if (error.status === 404) {
+          console.log('ℹ️ No hay jornada activa (404)');
+          return [{
+            success: true,
+            data: undefined,
+            message: 'No hay jornada activa'
+          } as ApiResponse<JornadaLaboralResponse>];
+        }
+        
+        return this.handleError(error);
+      })
     );
   }
 
   /**
-   * Obtener jornadas de un usuario
+   * ✅ CORREGIDO: Obtener jornadas de un usuario
    */
   obtenerJornadasUsuario(
     usuario_id: number,
@@ -194,14 +337,41 @@ export class JornadaLaboralService {
       .set('limite', limite.toString())
       .set('offset', offset.toString());
 
-    return this.http.get<ApiResponse<JornadaLaboralResponse[]>>(
+    console.log('📤 Consultando jornadas usuario:', usuario_id);
+
+    return this.http.get<any>(
       `${this.API_URL}/usuario/${usuario_id}`,
-      { params }
+      { ...this.getHttpOptions(), params }
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta jornadas usuario:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        // Si es un array directamente
+        if (Array.isArray(response)) {
+          return {
+            success: true,
+            data: response,
+            message: 'Jornadas obtenidas correctamente'
+          } as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        return {
+          success: true,
+          data: [],
+          message: 'No se encontraron jornadas'
+        } as ApiResponse<JornadaLaboralResponse[]>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * Obtener jornadas por periodo
+   * ✅ CORREGIDO: Obtener jornadas por periodo
    */
   obtenerJornadasPeriodo(
     usuario_id?: number,
@@ -215,34 +385,94 @@ export class JornadaLaboralService {
     if (fecha_inicio) params = params.set('fecha_inicio', fecha_inicio);
     if (fecha_fin) params = params.set('fecha_fin', fecha_fin);
 
-    return this.http.get<ApiResponse<JornadaLaboralResponse[]>>(
+    return this.http.get<any>(
       `${this.API_URL}/periodo`,
-      { params }
+      { ...this.getHttpOptions(), params }
+    ).pipe(
+      retry(1),
+      map(response => {
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        if (Array.isArray(response)) {
+          return {
+            success: true,
+            data: response,
+            message: 'Jornadas del periodo obtenidas'
+          } as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        return {
+          success: true,
+          data: [],
+          message: 'No se encontraron jornadas para el periodo'
+        } as ApiResponse<JornadaLaboralResponse[]>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * Obtener estadísticas del mes
+   * ✅ CORREGIDO: Obtener estadísticas del mes
    */
   obtenerEstadisticasMes(
     usuario_id: number,
     mes: number,
     anio: number
   ): Observable<ApiResponse<EstadisticasJornada>> {
-    return this.http.get<ApiResponse<EstadisticasJornada>>(
-      `${this.API_URL}/estadisticas/${usuario_id}/${mes}/${anio}`
+    console.log('📤 Consultando estadísticas:', { usuario_id, mes, anio });
+
+    return this.http.get<any>(
+      `${this.API_URL}/estadisticas/${usuario_id}/${mes}/${anio}`,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta estadísticas:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<EstadisticasJornada>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Estadísticas obtenidas correctamente'
+        } as ApiResponse<EstadisticasJornada>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   // ============ MÉTODOS DE CONTROL ============
 
   /**
-   * Actualizar estado de jornada
+   * ✅ CORREGIDO: Actualizar estado de jornada
    */
   actualizarEstadoJornada(jornada_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
-    return this.http.put<ApiResponse<JornadaLaboralResponse>>(
+    console.log('📤 Actualizando estado jornada:', jornada_id);
+
+    return this.http.put<any>(
       `${this.API_URL}/actualizar-estado/${jornada_id}`,
-      {}
+      {},
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta actualización estado:', response);
+        
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Estado actualizado correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
@@ -250,8 +480,31 @@ export class JornadaLaboralService {
    * Verificar jornadas activas
    */
   verificarJornadasActivas(): Observable<ApiResponse<JornadaLaboralResponse[]>> {
-    return this.http.get<ApiResponse<JornadaLaboralResponse[]>>(
-      `${this.API_URL}/verificar-activas`
+    return this.http.get<any>(
+      `${this.API_URL}/verificar-activas`,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        if (Array.isArray(response)) {
+          return {
+            success: true,
+            data: response,
+            message: 'Jornadas activas verificadas'
+          } as ApiResponse<JornadaLaboralResponse[]>;
+        }
+        
+        return {
+          success: true,
+          data: [],
+          message: 'No hay jornadas activas'
+        } as ApiResponse<JornadaLaboralResponse[]>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
@@ -262,8 +515,23 @@ export class JornadaLaboralService {
     usuario_id: number,
     fecha: string
   ): Observable<ApiResponse<any>> {
-    return this.http.get<ApiResponse<any>>(
-      `${this.API_URL}/resumen-dia/${usuario_id}/${fecha}`
+    return this.http.get<any>(
+      `${this.API_URL}/resumen-dia/${usuario_id}/${fecha}`,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<any>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Resumen del día obtenido'
+        } as ApiResponse<any>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
@@ -273,8 +541,23 @@ export class JornadaLaboralService {
    * Calcular tiempo restante para diferentes límites
    */
   calcularTiempoRestante(jornada_id: number): Observable<ApiResponse<any>> {
-    return this.http.get<ApiResponse<any>>(
-      `${this.API_URL}/tiempo-restante/${jornada_id}`
+    return this.http.get<any>(
+      `${this.API_URL}/tiempo-restante/${jornada_id}`,
+      this.getHttpOptions()
+    ).pipe(
+      retry(1),
+      map(response => {
+        if (this.isApiResponse(response)) {
+          return response as ApiResponse<any>;
+        }
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Tiempo restante calculado'
+        } as ApiResponse<any>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
@@ -339,13 +622,14 @@ export class JornadaLaboralService {
   }
 
   /**
-   * Verificar si necesita mostrar diálogo de horas extras
+   * ✅ CORREGIDO: Verificar si necesita mostrar diálogo de horas extras
    */
   necesitaDialogoOvertimeEstatico(jornada: JornadaLaboralResponse): boolean {
     return jornada.limite_regular_alcanzado && 
            !jornada.overtime_confirmado && 
            jornada.estado === 'pausada' &&
-           jornada.pausa_automatica;
+           jornada.pausa_automatica &&
+           !jornada.hora_fin; // ✅ CRÍTICO: Solo si no está finalizada
   }
 
   /**
@@ -379,5 +663,84 @@ export class JornadaLaboralService {
    */
   haExcedidoLimite(horas_trabajadas: number): boolean {
     return horas_trabajadas >= 13; // 9 regulares + 4 extras
+  }
+
+  // ============ MÉTODOS AUXILIARES ============
+
+  /**
+   * ✅ Verificar si la respuesta tiene el formato ApiResponse
+   */
+  private isApiResponse(response: any): boolean {
+    return response && 
+           typeof response === 'object' && 
+           'success' in response;
+  }
+
+  /**
+   * ✅ MEJORADO: Manejo de errores seguro
+   */
+  private handleError(error: any): Observable<never> {
+    console.error('❌ Error en JornadaLaboralService:', error);
+    
+    let errorMessage = 'Ocurrió un error inesperado';
+    
+    if (error.error instanceof ErrorEvent) {
+      // Error del lado del cliente
+      errorMessage = `Error: ${error.error.message}`;
+    } else {
+      // Error del lado del servidor
+      console.error(`Código de error: ${error.status}, Mensaje: ${error.message}`);
+      
+      // ✅ CRÍTICO: Manejo específico por código de estado
+      switch (error.status) {
+        case 0:
+          errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
+          break;
+        case 400:
+          errorMessage = 'Solicitud incorrecta. Verifica los datos enviados.';
+          break;
+        case 401:
+          errorMessage = 'No autorizado. Tu sesión ha expirado.';
+          // Limpiar localStorage y redirigir al login
+          localStorage.removeItem('usuarioActual');
+          break;
+        case 403:
+          errorMessage = 'Acceso prohibido. No tienes permisos suficientes.';
+          break;
+        case 404:
+          errorMessage = 'Recurso no encontrado.';
+          break;
+        case 409:
+          errorMessage = 'Conflicto. Ya existe una jornada activa.';
+          break;
+        case 422:
+          errorMessage = 'Datos de entrada inválidos.';
+          
+          // ✅ Manejo específico de errores de validación de FastAPI
+          if (error.error && error.error.detail) {
+            if (Array.isArray(error.error.detail)) {
+              const validationErrors = error.error.detail.map((e: any) => {
+                return e.msg || e.message || JSON.stringify(e);
+              }).join(', ');
+              errorMessage = 'Errores de validación: ' + validationErrors;
+            } else if (typeof error.error.detail === 'string') {
+              errorMessage = error.error.detail;
+            }
+          }
+          break;
+        case 500:
+          errorMessage = 'Error interno del servidor. Intenta nuevamente más tarde.';
+          break;
+        default:
+          errorMessage = `Error ${error.status}: ${error.message || error.statusText}`;
+      }
+      
+      // Verificar si hay un mensaje específico del backend
+      if (error.error && error.error.message) {
+        errorMessage = error.error.message;
+      }
+    }
+    
+    return throwError(() => new Error(errorMessage));
   }
 }
