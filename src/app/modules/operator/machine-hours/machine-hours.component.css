@@ -1,3 +1,5 @@
+/* ===== ESTILOS PARA MACHINE HOURS - VERSIÓN SIMPLIFICADA ===== */
+
 /* Estilos base */
 .machine-hours-container {
   width: 100%;
@@ -236,6 +238,114 @@ textarea.form-control {
   font-style: italic;
 }
 
+/* ===== SECCIÓN DE HORÓMETRO SIMPLIFICADA ===== */
+.machine-hours-section {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px solid #dee2e6;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  position: relative;
+  animation: fadeInScale 0.6s ease-out;
+}
+
+.machine-hours-section::before {
+  content: "🔧";
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  background: white;
+  padding: 0 10px;
+  font-size: 1.5rem;
+}
+
+.section-subtitle {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #495057;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-subtitle small {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.help-icon {
+  color: #6c757d;
+  cursor: help;
+  margin-left: 0.25rem;
+  font-size: 0.9rem;
+  transition: color 0.2s ease;
+}
+
+.help-icon:hover {
+  color: #495057;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+.half-width {
+  width: 50%;
+}
+
+/* Horas operativas calculadas */
+.calculated-hours {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border: 1px solid #c3e6cb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: center;
+  animation: slideInUp 0.5s ease-out;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+}
+
+.hours-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hours-label {
+  font-weight: 600;
+  color: #155724;
+  font-size: 1rem;
+}
+
+.hours-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #155724;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  border: 2px solid #c3e6cb;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.hours-value:hover {
+  transform: scale(1.05);
+}
+
+.hours-subtext {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
 /* Controles del timer */
 .timer-controls {
   display: flex;
@@ -379,7 +489,7 @@ textarea.form-control {
   font-size: 1.1rem;
 }
 
-/* Panel de ayuda */
+/* Panel de ayuda simplificado */
 .help-panel {
   background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
   padding: 1.5rem;
@@ -501,7 +611,7 @@ textarea.form-control {
   opacity: 0.7;
 }
 
-/* Badges y elementos específicos */
+/* Badges y elementos específicos simplificados */
 .project-badge {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -553,6 +663,32 @@ textarea.form-control {
   text-align: center;
 }
 
+.hours-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.hours-main {
+  font-weight: 600;
+  color: #28a745;
+}
+
+.hours-detail {
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+
+.machine-hours-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.text-muted {
+  color: #6c757d !important;
+}
+
 /* Panel de estadísticas */
 .quick-stats {
   display: grid;
@@ -588,7 +724,69 @@ textarea.form-control {
   font-weight: 500;
 }
 
-/* Media Queries para responsividad */
+/* Animaciones */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.form-card,
+.recent-records,
+.work-status-panel {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* Mejoras de accesibilidad */
+.btn:focus,
+.form-control:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Validación visual simplificada */
+.form-control.ng-invalid.ng-touched {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.form-control.ng-valid.ng-touched {
+  border-color: #28a745;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.invalid-hour-meter {
+  border-color: #dc3545 !important;
+  background-color: #fff5f5;
+}
+
+.invalid-hour-meter:focus {
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+/* ===== MEDIA QUERIES RESPONSIVE ===== */
+
 @media screen and (max-width: 768px) {
   .machine-hours-container {
     padding: 0.5rem;
@@ -630,6 +828,15 @@ textarea.form-control {
     flex: 1;
   }
   
+  .form-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .half-width {
+    width: 100%;
+  }
+  
   .section-header {
     flex-direction: column;
     align-items: stretch;
@@ -643,6 +850,37 @@ textarea.form-control {
   
   .quick-stats {
     grid-template-columns: 1fr;
+  }
+  
+  .machine-hours-section {
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+  
+  .machine-hours-section::before {
+    top: -12px;
+    left: 15px;
+    font-size: 1.2rem;
+  }
+  
+  .hours-display {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .section-subtitle {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .section-subtitle small {
+    margin-left: 0;
+  }
+  
+  .hours-value {
+    font-size: 1.2rem;
+    padding: 0.2rem 0.5rem;
   }
 }
 
@@ -677,6 +915,24 @@ textarea.form-control {
   .timer-info {
     flex-direction: column;
     gap: 0.25rem;
+  }
+  
+  .machine-hours-section {
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+  }
+  
+  .hours-display {
+    gap: 0.25rem;
+  }
+  
+  .hours-value {
+    font-size: 1.1rem;
+    padding: 0.15rem 0.4rem;
+  }
+  
+  .section-subtitle {
+    font-size: 1rem;
   }
   
   /* Convertir tabla a formato de lista en móviles */
@@ -727,25 +983,22 @@ textarea.form-control {
   .stat-value {
     font-size: 1.5rem;
   }
-}
-
-/* Animaciones adicionales */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.form-card,
-.recent-records,
-.work-status-panel {
-  animation: fadeIn 0.6s ease-out;
-}
-
-/* Mejoras de accesibilidad */
-.btn:focus,
-.form-control:focus {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
+  
+  /* Datos específicos para la tabla móvil */
+  .data-table td:nth-of-type(1):before { content: "Fecha: "; }
+  .data-table td:nth-of-type(2):before { content: "Proyecto: "; }
+  .data-table td:nth-of-type(3):before { content: "Máquina: "; }
+  .data-table td:nth-of-type(4):before { content: "Horas Trabajo: "; }
+  .data-table td:nth-of-type(5):before { content: "Horómetro Inicial: "; }
+  .data-table td:nth-of-type(6):before { content: "Horómetro Final: "; }
+  .data-table td:nth-of-type(7):before { content: "Horas Máquina: "; }
+  .data-table td:nth-of-type(8):before { content: "Estado: "; }
+  
+  /* Forzar el ancho completo en dispositivos pequeños */
+  body, html {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
 }
 
 /* Optimizaciones para dispositivos táctiles */
@@ -757,385 +1010,8 @@ textarea.form-control {
   .stat-card:hover {
     transform: none;
   }
-}
-
-/* =========== ESTILOS PARA HORAS DE MÁQUINA - NUEVOS =========== */
-.machine-hours-section {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border: 2px solid #dee2e6;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  position: relative;
-  animation: fadeInScale 0.6s ease-out;
-}
-
-.machine-hours-section::before {
-  content: "🔧";
-  position: absolute;
-  top: -15px;
-  left: 20px;
-  background: white;
-  padding: 0 10px;
-  font-size: 1.5rem;
-}
-
-.section-subtitle {
-  margin: 0 0 1rem 0;
-  font-size: 1.1rem;
-  color: #495057;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.section-subtitle small {
-  font-size: 0.85rem;
-  color: #6c757d;
-  font-weight: 400;
-  margin-left: auto;
-}
-
-.help-icon {
-  color: #6c757d;
-  cursor: help;
-  margin-left: 0.25rem;
-  font-size: 0.9rem;
-  transition: color 0.2s ease;
-}
-
-.help-icon:hover {
-  color: #495057;
-}
-
-/* =========== HORAS CALCULADAS =========== */
-.calculated-hours {
-  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-  border: 1px solid #c3e6cb;
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 1rem 0;
-  text-align: center;
-  animation: slideInUp 0.5s ease-out;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
-}
-
-.hours-display {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.hours-label {
-  font-weight: 600;
-  color: #155724;
-  font-size: 1rem;
-}
-
-.hours-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #155724;
-  padding: 0.25rem 0.75rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  border: 2px solid #c3e6cb;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
-}
-
-.hours-value:hover {
-  transform: scale(1.05);
-}
-
-.hours-subtext {
-  font-size: 0.8rem;
-  color: #6c757d;
-  font-style: italic;
-}
-
-/* =========== PANEL DE ANÁLISIS =========== */
-.analysis-panel {
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-  border: 2px solid #90caf9;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1rem 0;
-  position: relative;
-  animation: fadeInScale 0.6s ease-out;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
-}
-
-.analysis-panel::before {
-  content: "📊";
-  position: absolute;
-  top: -15px;
-  left: 20px;
-  background: white;
-  padding: 0 10px;
-  font-size: 1.5rem;
-}
-
-.analysis-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.analysis-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #90caf9;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.analysis-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.analysis-label {
-  font-weight: 500;
-  color: #0d47a1;
-  font-size: 0.9rem;
-}
-
-.analysis-value {
-  font-weight: 700;
-  font-size: 1.1rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 15px;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease;
-}
-
-.analysis-value:hover {
-  transform: scale(1.1);
-}
-
-/* =========== CLASES DE EFICIENCIA =========== */
-.efficiency-excellent {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-}
-
-.efficiency-good {
-  background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
-  color: #212529 !important;
-  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
-}
-
-.efficiency-poor {
-  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
-}
-
-/* =========== ALERTAS DE EFICIENCIA =========== */
-.efficiency-alerts {
-  margin-top: 1rem;
-}
-
-.efficiency-alerts .alert {
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  animation: fadeIn 0.5s ease-out;
-}
-
-/* =========== VALIDACIÓN VISUAL =========== */
-.form-control.ng-invalid.ng-touched {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-}
-
-.form-control.ng-valid.ng-touched {
-  border-color: #28a745;
-  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
-}
-
-.invalid-hour-meter {
-  border-color: #dc3545 !important;
-  background-color: #fff5f5;
-}
-
-.invalid-hour-meter:focus {
-  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
-}
-
-/* =========== ANIMACIONES =========== */
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInScale {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* =========== RESPONSIVE DESIGN =========== */
-@media (max-width: 768px) {
-  .machine-hours-section,
-  .analysis-panel {
-    padding: 1rem;
-    margin: 1rem 0;
-  }
   
-  .machine-hours-section::before,
-  .analysis-panel::before {
-    top: -12px;
-    left: 15px;
-    font-size: 1.2rem;
-  }
-  
-  .hours-display {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .analysis-grid {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  
-  .analysis-item {
-    padding: 0.5rem 0.75rem;
-  }
-  
-  .section-subtitle {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-  
-  .section-subtitle small {
-    margin-left: 0;
-  }
-  
-  .hours-value {
-    font-size: 1.2rem;
-    padding: 0.2rem 0.5rem;
-  }
-  
-  .analysis-value {
-    font-size: 1rem;
-    padding: 0.2rem 0.4rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .machine-hours-section,
-  .analysis-panel {
-    padding: 0.75rem;
-    margin: 0.75rem 0;
-  }
-  
-  .hours-display {
-    gap: 0.25rem;
-  }
-  
-  .hours-value {
-    font-size: 1.1rem;
-    padding: 0.15rem 0.4rem;
-  }
-  
-  .analysis-grid {
-    gap: 0.5rem;
-  }
-  
-  .analysis-item {
-    padding: 0.4rem 0.6rem;
-    flex-direction: column;
-    gap: 0.25rem;
-    text-align: center;
-  }
-  
-  .analysis-value {
-    font-size: 0.95rem;
-    padding: 0.15rem 0.35rem;
-  }
-}
-
-/* =========== MEJORAS DE ACCESIBILIDAD =========== */
-.help-icon:focus {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
-}
-
-.hours-value:focus,
-.analysis-value:focus {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
-}
-
-/* =========== TEMA OSCURO (OPCIONAL) =========== */
-@media (prefers-color-scheme: dark) {
-  .machine-hours-section {
-    background: linear-gradient(135deg, #495057 0%, #6c757d 100%);
-    border-color: #6c757d;
-    color: white;
-  }
-  
-  .analysis-panel {
-    background: linear-gradient(135deg, #1a365d 0%, #2a4a6b 100%);
-    border-color: #4a90e2;
-    color: white;
-  }
-  
-  .calculated-hours {
-    background: linear-gradient(135deg, #1e3a28 0%, #2d5a3d 100%);
-    border-color: #4a7c59;
-    color: white;
-  }
-  
-  .analysis-item {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-  
-  .analysis-label {
-    color: #b3d9ff;
-  }
-  
-  .hours-label {
-    color: #90ee90;
-  }
-  
-  .section-subtitle {
-    color: #e9ecef;
+  .hours-value:hover {
+    transform: none;
   }
 }

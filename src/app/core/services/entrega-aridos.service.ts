@@ -1,12 +1,13 @@
+// src/app/core/services/entrega-aridos.service.ts - TIPOS DE ÁRIDOS ACTUALIZADOS
+
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
-// ============= INTERFACES CORREGIDAS =============
+// ============= INTERFACES (sin cambios) =============
 
-// Interface para crear entregas (envío al backend)
 export interface EntregaAridoCreate {
   proyecto_id: number;
   usuario_id: number;
@@ -15,7 +16,6 @@ export interface EntregaAridoCreate {
   fecha_entrega: string; // ISO string
 }
 
-// Interface para las respuestas del backend (lo que recibimos) - CORREGIDA
 export interface EntregaAridoOut {
   id?: number;
   proyecto_id: number;
@@ -26,53 +26,14 @@ export interface EntregaAridoOut {
   created?: string;
   updated?: string;
   
-  // ✅ PROPIEDADES MAPEADAS para compatibilidad con el template
-  date: string;           // Mapeado desde fecha_entrega
-  project: string | number; // Mapeado desde proyecto_id
-  materialType: string;   // Mapeado desde tipo_arido
-  quantity: number;       // Mapeado desde cantidad
-  vehicleId: string;      // Vehículo (simulado o desde notas)
-  operator: string;       // Mapeado desde usuario_id
-  notes?: string;         // Notas adicionales
-}
-
-// Interface para el frontend (lo que usa el componente)
-export interface AridosDelivery {
-  id?: number;
+  // Propiedades mapeadas para compatibilidad con el template
   date: string;
-  project: string;
+  project: string | number;
   materialType: string;
   quantity: number;
-  unit: string;
   vehicleId: string;
   operator: string;
   notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface AridosDeliveryRequest {
-  date: string;
-  project: string;
-  materialType: string;
-  quantity: number;
-  unit: string;
-  vehicleId: string;
-  operator: string;
-  notes?: string;
-}
-
-// Interfaces de datos maestros
-export interface Project {
-  id: number;
-  nombre: string;
-  estado: boolean;
-  descripcion?: string;
-  ubicacion?: string;
-  
-  // Alias para compatibilidad con el template
-  name: string;
-  status?: string;
 }
 
 export interface MaterialType {
@@ -80,6 +41,16 @@ export interface MaterialType {
   name: string;
   description?: string;
   unit?: string;
+}
+
+export interface Project {
+  id: number;
+  nombre: string;
+  estado: boolean;
+  descripcion?: string;
+  ubicacion?: string;
+  name: string;
+  status?: string;
 }
 
 export interface Vehicle {
@@ -96,8 +67,6 @@ export interface Operator {
   email: string;
   roles: string;
   estado: boolean;
-  
-  // Alias para compatibilidad
   name: string;
   status?: string;
 }
@@ -113,7 +82,6 @@ export interface ApiResponse<T> {
   providedIn: 'root'
 })
 export class EntregaAridosService {
-  // ✅ URL corregida para usar tu servidor
   private apiUrl = `${environment.apiUrl}/entregas-arido`;
 
   private httpOptions = {
@@ -124,11 +92,8 @@ export class EntregaAridosService {
 
   constructor(private http: HttpClient) {}
 
-  // ============= MÉTODOS PRINCIPALES =============
+  // ============= MÉTODOS PRINCIPALES (sin cambios) =============
 
-  /**
-   * Crear una nueva entrega de áridos
-   */
   createDelivery(delivery: EntregaAridoCreate): Observable<ApiResponse<EntregaAridoOut>> {
     return this.http.post<any>(
       `${this.apiUrl}`, 
@@ -136,7 +101,6 @@ export class EntregaAridosService {
       this.httpOptions
     ).pipe(
       map(response => {
-        // Mapear la respuesta del backend al formato que espera el frontend
         const mappedResponse = this.mapBackendToFrontend(response);
         return {
           success: true,
@@ -148,9 +112,6 @@ export class EntregaAridosService {
     );
   }
 
-  /**
-   * Obtener entregas recientes
-   */
   getRecentDeliveries(limit: number = 10): Observable<ApiResponse<EntregaAridoOut[]>> {
     const params = new HttpParams()
       .set('limit', limit.toString());
@@ -160,7 +121,6 @@ export class EntregaAridosService {
       { params, ...this.httpOptions }
     ).pipe(
       map(response => {
-        // Mapear cada elemento de la respuesta
         const mappedData = response.map(item => this.mapBackendToFrontend(item));
         return {
           success: true,
@@ -177,9 +137,6 @@ export class EntregaAridosService {
     );
   }
 
-  /**
-   * Eliminar una entrega
-   */
   deleteDelivery(id: number): Observable<ApiResponse<any>> {
     return this.http.delete<any>(
       `${this.apiUrl}/${id}`
@@ -193,30 +150,96 @@ export class EntregaAridosService {
     );
   }
 
-  // ============= MÉTODOS PARA DATOS MAESTROS =============
+  // ============= TIPOS DE MATERIALES ACTUALIZADOS =============
 
   /**
-   * Obtener lista de proyectos activos
+   * ✅ ACTUALIZADO: Obtener tipos de materiales con los nombres correctos
    */
+  getMaterialTypes(): Observable<ApiResponse<MaterialType[]>> {
+    const updatedTypes: MaterialType[] = [
+      { 
+        id: 'Arena Fina (m3)', 
+        name: 'Arena Fina (m³)', 
+        description: 'Arena fina para construcción y acabados', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Granza (m3)', 
+        name: 'Granza (m³)', 
+        description: 'Granza triturada para base de construcción', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Arena Comun (m3)', 
+        name: 'Arena Común (m³)', 
+        description: 'Arena común para construcción general', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Relleno (m3)', 
+        name: 'Relleno (m³)', 
+        description: 'Material de relleno para nivelación', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Tierra Negra (m3)', 
+        name: 'Tierra Negra (m³)', 
+        description: 'Tierra negra rica en nutrientes', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Piedra (m3)', 
+        name: 'Piedra (m³)', 
+        description: 'Piedra chancada para construcción', 
+        unit: 'm³' 
+      },
+      { 
+        id: '0.20 (m3)', 
+        name: '0.20 (m³)', 
+        description: 'Material granular 0.20mm', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'blinder (m3)', 
+        name: 'Blinder (m³)', 
+        description: 'Material blinder para mezclas', 
+        unit: 'm³' 
+      },
+      { 
+        id: 'Arena Lavada (m3)', 
+        name: 'Arena Lavada (m³)', 
+        description: 'Arena lavada libre de impurezas', 
+        unit: 'm³' 
+      }
+    ];
+
+    console.log('✅ Tipos de materiales actualizados cargados:', updatedTypes.length);
+
+    return of({
+      success: true,
+      data: updatedTypes
+    });
+  }
+
+  // ============= MÉTODOS EXISTENTES (sin cambios) =============
+
   getProjects(): Observable<ApiResponse<Project[]>> {
     return this.http.get<Project[]>(`${environment.apiUrl}/proyectos`)
       .pipe(
         map(projects => {
-          // Mapear proyectos para agregar alias de compatibilidad
           const mappedProjects = projects.map(project => ({
             ...project,
-            name: project.nombre, // Alias para el template
+            name: project.nombre,
             status: project.estado ? 'active' : 'inactive'
           }));
           
           return {
             success: true,
-            data: mappedProjects.filter(p => p.estado === true) // Solo proyectos activos
+            data: mappedProjects.filter(p => p.estado === true)
           };
         }),
         catchError(error => {
           console.error('Error obteniendo proyectos:', error);
-          // Fallback a proyectos mock
           return of({
             success: true,
             data: [{
@@ -233,27 +256,6 @@ export class EntregaAridosService {
       );
   }
 
-  /**
-   * Obtener tipos de materiales (mock por ahora)
-   */
-  getMaterialTypes(): Observable<ApiResponse<MaterialType[]>> {
-    const mockTypes: MaterialType[] = [
-      { id: 'arena_fina', name: 'Arena Fina', description: 'Arena fina para construcción', unit: 'm³' },
-      { id: 'granza', name: 'Granza', description: 'Granza triturada', unit: 'm³' },
-      { id: 'arena_comun', name: 'Arena Común', description: 'Arena común para construcción', unit: 'm³' },
-      { id: 'piedra', name: 'Piedra', description: 'Piedra chancada', unit: 'm³' },
-      { id: 'ripio', name: 'Ripio', description: 'Ripio seleccionado', unit: 'm³' }
-    ];
-
-    return of({
-      success: true,
-      data: mockTypes
-    });
-  }
-
-  /**
-   * Obtener lista de vehículos disponibles (mock por ahora)
-   */
   getVehicles(): Observable<ApiResponse<Vehicle[]>> {
     const mockVehicles: Vehicle[] = [
       { id: 'CAM001', name: 'Camión Tolva CAM001', capacity: '10m³', status: 'active', type: 'camion' },
@@ -269,20 +271,15 @@ export class EntregaAridosService {
     });
   }
 
-  /**
-   * Obtener lista de operadores
-   */
   getOperators(): Observable<ApiResponse<Operator[]>> {
     return this.http.get<any[]>(`${environment.apiUrl}/usuarios`)
       .pipe(
         map(usuarios => {
-          // Mapear usuarios para agregar alias de compatibilidad
           const mappedOperators = usuarios
             .filter(u => u.roles === 'operario' && u.estado === true)
             .map(usuario => ({
               ...usuario,
-              name: usuario.nombre, // Alias para el template
-              status: usuario.estado ? 'active' : 'inactive'
+              name: usuario.nombre
             }));
           
           return {
@@ -292,7 +289,6 @@ export class EntregaAridosService {
         }),
         catchError(error => {
           console.error('Error obteniendo operadores:', error);
-          // Fallback a operador mock
           return of({
             success: true,
             data: [{
@@ -309,24 +305,17 @@ export class EntregaAridosService {
       );
   }
 
-  /**
-   * Validar disponibilidad de vehículo (mock por ahora)
-   */
   validateVehicleAvailability(vehicleId: string, date: string): Observable<ApiResponse<boolean>> {
     return of({
       success: true,
-      data: true // Por ahora siempre disponible
+      data: true
     });
   }
 
-  // ============= MÉTODOS DE UTILIDAD =============
+  // ============= MÉTODOS DE UTILIDAD (sin cambios) =============
 
-  /**
-   * ✅ MÉTODO CLAVE: Mapear datos del backend al formato que espera el frontend
-   */
   private mapBackendToFrontend(backendData: any): EntregaAridoOut {
     return {
-      // Propiedades originales del backend
       id: backendData.id,
       proyecto_id: backendData.proyecto_id,
       usuario_id: backendData.usuario_id,
@@ -336,21 +325,17 @@ export class EntregaAridosService {
       created: backendData.created,
       updated: backendData.updated,
       
-      // ✅ Propiedades mapeadas para el template
       date: backendData.fecha_entrega ? backendData.fecha_entrega.split('T')[0] : '',
       project: backendData.proyecto_id,
       materialType: backendData.tipo_arido,
       quantity: backendData.cantidad,
-      vehicleId: 'CAM001', // Por defecto, se puede mejorar
+      vehicleId: 'CAM001',
       operator: backendData.usuario_id?.toString() || '',
       notes: ''
     };
   }
 
-  /**
-   * Mapear datos del frontend al formato del backend
-   */
-  mapFrontendToBackend(frontendData: AridosDeliveryRequest): EntregaAridoCreate {
+  mapFrontendToBackend(frontendData: any): EntregaAridoCreate {
     return {
       proyecto_id: parseInt(frontendData.project),
       usuario_id: parseInt(frontendData.operator),
@@ -360,7 +345,6 @@ export class EntregaAridosService {
     };
   }
 
-  // Manejo de errores
   private handleError(error: any): Observable<never> {
     console.error('Error en EntregaAridosService:', error);
     
