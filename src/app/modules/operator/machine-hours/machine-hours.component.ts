@@ -1,4 +1,4 @@
-// machine-hours.component.ts - VERSIÓN COMPLETA CON HORAS DE MÁQUINA
+// machine-hours.component.ts - VERSIÓN SIMPLIFICADA SIN CÁLCULOS COMPLEJOS
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -23,6 +23,7 @@ interface MachineWorkStatus {
   machineId: string;
   machineType: string;
   notes: string;
+  hourMeterStart: number; // ✅ SIMPLIFICADO: Solo horómetro inicial
 }
 
 interface CurrentOperator {
@@ -62,12 +63,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   // ✅ Flag para evitar restauración después de finalizar
   private isFinishing = false;
   
-  // 🆕 NUEVAS PROPIEDADES PARA HORAS DE MÁQUINA
+  // 🆕 SIMPLIFICADO: Solo horas operativas básicas
   operatingHours = 0;
-  efficiency = 0;
-  idleTime = 0;
-  fuelConsumption = 0;
-  showAnalysis = false;
   
   // Estado de trabajo de máquina activo
   activeMachineWork: MachineWorkStatus | null = null;
@@ -109,7 +106,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ INICIALIZAR FORMULARIO CON CAMPOS DE HORÓMETRO
+   * ✅ SIMPLIFICADO: Inicializar formulario solo con campos esenciales
    */
   private initializeForm(): void {
     const today = new Date().toISOString().split('T')[0];
@@ -121,18 +118,17 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       machineId: ['', [Validators.required]],
       notes: [''],
       
-      // 🆕 NUEVOS CAMPOS PARA HORAS DE MÁQUINA
+      // 🆕 SIMPLIFICADO: Solo horómetro inicial y final
       hourMeterStart: ['', [Validators.required, Validators.min(0)]],
-      hourMeterEnd: ['', [Validators.min(0)]],
-      fuelLevel: ['']
+      hourMeterEnd: ['', [Validators.min(0)]]
     }, {
-      // 🆕 VALIDADOR PERSONALIZADO
+      // ✅ Validador simple para horómetro
       validators: [this.hourMeterValidator]
     });
   }
 
   /**
-   * ✅ CORREGIDO: Cargar operador actual
+   * ✅ Cargar operador actual
    */
   private loadCurrentOperator(): void {
     const user: Usuario | null = this.authService.getCurrentUser();
@@ -159,12 +155,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CORREGIDO: Verificar trabajo activo - CON PROTECCIÓN
+   * ✅ Verificar trabajo activo
    */
   private checkForActiveMachineWork(): void {
     console.log('🔍 Verificando trabajo activo...');
     
-    // ✅ Si estamos finalizando, NO restaurar
     if (this.isFinishing) {
       console.log('⚠️ Proceso de finalización en curso - saltando restauración');
       return;
@@ -177,7 +172,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         
         console.log('📋 Datos encontrados en localStorage:', parsed);
         
-        // ✅ Restaurar estado
         this.activeMachineWork = parsed;
         this.startTime = new Date(parsed.startTimestamp);
         this.isTimerActive = true;
@@ -186,12 +180,14 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         this.machineHoursForm.patchValue({
           project: parsed.project,
           machineId: parsed.machineId,
-          notes: parsed.notes
+          notes: parsed.notes,
+          hourMeterStart: parsed.hourMeterStart
         });
         
         // Deshabilitar campos
         this.machineHoursForm.get('project')?.disable();
         this.machineHoursForm.get('machineId')?.disable();
+        this.machineHoursForm.get('hourMeterStart')?.disable(); // ✅ También deshabilitar horómetro inicial
         
         console.log('✅ Trabajo activo restaurado');
         return;
@@ -234,7 +230,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CORREGIDO: Iniciar nuevo trabajo CON VALIDACIÓN DE HORÓMETRO
+   * ✅ Iniciar nuevo trabajo - SIMPLIFICADO
    */
   startTimer(): void {
     console.log('🚀 Iniciando nuevo trabajo...');
@@ -246,10 +242,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const formValues = this.machineHoursForm.value;
     console.log('📋 Valores del formulario:', formValues);
     
-    // ✅ RESETEAR flags
     this.isFinishing = false;
     
-    // ✅ Establecer estado
     this.startTime = new Date();
     this.isTimerActive = true;
     this.elapsedHours = 0;
@@ -258,7 +252,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.success = false;
 
-    // ✅ Crear estado de trabajo
+    // ✅ SIMPLIFICADO: Estado de trabajo con horómetro inicial
     this.activeMachineWork = {
       isActive: true,
       startTime: this.extractTime(this.startTime.toISOString()),
@@ -267,23 +261,24 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       project: formValues.project,
       machineId: formValues.machineId,
       machineType: 'excavadora',
-      notes: formValues.notes || ''
+      notes: formValues.notes || '',
+      hourMeterStart: parseFloat(formValues.hourMeterStart) // ✅ Guardar horómetro inicial
     };
 
     console.log('✅ Estado de trabajo creado:', this.activeMachineWork);
 
-    // ✅ Guardar en localStorage
     localStorage.setItem(this.MACHINE_WORK_KEY, JSON.stringify(this.activeMachineWork));
 
-    // ✅ Deshabilitar campos
+    // Deshabilitar campos
     this.machineHoursForm.get('project')?.disable();
     this.machineHoursForm.get('machineId')?.disable();
+    this.machineHoursForm.get('hourMeterStart')?.disable(); // ✅ Deshabilitar horómetro inicial
 
     console.log('✅ Trabajo iniciado correctamente');
   }
 
   /**
-   * ✅ CORREGIDO: Finalizar trabajo CON VALIDACIÓN DE HORÓMETRO
+   * ✅ SIMPLIFICADO: Finalizar trabajo solo validando horómetro final
    */
   stopTimer(): void {
     console.log('🛑 FINALIZANDO TRABAJO - INICIO DEL PROCESO');
@@ -293,40 +288,33 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // 🆕 VALIDAR HORÓMETRO FINAL
+    // ✅ SIMPLIFICADO: Solo validar horómetro final
     const hourMeterEnd = this.machineHoursForm.get('hourMeterEnd')?.value;
     if (!hourMeterEnd || hourMeterEnd <= 0) {
       this.error = 'Debe ingresar la lectura final del horómetro antes de finalizar';
       return;
     }
 
-    // 🆕 VALIDAR QUE HORÓMETRO FINAL SEA MAYOR AL INICIAL
-    const hourMeterStart = this.machineHoursForm.get('hourMeterStart')?.value;
+    const hourMeterStart = this.activeMachineWork.hourMeterStart;
     if (hourMeterEnd <= hourMeterStart) {
       this.error = 'El horómetro final debe ser mayor al inicial';
       return;
     }
 
-    // 🆕 CALCULAR HORAS OPERATIVAS ANTES DE FINALIZAR
-    this.calculateOperatingHours();
+    // ✅ SIMPLIFICADO: Calcular solo horas operativas
+    this.operatingHours = hourMeterEnd - hourMeterStart;
 
-    // ✅ CRÍTICO: Marcar que estamos finalizando PRIMERO
     this.isFinishing = true;
-    
-    // ✅ CRÍTICO: DETENER TIMER INMEDIATAMENTE
     this.isTimerActive = false;
-    
-    // ✅ CRÍTICO: LIMPIAR LOCALSTORAGE INMEDIATAMENTE
     localStorage.removeItem(this.MACHINE_WORK_KEY);
     
     console.log('✅ Timer detenido y localStorage limpiado');
     
-    // ✅ Guardar en backend
     this.saveToBackend();
   }
 
   /**
-   * ✅ CORREGIDO: Guardar en backend CON DATOS DE HORÓMETRO
+   * ✅ SIMPLIFICADO: Guardar en backend solo con datos básicos
    */
   private saveToBackend(): void {
     console.log('💾 Guardando en backend...');
@@ -342,44 +330,34 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const endTime = new Date();
     const startHour = this.getDecimalHours(this.startTime);
     const endHour = this.getDecimalHours(endTime);
-    const totalHours = Math.round(endHour - startHour); // ✅ REDONDEAR A ENTERO
+    const totalHours = Math.round(endHour - startHour);
     
-    // 🆕 OBTENER DATOS DEL HORÓMETRO
-    const hourMeterStart = this.machineHoursForm.get('hourMeterStart')?.value;
     const hourMeterEnd = this.machineHoursForm.get('hourMeterEnd')?.value;
-    const fuelLevel = this.machineHoursForm.get('fuelLevel')?.value;
 
-    // 🆕 CREAR OBJETO CON DATOS DEL HORÓMETRO PARA NOTAS
+    // ✅ SIMPLIFICADO: Datos básicos para el backend
     const notasConDatos = {
       notas_usuario: this.activeMachineWork.notes || '',
       horometro: {
-        inicial: hourMeterStart || 0,
-        final: hourMeterEnd || 0,
-        operacion: this.operatingHours,
-        eficiencia: this.efficiency,
-        tiempo_inactivo: this.idleTime,
-        combustible: fuelLevel || null,
-        consumo_estimado: this.fuelConsumption
+        inicial: this.activeMachineWork.hourMeterStart,
+        final: hourMeterEnd,
+        operacion: this.operatingHours
       },
       timestamp: new Date().toISOString()
     };
     
-    // ✅ DATOS CORREGIDOS para el backend
     const machineHoursData = {
       date: new Date().toISOString().split('T')[0],
       machineType: this.activeMachineWork.machineType,
       machineId: this.activeMachineWork.machineId,
       startHour: startHour,
       endHour: endHour,
-      totalHours: Math.max(1, totalHours), // ✅ Mínimo 1 hora
+      totalHours: Math.max(1, totalHours),
       project: this.activeMachineWork.project,
       operator: this.currentOperator.id.toString(),
-      
-      // 🆕 DATOS DEL HORÓMETRO EN NOTAS COMO JSON
       notes: JSON.stringify(notasConDatos)
     };
 
-    console.log('📤 Datos para backend (CON HORÓMETRO):', machineHoursData);
+    console.log('📤 Datos para backend (SIMPLIFICADOS):', machineHoursData);
 
     this.machineHoursService.createMachineHours(machineHoursData)
       .pipe(takeUntil(this.destroy$))
@@ -401,63 +379,51 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
             this.error = (response && response.message) || 'Error al guardar';
           }
           
-          // ✅ SIEMPRE completar finalización
           this.completeFinalization();
         },
         error: (error) => {
           console.error('❌ Error en petición backend:', error);
           this.loading = false;
           this.error = error.message || 'Error al guardar el registro';
-          
-          // ✅ SIEMPRE completar finalización
           this.completeFinalization();
         }
       });
   }
 
   /**
-   * ✅ CORREGIDO: Completar finalización - LIMPIAR TODO
+   * ✅ SIMPLIFICADO: Completar finalización - limpiar estado
    */
   private completeFinalization(): void {
     console.log('🧹 Completando finalización - limpieza final');
     
-    // ✅ Limpiar TODA la información de estado
     this.activeMachineWork = null;
     this.isTimerActive = false;
     this.startTime = null;
     this.elapsedHours = 0;
     this.elapsedMinutes = 0;
     this.elapsedSeconds = 0;
-    this.isFinishing = false; // ✅ CRÍTICO: Resetear flag
-    
-    // 🆕 LIMPIAR DATOS DE HORÓMETRO
+    this.isFinishing = false;
     this.operatingHours = 0;
-    this.efficiency = 0;
-    this.idleTime = 0;
-    this.fuelConsumption = 0;
-    this.showAnalysis = false;
     
-    // ✅ Rehabilitar formulario
+    // Rehabilitar formulario
     this.machineHoursForm.get('project')?.enable();
     this.machineHoursForm.get('machineId')?.enable();
+    this.machineHoursForm.get('hourMeterStart')?.enable();
     
-    // ✅ Resetear formulario
+    // Resetear formulario
     this.machineHoursForm.reset({
       date: new Date().toISOString().split('T')[0],
       project: '',
       machineId: '',
       notes: '',
       hourMeterStart: '',
-      hourMeterEnd: '',
-      fuelLevel: ''
+      hourMeterEnd: ''
     });
     
     this.submitted = false;
-    
-    // ✅ CRÍTICO: Asegurar que localStorage esté limpio
     localStorage.removeItem(this.MACHINE_WORK_KEY);
     
-    console.log('✅ Finalización completada - estado limpio y listo para nuevo trabajo');
+    console.log('✅ Finalización completada - estado limpio');
   }
 
   /**
@@ -470,30 +436,47 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     }
     
     console.log('🔄 Reset manual');
-    
-    // ✅ Marcar como finalizando para evitar restauración
     this.isFinishing = true;
-    
-    // 🆕 LIMPIAR DATOS DE HORÓMETRO
     this.operatingHours = 0;
-    this.efficiency = 0;
-    this.idleTime = 0;
-    this.fuelConsumption = 0;
-    this.showAnalysis = false;
     
-    // Resetear también los campos del formulario de horómetro
     this.machineHoursForm.patchValue({
       hourMeterStart: '',
-      hourMeterEnd: '',
-      fuelLevel: ''
+      hourMeterEnd: ''
     });
     
-    // ✅ Limpiar completamente
     this.completeFinalization();
   }
 
   /**
-   * ✅ CORREGIDO: Convertir Date a horas decimales
+   * ✅ SIMPLIFICADO: Calcular horas operativas automáticamente
+   */
+  calculateOperatingHours(): void {
+    const start = this.activeMachineWork?.hourMeterStart;
+    const end = this.machineHoursForm.get('hourMeterEnd')?.value;
+    
+    if (start && end && parseFloat(end) > start) {
+      this.operatingHours = parseFloat(end) - start;
+      console.log('✅ Horas operativas calculadas:', this.operatingHours);
+    } else {
+      this.operatingHours = 0;
+    }
+  }
+
+  /**
+   * ✅ SIMPLIFICADO: Validador solo para horómetro
+   */
+  private hourMeterValidator(formGroup: FormGroup) {
+    const start = formGroup.get('hourMeterStart')?.value;
+    const end = formGroup.get('hourMeterEnd')?.value;
+    
+    if (start && end && parseFloat(end) <= parseFloat(start)) {
+      return { invalidHourMeter: true };
+    }
+    return null;
+  }
+
+  /**
+   * Convertir Date a horas decimales
    */
   private getDecimalHours(date: Date): number {
     return date.getHours() + (date.getMinutes() / 60) + (date.getSeconds() / 3600);
@@ -509,19 +492,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ============ MÉTODOS DE UTILIDAD Y CONFIGURACIÓN ============
+  // ============ MÉTODOS DE CARGA DE DATOS ============
 
-  setupMobileTable(): void {
-    // Implementación futura para tabla responsiva
-  }
-  
-  get f() { 
-    return this.machineHoursForm.controls; 
-  }
-  
-  /**
-   * ✅ CORREGIDO: Cargar datos maestros
-   */
   loadMasterData(): void {
     this.loadingMasterData = true;
     console.log('📡 Cargando datos maestros...');
@@ -556,9 +528,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     });
   }
   
-  /**
-   * ✅ CORREGIDO: Cargar registros recientes CON DATOS DE HORÓMETRO
-   */
   loadRecentRecords(): void {
     console.log('📡 Cargando registros recientes...');
     
@@ -594,8 +563,12 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   onMachineChange(): void {
     // Implementar lógica si es necesario
   }
-  
+
   // ============ MÉTODOS DE UTILIDAD ============
+  
+  get f() { 
+    return this.machineHoursForm.controls; 
+  }
   
   getProjectName(projectId: string | number): string {
     if (!projectId) return 'Sin proyecto';
@@ -690,7 +663,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CORREGIDO: Verificar si se puede iniciar timer CON VALIDACIÓN DE HORÓMETRO
+   * ✅ SIMPLIFICADO: Verificar si se puede iniciar timer
    */
   canStartTimer(): boolean {
     if (this.isTimerActive || this.isFinishing) {
@@ -710,6 +683,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     
     const project = this.machineHoursForm.get('project')?.value;
     const machineId = this.machineHoursForm.get('machineId')?.value;
+    const hourMeterStart = this.machineHoursForm.get('hourMeterStart')?.value;
     
     if (!project) {
       this.error = 'Debe seleccionar un proyecto';
@@ -721,8 +695,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    // 🆕 VALIDAR HORÓMETRO INICIAL
-    const hourMeterStart = this.machineHoursForm.get('hourMeterStart')?.value;
     if (!hourMeterStart || hourMeterStart <= 0) {
       this.error = 'Debe ingresar la lectura inicial del horómetro';
       return false;
@@ -772,129 +744,4 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     );
     return machines.size;
   }
-
-  // ============ MÉTODOS NUEVOS PARA HORAS DE MÁQUINA ============
-
-  /**
-   * 🆕 VALIDADOR PERSONALIZADO PARA HORÓMETRO
-   */
-  private hourMeterValidator(formGroup: FormGroup) {
-    const start = formGroup.get('hourMeterStart')?.value;
-    const end = formGroup.get('hourMeterEnd')?.value;
-    
-    if (start && end && parseFloat(end) <= parseFloat(start)) {
-      return { invalidHourMeter: true };
-    }
-    return null;
-  }
-
-  /**
-   * 🆕 CALCULAR HORAS OPERATIVAS AUTOMÁTICAMENTE
-   */
-  calculateOperatingHours(): void {
-    const start = this.machineHoursForm.get('hourMeterStart')?.value;
-    const end = this.machineHoursForm.get('hourMeterEnd')?.value;
-    
-    if (start && end && parseFloat(end) > parseFloat(start)) {
-      this.operatingHours = parseFloat(end) - parseFloat(start);
-      this.calculateEfficiency();
-      this.showAnalysis = true;
-      console.log('✅ Horas operativas calculadas:', this.operatingHours);
-    } else {
-      this.operatingHours = 0;
-      this.showAnalysis = false;
-      this.efficiency = 0;
-      this.idleTime = 0;
-      this.fuelConsumption = 0;
-    }
-  }
-
-  /**
-   * 🆕 CALCULAR EFICIENCIA Y ANÁLISIS
-   */
-  private calculateEfficiency(): void {
-    // Obtener horas de trabajo del timer existente
-    const workHours = this.elapsedTimeDecimal || 8; // Usar tu lógica existente o default 8h
-    
-    if (workHours > 0 && this.operatingHours > 0) {
-      this.efficiency = Math.min(100, (this.operatingHours / workHours) * 100);
-      this.idleTime = Math.max(0, workHours - this.operatingHours);
-      
-      // Calcular consumo estimado (15L/hora operativa es un estimado)
-      this.fuelConsumption = this.operatingHours * 15;
-      
-      console.log('📊 Análisis calculado:', {
-        eficiencia: this.efficiency,
-        tiempoInactivo: this.idleTime,
-        consumo: this.fuelConsumption
-      });
-    }
-  }
-
-  /**
-   * 🆕 OBTENER CLASE CSS PARA EFICIENCIA
-   */
-  getEfficiencyClass(): string {
-    if (this.efficiency >= 80) return 'efficiency-excellent';
-    if (this.efficiency >= 60) return 'efficiency-good';
-    return 'efficiency-poor';
-  }
-
-  /**
-   * 🆕 OBTENER CLASE CSS PARA BADGE DE EFICIENCIA EN TABLA
-   */
-  getEfficiencyBadgeClass(efficiency: number): string {
-    if (!efficiency) return 'badge-secondary';
-    if (efficiency >= 80) return 'badge-success';
-    if (efficiency >= 60) return 'badge-warning';
-    return 'badge-danger';
-  }
-
-  /**
-   * 🆕 EXTRAER DATOS DEL HORÓMETRO DESDE NOTAS JSON
-   */
-  private extractHourMeterData(notes: string): any {
-    try {
-      if (notes) {
-        const notasJson = JSON.parse(notes);
-        return notasJson.horometro || {};
-      }
-    } catch (error) {
-      // Si no es JSON válido, ignorar
-    }
-    return {};
-  }
-
-  /**
-   * 🆕 MAPEAR REPORTE A MACHINE HOURS CON DATOS DEL HORÓMETRO
-   */
-  private mapReporteToMachineHours(reporte: any): MachineHours {
-    const fechaInicio = reporte.fecha_asignacion || reporte.fecha_inicio;
-    
-    // 🆕 EXTRAER DATOS DEL HORÓMETRO DESDE NOTAS
-    const horometroData = this.extractHourMeterData(reporte.notas || '');
-    
-    return {
-      id: reporte.id,
-      date: fechaInicio ? fechaInicio.split('T')[0] : new Date().toISOString().split('T')[0],
-      machineType: 'excavadora',
-      machineId: reporte.maquina_id?.toString() || '',
-      startHour: fechaInicio ? this.getDecimalHours(new Date(fechaInicio)) : 0,
-      endHour: fechaInicio ? this.getDecimalHours(new Date(fechaInicio)) + (reporte.horas_turno || 0) : 0,
-      totalHours: reporte.horas_turno || 0,
-      project: reporte.proyecto_id?.toString() || '',
-      operator: reporte.usuario_id?.toString() || '',
-      
-      // 🆕 DATOS DEL HORÓMETRO EXTRAÍDOS
-      hourMeterStart: horometroData.inicial || undefined,
-      hourMeterEnd: horometroData.final || undefined,
-      operatingHours: horometroData.operacion || undefined,
-      efficiency: horometroData.eficiencia || undefined,
-      idleTime: horometroData.tiempo_inactivo || undefined,
-      fuelLevel: horometroData.combustible || undefined,
-      
-      notes: reporte.notas || ''
-    } as MachineHours;
-  }
-  
 }
