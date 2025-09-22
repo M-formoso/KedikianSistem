@@ -1,12 +1,10 @@
-// src/app/core/services/jornada-laboral.service.ts - CORREGIDO PARA ERRORES DE VALIDACIÓN
+// jornada-laboral.service.ts - CORREGIDO
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map, retry, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
-
-// ===== INTERFACES PARA JORNADA LABORAL =====
 
 export interface JornadaLaboralCreate {
   usuario_id: number;
@@ -106,7 +104,7 @@ export class JornadaLaboralService {
   }
 
   /**
-   * ✅ CRÍTICO: Obtener primera máquina disponible para cumplir validaciones
+   * ✅ CORREGIDO: Obtener primera máquina disponible
    */
   private getFirstAvailableMachine(): Observable<number> {
     return this.http.get<any[]>(`${environment.apiUrl}/maquinas`, this.getHttpOptions()).pipe(
@@ -114,12 +112,10 @@ export class JornadaLaboralService {
         console.log('📋 Máquinas disponibles:', maquinas);
         
         if (!maquinas || maquinas.length === 0) {
-          // Si no hay máquinas, usamos un ID por defecto
           console.warn('⚠️ No hay máquinas disponibles, usando ID por defecto');
           return 1;
         }
         
-        // Usar la primera máquina activa
         const primeraMatera = maquinas.find(m => m.estado === true) || maquinas[0];
         const maquinaId = primeraMatera.id;
         
@@ -128,14 +124,13 @@ export class JornadaLaboralService {
       }),
       catchError(error => {
         console.warn('⚠️ Error obteniendo máquinas, usando ID por defecto:', error);
-        // En caso de error, usar máquina por defecto
         return [1];
       })
     );
   }
 
   /**
-   * ✅ CORREGIDO: Fichar entrada - Con todos los campos requeridos
+   * ✅ CORREGIDO: Fichar entrada
    */
   ficharEntrada(
     usuario_id: number, 
@@ -144,15 +139,14 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🚀 Iniciando fichaje para usuario ID:', usuario_id);
 
-    // Obtener máquina disponible
     return this.getFirstAvailableMachine().pipe(
       switchMap((maquinaId: number) => {
-        // Crear payload con TODOS los campos requeridos
+        // ✅ CORREGIDO: NO incluir 'id' en el payload de creación
         const payload = {
-          maquina_id: maquinaId,           // ✅ Campo requerido
-          usuario_id: usuario_id,          // ✅ Campo requerido
-          fecha_asignacion: new Date().toISOString(), // ✅ Campo requerido
-          horas_turno: 0                   // ✅ 0 = jornada activa
+          maquina_id: maquinaId,
+          usuario_id: usuario_id,
+          fecha_asignacion: new Date().toISOString(),
+          horas_turno: 0  // 0 = jornada activa
         };
 
         console.log('📤 Payload para fichaje entrada:', payload);
@@ -176,7 +170,7 @@ export class JornadaLaboralService {
   }
 
   /**
-   * ✅ CORREGIDO: Finalizar jornada laboral - Con cálculo dinámico de horas
+   * ✅ CRÍTICO: Finalizar jornada - CORREGIDO para NO incluir 'id'
    */
   finalizarJornada(
     jornada_id: number,
@@ -187,7 +181,7 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🛑 Finalizando jornada ID:', jornada_id);
 
-    // ✅ CRÍTICO: Obtener el reporte actual para calcular horas trabajadas
+    // Obtener el reporte actual para calcular horas trabajadas
     return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
       switchMap(reporteActual => {
         console.log('📋 Reporte actual:', reporteActual);
@@ -198,7 +192,7 @@ export class JornadaLaboralService {
         const diffMs = ahora.getTime() - fechaInicio.getTime();
         const horasTrabajadasDecimal = diffMs / (1000 * 60 * 60);
         
-        // ✅ Restar tiempo de descanso y redondear a entero
+        // Restar tiempo de descanso y redondear a entero
         const horasNetas = Math.max(1, horasTrabajadasDecimal - (tiempo_descanso / 60));
         const horasEntero = Math.round(horasNetas);
 
@@ -211,15 +205,16 @@ export class JornadaLaboralService {
           horasEntero
         });
 
-        // ✅ Payload con TODOS los campos necesarios
+        // ✅ CRÍTICO: Payload CORREGIDO - NO incluir 'id'
         const payload = {
-          maquina_id: reporteActual.maquina_id || 1,  // ✅ Mantener máquina original
-          usuario_id: reporteActual.usuario_id,        // ✅ Mantener usuario original
-          fecha_asignacion: reporteActual.fecha_asignacion, // ✅ Mantener fecha original
-          horas_turno: horasEntero                     // ✅ Horas calculadas dinámicamente
+          maquina_id: reporteActual.maquina_id || 1,
+          usuario_id: reporteActual.usuario_id,
+          fecha_asignacion: reporteActual.fecha_asignacion,
+          horas_turno: horasEntero
+          // ❌ NO incluir 'id': null o 'id': reporteActual.id
         };
 
-        console.log('📤 Payload para finalizar jornada:', payload);
+        console.log('📤 Payload CORREGIDO para finalizar jornada:', payload);
 
         return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
           retry(1),
@@ -239,12 +234,13 @@ export class JornadaLaboralService {
       catchError(error => {
         console.error('❌ Error obteniendo reporte actual:', error);
         
-        // ✅ FALLBACK: Si no podemos obtener el reporte, usar valores por defecto
+        // ✅ FALLBACK: Usar valores mínimos sin 'id'
         const payloadFallback = {
           maquina_id: 1,
           usuario_id: jornada_id, // Asumir que el ID de jornada corresponde al usuario
           fecha_asignacion: new Date().toISOString(),
-          horas_turno: 8 // 8 horas por defecto
+          horas_turno: 8
+          // ❌ NO incluir 'id'
         };
 
         console.log('⚠️ Usando payload de fallback:', payloadFallback);
@@ -274,12 +270,13 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
       switchMap(reporteActual => {
-        // Calcular horas con extras (ejemplo: 9 + 3 = 12)
+        // ✅ CORREGIDO: NO incluir 'id'
         const payload = {
           maquina_id: reporteActual.maquina_id || 1,
           usuario_id: reporteActual.usuario_id,
           fecha_asignacion: reporteActual.fecha_asignacion,
           horas_turno: 12 // Horas con extras
+          // ❌ NO incluir 'id'
         };
 
         return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
@@ -309,12 +306,13 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
       switchMap(reporteActual => {
-        // Finalizar con exactamente 9 horas
+        // ✅ CORREGIDO: NO incluir 'id'
         const payload = {
           maquina_id: reporteActual.maquina_id || 1,
           usuario_id: reporteActual.usuario_id,
           fecha_asignacion: reporteActual.fecha_asignacion,
           horas_turno: 9 // Exactamente 9 horas
+          // ❌ NO incluir 'id'
         };
 
         return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
@@ -334,7 +332,37 @@ export class JornadaLaboralService {
   }
 
   /**
-   * ✅ CORREGIDO: Obtener jornada activa de un usuario
+   * ✅ CORREGIDO: Actualizar estado
+   */
+  actualizarEstadoJornada(jornada_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
+    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
+      switchMap(reporteActual => {
+        // ✅ CORREGIDO: NO incluir 'id'
+        const payload = {
+          maquina_id: reporteActual.maquina_id || 1,
+          usuario_id: reporteActual.usuario_id,
+          fecha_asignacion: reporteActual.fecha_asignacion,
+          horas_turno: reporteActual.horas_turno
+          // ❌ NO incluir 'id'
+        };
+
+        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
+          map(response => {
+            const mappedResponse = this.mapReporteToJornada(response);
+            return {
+              success: true,
+              data: mappedResponse,
+              message: 'Estado actualizado correctamente'
+            } as ApiResponse<JornadaLaboralResponse>;
+          })
+        );
+      }),
+      catchError(this.handleError.bind(this))
+    );
+  }
+
+  /**
+   * ✅ CORREGIDO: Obtener jornada activa
    */
   obtenerJornadaActiva(usuario_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('📤 Consultando jornada activa para usuario:', usuario_id);
@@ -379,7 +407,7 @@ export class JornadaLaboralService {
   }
 
   /**
-   * ✅ NUEVO: Limpiar jornadas fantasma - Para resolver problemas de estado
+   * ✅ NUEVO: Limpiar jornadas fantasma
    */
   limpiarJornadasFantasma(usuario_id: number): Observable<void> {
     console.log('🧹 Limpiando jornadas fantasma para usuario:', usuario_id);
@@ -393,11 +421,13 @@ export class JornadaLaboralService {
 
         // Si hay reportes activos, finalizarlos automáticamente
         reportesActivos.forEach(reporte => {
+          // ✅ CORREGIDO: NO incluir 'id'
           const payload = {
             maquina_id: reporte.maquina_id || 1,
             usuario_id: reporte.usuario_id,
             fecha_asignacion: reporte.fecha_asignacion,
             horas_turno: 8 // Finalizar con 8 horas por defecto
+            // ❌ NO incluir 'id'
           };
 
           this.http.put(`${this.API_URL}/${reporte.id}`, payload, this.getHttpOptions()).subscribe({
@@ -415,9 +445,7 @@ export class JornadaLaboralService {
     );
   }
 
-  /**
-   * ✅ OTROS MÉTODOS (mantengo los existentes)
-   */
+  // ✅ Resto de métodos sin cambios...
   obtenerJornadasUsuario(
     usuario_id: number,
     limite: number = 10,
@@ -482,31 +510,6 @@ export class JornadaLaboralService {
     );
   }
 
-  actualizarEstadoJornada(jornada_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
-    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
-      switchMap(reporteActual => {
-        const payload = {
-          maquina_id: reporteActual.maquina_id || 1,
-          usuario_id: reporteActual.usuario_id,
-          fecha_asignacion: reporteActual.fecha_asignacion,
-          horas_turno: reporteActual.horas_turno
-        };
-
-        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
-          map(response => {
-            const mappedResponse = this.mapReporteToJornada(response);
-            return {
-              success: true,
-              data: mappedResponse,
-              message: 'Estado actualizado correctamente'
-            } as ApiResponse<JornadaLaboralResponse>;
-          })
-        );
-      }),
-      catchError(this.handleError.bind(this))
-    );
-  }
-
   /**
    * ✅ Mapear ReporteLaboral del backend a JornadaLaboralResponse
    */
@@ -551,7 +554,6 @@ export class JornadaLaboralService {
    * ✅ Verificar si necesita mostrar diálogo de horas extras
    */
   necesitaDialogoOvertimeEstatico(jornada: JornadaLaboralResponse): boolean {
-    // ✅ CORREGIDO: Lógica más simple para evitar bucles
     return false; // Deshabilitar temporalmente hasta que se corrijan los estados
   }
 
