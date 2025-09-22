@@ -88,43 +88,79 @@ export class ExpenseService {
 
   // ✅ MÉTODO PRINCIPAL COMPLETAMENTE CORREGIDO
   /**
-   * Crear un nuevo registro de gasto - USANDO FORMDATA como espera el backend
+   * ✅ CREAR GASTO - ENVIANDO FORMDATA COMO ESPERA EL BACKEND
+   * Esta es la única corrección que necesitas para que funcione
    */
-  createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-    console.log('📤 CreatingExpense con datos:', expense);
-    
-    // ✅ CRÍTICO: Crear FormData exactamente como espera tu backend
-    const formData = new FormData();
-    formData.append('usuario_id', expense.operator);
-    formData.append('maquina_id', '1'); // Por defecto, ajustar según necesidad
-    formData.append('tipo', expense.expenseType);
-    formData.append('importe_total', expense.amount.toString());
-    formData.append('fecha', expense.date);
-    formData.append('descripcion', expense.description || '');
-    
-    // ✅ CRÍTICO: No agregar Content-Type - FormData lo maneja automáticamente
-    const httpOptions = this.getHttpOptions();
-    
-    console.log('📤 FormData enviado al backend');
-    
-    return this.http.post<ExpenseRecord>(
-      this.apiUrl, 
-      formData,
-      httpOptions
-    ).pipe(
-      map(response => {
-        console.log('📥 Respuesta del backend:', response);
-        // Mapear la respuesta del backend al formato del frontend
-        const mappedResponse = this.mapBackendToFrontend(response);
-        return {
-          success: true,
-          data: mappedResponse,
-          message: 'Gasto registrado correctamente'
-        };
-      }),
-      catchError(this.handleError)
-    );
+  // ✅ VERSIÓN ULTRA SIMPLIFICADA PARA TESTING
+// Reemplaza TEMPORALMENTE tu método createExpense con este
+
+/**
+ * ✅ VERSIÓN DE PRUEBA SÚPER SIMPLE
+ */
+createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
+  console.log('🧪 === PRUEBA SIMPLE DE ENVÍO ===');
+  console.log('📤 Datos recibidos:', expense);
+  
+  // ✅ FormData básico y simple
+  const formData = new FormData();
+  formData.append('usuario_id', expense.operator);
+  formData.append('tipo', expense.expenseType);
+  formData.append('importe_total', expense.amount.toString());
+  formData.append('fecha', expense.date);
+  formData.append('descripcion', expense.description || 'Sin descripción');
+  
+  console.log('📋 FormData creado:');
+  for (let [key, value] of formData.entries()) {
+    console.log(`  ${key}: ${value}`);
   }
+  
+  // ✅ Headers mínimos - Solo lo esencial
+  const headers = new HttpHeaders();
+  // No agregar Content-Type - FormData lo maneja automáticamente
+  
+  // Obtener token si existe
+  const usuarioActual = localStorage.getItem('usuarioActual');
+  if (usuarioActual) {
+    try {
+      const usuario = JSON.parse(usuarioActual);
+      const token = usuario.access_token || usuario.token;
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+        console.log('🔐 Token agregado');
+      }
+    } catch (e) {
+      console.log('⚠️ No se pudo obtener token');
+    }
+  }
+  
+  console.log('📡 Enviando petición a:', this.apiUrl);
+  
+  // ✅ Petición HTTP simplificada al máximo
+  return this.http.post(this.apiUrl, formData, { headers }).pipe(
+    map((response: any) => {
+      console.log('✅ === RESPUESTA EXITOSA ===');
+      console.log('📥 Respuesta completa:', response);
+      
+      return {
+        success: true,
+        data: response, // Devolver tal como viene del backend
+        message: 'Gasto registrado correctamente'
+      };
+    }),
+    catchError((error: any) => {
+      console.error('❌ === ERROR COMPLETO ===');
+      console.error('🔍 Status:', error.status);
+      console.error('🔍 StatusText:', error.statusText);
+      console.error('🔍 URL:', error.url);
+      console.error('🔍 Error completo:', error);
+      console.error('🔍 Error.error:', error.error);
+      console.error('🔍 Error.message:', error.message);
+      
+      // Devolver error simplificado
+      return throwError(() => new Error(`Error ${error.status}: ${error.message || 'Error desconocido'}`));
+    })
+  );
+}
 
   /**
    * ✅ CORREGIDO: Obtener registros recientes
@@ -249,7 +285,25 @@ export class ExpenseService {
   // ============= MÉTODOS DE UTILIDAD =============
 
   /**
-   * ✅ CRÍTICO: Mapear respuesta del backend al formato del frontend
+   * ✅ OBTENER TOKEN DE AUTORIZACIÓN
+   */
+  private getAuthToken(): string {
+    const usuarioActual = localStorage.getItem('usuarioActual');
+    if (usuarioActual) {
+      try {
+        const usuario = JSON.parse(usuarioActual);
+        const token = usuario.access_token || usuario.token;
+        return token ? `Bearer ${token}` : '';
+      } catch {
+        console.error('❌ Error obteniendo token');
+        return '';
+      }
+    }
+    return '';
+  }
+
+  /**
+   * ✅ MAPEAR RESPUESTA DEL BACKEND AL FORMATO DEL FRONTEND
    */
   private mapBackendToFrontend(backendData: any): ExpenseRecord {
     return {
@@ -266,13 +320,33 @@ export class ExpenseService {
       updated: backendData.updated,
       
       // Propiedades mapeadas para el template
-      date: backendData.fecha ? backendData.fecha.split('T')[0] : '',
+      date: backendData.fecha ? backendData.fecha.split('T')[0] : new Date().toISOString().split('T')[0],
       expenseType: backendData.tipo,
       amount: backendData.importe_total,
       operator: backendData.usuario_id?.toString() || '',
       description: backendData.descripcion,
-      status: 'pending' // Estado por defecto
+      status: 'approved', // Estado por defecto
+      paymentMethod: this.extractPaymentMethodFromDescription(backendData.descripcion),
+      receiptNumber: this.extractReceiptNumberFromDescription(backendData.descripcion)
     };
+  }
+
+  /**
+   * ✅ EXTRAER MÉTODO DE PAGO DE LA DESCRIPCIÓN
+   */
+  private extractPaymentMethodFromDescription(descripcion: string): string {
+    if (!descripcion) return '';
+    const match = descripcion.match(/Método:\s*([^-]+)/);
+    return match ? match[1].trim() : '';
+  }
+
+  /**
+   * ✅ EXTRAER NÚMERO DE RECIBO DE LA DESCRIPCIÓN
+   */
+  private extractReceiptNumberFromDescription(descripcion: string): string {
+    if (!descripcion) return '';
+    const match = descripcion.match(/Recibo:\s*([^-]+)/);
+    return match ? match[1].trim() : '';
   }
 
   /**

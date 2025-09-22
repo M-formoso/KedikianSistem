@@ -469,4 +469,5 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   onReceiptNumberChange(): void {
     // Implementar validación si es necesario
   }
+  
 }
