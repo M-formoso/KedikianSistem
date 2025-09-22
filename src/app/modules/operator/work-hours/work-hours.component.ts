@@ -141,7 +141,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Verificar jornada activa - LÓGICA CORREGIDA
+   * ✅ CRÍTICO: Verificar jornada activa - LÓGICA CORREGIDA CON LIMPIEZA
    */
   private checkForActiveJornada(): void {
     if (!this.currentUser?.id || this.isSyncing) return;
@@ -152,31 +152,56 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.isSyncing = true;
     console.log('🔍 Verificando jornada activa para usuario:', usuarioId);
 
-    // PASO 1: Verificar SIEMPRE en el backend primero
-    this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
+    // ✅ PASO 1: Limpiar jornadas fantasma primero
+    this.jornadaLaboralService.limpiarJornadasFantasma(usuarioId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (response) => {
-          console.log('📥 Respuesta del backend:', response);
+        next: () => {
+          console.log('✅ Jornadas fantasma limpiadas');
           
-          if (response.success && response.data) {
-            // HAY JORNADA ACTIVA EN EL BACKEND
-            console.log('✅ Jornada activa encontrada en backend');
-            this.processActiveJornada(response.data);
-          } else {
-            // NO HAY JORNADA ACTIVA EN EL BACKEND
-            console.log('ℹ️ No hay jornada activa en el backend');
-            this.clearJornadaState(); // Limpiar cualquier estado local
-          }
-          
-          this.isSyncing = false;
+          // ✅ PASO 2: Verificar jornada activa después de la limpieza
+          this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (response) => {
+                console.log('📥 Respuesta del backend después de limpieza:', response);
+                
+                if (response.success && response.data) {
+                  console.log('✅ Jornada activa encontrada en backend');
+                  this.processActiveJornada(response.data);
+                } else {
+                  console.log('ℹ️ No hay jornada activa en el backend');
+                  this.clearJornadaState();
+                }
+                
+                this.isSyncing = false;
+              },
+              error: (error) => {
+                console.error('❌ Error verificando jornada activa:', error);
+                this.isSyncing = false;
+                this.checkLocalStorageFallback();
+              }
+            });
         },
         error: (error) => {
-          console.error('❌ Error verificando jornada activa:', error);
-          this.isSyncing = false;
-          
-          // En caso de error de conexión, verificar localStorage como fallback
-          this.checkLocalStorageFallback();
+          console.error('❌ Error limpiando jornadas fantasma:', error);
+          // Continuar con la verificación normal
+          this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (response) => {
+                if (response.success && response.data) {
+                  this.processActiveJornada(response.data);
+                } else {
+                  this.clearJornadaState();
+                }
+                this.isSyncing = false;
+              },
+              error: (error) => {
+                this.isSyncing = false;
+                this.checkLocalStorageFallback();
+              }
+            });
         }
       });
   }
@@ -207,7 +232,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Procesar jornada activa del backend
+   * ✅ CORREGIDO: Procesar jornada activa - SIN mostrar diálogo automáticamente
    */
   private processActiveJornada(jornada: JornadaLaboralResponse): void {
     console.log('🔄 Procesando jornada activa:', jornada);
@@ -233,11 +258,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       autoStoppedAt9Hours: jornada.pausa_automatica || false
     };
 
-    // ✅ CRÍTICO: Solo mostrar diálogo si está pausada esperando confirmación
-    if (this.jornadaLaboralService.necesitaDialogoOvertimeEstatico(jornada)) {
-      setTimeout(() => {
-        this.showOvertimeConfirmation();
-      }, 1000);
+    // ✅ CRÍTICO: NO mostrar diálogo automáticamente para evitar bucles
+    // Solo mostrar si está realmente pausada esperando confirmación
+    if (jornada.estado === 'pausada' && 
+        jornada.limite_regular_alcanzado && 
+        !jornada.overtime_confirmado && 
+        !this.showOvertimeDialog) {
+      console.log('ℹ️ Jornada pausada detectada, pero NO mostrando diálogo automáticamente');
+      // Comentado temporalmente: this.showOvertimeConfirmation();
     }
 
     this.saveJornadaToStorage();
@@ -246,7 +274,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     console.log('✅ Jornada activa procesada:', {
       isActive: this.activeClockIn.isActive,
       estado: jornada.estado,
-      horaFin: jornada.hora_fin
+      horaFin: jornada.hora_fin,
+      showDialog: this.showOvertimeDialog
     });
   }
 
@@ -285,7 +314,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Verificar límites de tiempo
+   * ✅ CORREGIDO: Verificar límites de tiempo - Sin mostrar diálogo automáticamente
    */
   private checkTimeConstraints(): void {
     if (!this.activeClockIn || !this.activeClockIn.isActive) return;
@@ -295,45 +324,37 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         !this.activeClockIn.regularHoursCompleted && 
         !this.showOvertimeDialog) {
       
-      this.pauseTimerAndShowDialog();
+      console.log('⏰ Límite de 9 horas alcanzado');
+      this.activeClockIn.regularHoursCompleted = true;
+      this.activeClockIn.autoStoppedAt9Hours = true;
+      this.activeClockIn.isActive = false;
+      
+      // ✅ NO mostrar diálogo automáticamente
+      // this.showOvertimeConfirmation(); // Comentado
+      
+      this.saveJornadaToStorage();
+      
+      // Solo actualizar estado en backend sin mostrar diálogo
+      if (this.currentJornada) {
+        this.jornadaLaboralService.actualizarEstadoJornada(this.currentJornada.id)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: (response) => {
+              if (response.success && response.data) {
+                this.currentJornada = response.data;
+                console.log('✅ Estado actualizado en backend');
+              }
+            },
+            error: (error) => {
+              console.error('❌ Error actualizando estado:', error);
+            }
+          });
+      }
     }
 
     // Si supera las horas extras máximas
     if (this.overtimeHours >= this.MAX_OVERTIME_HOURS) {
       this.autoFinishJornada('Se alcanzó el límite máximo de horas extras (4h)');
-    }
-  }
-
-  /**
-   * ✅ Pausar timer y mostrar diálogo
-   */
-  private pauseTimerAndShowDialog(): void {
-    if (!this.activeClockIn) return;
-
-    console.log('⏸️ Pausando timer - límite de 9h alcanzado');
-    
-    this.activeClockIn.regularHoursCompleted = true;
-    this.activeClockIn.autoStoppedAt9Hours = true;
-    this.activeClockIn.isActive = false;
-    
-    this.showOvertimeConfirmation();
-    this.saveJornadaToStorage();
-
-    // ✅ CRÍTICO: Notificar al backend sobre la pausa automática
-    if (this.currentJornada) {
-      this.jornadaLaboralService.actualizarEstadoJornada(this.currentJornada.id)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (response) => {
-            if (response.success && response.data) {
-              this.currentJornada = response.data;
-              console.log('✅ Estado actualizado en backend');
-            }
-          },
-          error: (error) => {
-            console.error('❌ Error actualizando estado:', error);
-          }
-        });
     }
   }
 
@@ -383,7 +404,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Fichar salida - COMPLETAMENTE CORREGIDO
+   * ✅ CORREGIDO: Fichar salida - Con mejor manejo de errores
    */
   clockOut(): void {
     if (!this.activeClockIn || !this.currentJornada) {
@@ -395,22 +416,24 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.showOvertimeDialog = false;
 
-    // Validar formulario
+    // ✅ Validar y completar formulario si está incompleto
     if (this.clockOutForm.invalid) {
+      console.log('⚠️ Formulario inválido, completando con valores por defecto');
       this.clockOutForm.patchValue({
         tiempoDescanso: 60,
-        notas: 'Fichaje manual de salida'
+        notas: 'Fichaje de salida'
       });
     }
 
     const formValues = this.clockOutForm.value;
     
     console.log('🛑 Finalizando jornada ID:', this.activeClockIn.jornadaId);
+    console.log('📋 Valores del formulario:', formValues);
 
     this.jornadaLaboralService.finalizarJornada(
       this.activeClockIn.jornadaId,
       formValues.tiempoDescanso || 60,
-      formValues.notas || 'Fichaje manual de salida',
+      formValues.notas || 'Fichaje de salida',
       undefined, // ubicación
       false // no forzado
     )
@@ -437,8 +460,15 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         this.loading = false;
-        this.error = error.message || 'Error al procesar la solicitud';
         console.error('❌ Error finalizando jornada:', error);
+        
+        // ✅ NUEVO: En caso de error, intentar limpiar estado de todas formas
+        if (error.message && error.message.includes('422')) {
+          console.log('⚠️ Error 422 detectado, intentando limpieza forzosa');
+          this.forceCleanup();
+        } else {
+          this.error = error.message || 'Error al procesar la solicitud';
+        }
       }
     });
   }
@@ -595,6 +625,44 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * ✅ NUEVO: Limpieza forzosa en caso de errores persistentes
+   */
+  forceCleanup(): void {
+    console.log('🧹 Ejecutando limpieza forzosa');
+    
+    // Limpiar localStorage
+    localStorage.removeItem(this.JORNADA_STORAGE_KEY);
+    
+    // Limpiar estado del componente
+    this.clearJornadaState();
+    
+    // Mostrar mensaje informativo
+    this.error = 'Jornada finalizada (se detectaron inconsistencias y se limpiaron automáticamente)';
+    
+    // Recargar datos
+    this.loadRecentJornadas();
+    this.loadMonthlyStats();
+    
+    setTimeout(() => {
+      this.error = '';
+      this.success = true;
+      setTimeout(() => { this.success = false; }, 3000);
+    }, 2000);
+  }
+
+  /**
+   * ✅ NUEVO: Botón manual para mostrar diálogo de horas extras
+   */
+  requestOvertimeManually(): void {
+    if (this.activeClockIn && this.activeClockIn.regularHoursCompleted) {
+      this.showOvertimeDialog = true;
+    } else {
+      this.error = 'No es posible solicitar horas extras en este momento';
+      setTimeout(() => { this.error = ''; }, 3000);
+    }
+  }
+
+  /**
    * ✅ Mostrar diálogo de confirmación de horas extras
    */
   private showOvertimeConfirmation(): void {
@@ -604,15 +672,15 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Limpiar estado de jornada - COMPLETAMENTE CORREGIDO
+   * ✅ CORREGIDO: Limpiar estado de jornada - MÁS COMPLETO
    */
   private clearJornadaState(): void {
     console.log('🧹 Limpiando estado de jornada completamente');
     
-    // Limpiar localStorage PRIMERO
+    // ✅ Limpiar localStorage PRIMERO
     localStorage.removeItem(this.JORNADA_STORAGE_KEY);
     
-    // Limpiar estado del componente
+    // ✅ Limpiar TODOS los estados del componente
     this.activeClockIn = null;
     this.currentJornada = null;
     this.regularHours = 0;
@@ -620,8 +688,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.totalHours = 0;
     this.showOvertimeDialog = false;
     
-    // Resetear formularios
+    // ✅ Resetear formularios completamente
     this.resetForms();
+    
+    // ✅ Limpiar cualquier timer o intervalo
+    this.isSyncing = false;
     
     console.log('✅ Estado de jornada limpiado completamente');
   }

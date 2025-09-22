@@ -15,6 +15,14 @@
   
   <div *ngIf="error" class="alert alert-danger">
     ❌ {{ error }}
+    <!-- ✅ NUEVO: Botón de limpieza para errores 422 -->
+    <button type="button" 
+            class="btn btn-sm btn-outline-danger" 
+            (click)="forceCleanup()"
+            *ngIf="error.includes('422') || error.includes('validación')"
+            style="margin-left: 10px;">
+      🧹 Limpiar Estado
+    </button>
   </div>
 
   <!-- ✅ CORREGIDO: Diálogo de confirmación de horas extras -->
@@ -168,6 +176,17 @@
       </div>
     </div>
     
+    <!-- ✅ NUEVO: Información para jornada pausada -->
+    <div class="info-panel" *ngIf="activeClockIn && activeClockIn.regularHoursCompleted && !isInOvertimeMode">
+      <h4>⏰ Jornada Regular Completada</h4>
+      <ul class="info-list">
+        <li>Has completado 9 horas de trabajo regular</li>
+        <li>Puedes <strong>finalizar tu jornada</strong> ahora</li>
+        <li>O puedes <strong>solicitar horas extras</strong> si necesitas continuar</li>
+        <li>Las horas extras tienen un máximo de 4 horas adicionales</li>
+      </ul>
+    </div>
+    
     <form [formGroup]="clockOutForm" (ngSubmit)="clockOut()">
       <div class="form-compact">
         <div class="form-group">
@@ -212,6 +231,16 @@
           </span>
         </button>
 
+        <!-- ✅ NUEVO: Botón manual para solicitar horas extras -->
+        <button type="button" 
+                class="btn btn-warning"
+                (click)="requestOvertimeManually()"
+                [disabled]="!activeClockIn || !activeClockIn.regularHoursCompleted || showOvertimeDialog || loading"
+                *ngIf="activeClockIn && activeClockIn.regularHoursCompleted && !isInOvertimeMode && !showOvertimeDialog"
+                title="Solicitar horas extras manualmente">
+          🕐 Solicitar Horas Extras
+        </button>
+
         <!-- ✅ CORREGIDO: Botón de finalización forzosa (solo en casos especiales) -->
         <button type="button" 
                 class="btn btn-warning btn-force-finish"
@@ -220,6 +249,16 @@
                 *ngIf="activeClockIn && activeClockIn.isActive && !showOvertimeDialog"
                 title="Usar solo en emergencias">
           🚨 Finalizar Forzosamente
+        </button>
+
+        <!-- ✅ NUEVO: Botón de limpieza forzosa (solo para errores persistentes) -->
+        <button type="button" 
+                class="btn btn-outline-danger btn-sm"
+                (click)="forceCleanup()"
+                [disabled]="loading"
+                *ngIf="activeClockIn && error && error.includes('422')"
+                title="Usar solo si hay problemas persistentes">
+          🧹 Limpiar Estado
         </button>
       </div>
     </form>
