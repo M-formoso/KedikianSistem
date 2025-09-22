@@ -1,4 +1,4 @@
-<!-- work-hours.component.html - COMPLETAMENTE CORREGIDO SIN ERRORES -->
+<!-- work-hours.component.html - CORREGIDO COMPLETAMENTE -->
 
 <div class="work-hours-container">
   <h2 class="page-title">Registro de Jornada Laboral</h2>
@@ -15,22 +15,23 @@
   
   <div *ngIf="error" class="alert alert-danger">
     ❌ {{ error }}
-    <!-- ✅ NUEVO: Botón de limpieza para errores 422 -->
+    <!-- ✅ Botón de limpieza para errores persistentes -->
     <button type="button" 
             class="btn btn-sm btn-outline-danger" 
             (click)="forceCleanup()"
-            *ngIf="error.includes('422') || error.includes('validación')"
+            *ngIf="error.includes('422') || error.includes('validación') || error.includes('inconsistencias')"
             style="margin-left: 10px;">
       🧹 Limpiar Estado
     </button>
   </div>
 
-  <!-- ✅ CORREGIDO: Diálogo de confirmación de horas extras -->
-  <div *ngIf="showOvertimeDialog" class="alert alert-warning overtime-dialog">
+  <!-- ✅ CRÍTICO: Diálogo de confirmación de horas extras -->
+  <div *ngIf="showOvertimeDialog" class="overtime-dialog">
     <div class="overtime-content">
       <h4>🕘 Límite de 9 horas alcanzado</h4>
       <p>Has completado tu jornada laboral regular de 9 horas.</p>
       <p><strong>¿Deseas continuar con horas extras?</strong></p>
+      <p><small>Si no decides en 10 minutos, la jornada se finalizará automáticamente.</small></p>
       <div class="overtime-buttons">
         <button class="btn btn-primary" (click)="confirmOvertime()" [disabled]="loading">
           ✅ Sí, continuar con horas extras
@@ -45,17 +46,15 @@
     </div>
   </div>
 
-  <!-- Alerta de límite de horas regulares -->
+  <!-- Alertas de estado de trabajo -->
   <div *ngIf="activeClockIn && isNearingLimit() && !isInOvertimeMode" class="alert alert-warning">
     ⚠️ Atención: Se acerca el límite de 9 horas de jornada laboral
   </div>
 
-  <!-- Alerta de horas extras -->
-  <div *ngIf="activeClockIn && isInOvertimeMode && isNearingLimit()" class="alert alert-danger">
-    🚨 Atención: Se acerca el límite de horas extras (4h)
+  <div *ngIf="activeClockIn && isInOvertimeMode && isNearingLimit()" class="alert alert-warning">
+    ⚠️ Atención: Se acerca el límite de horas extras (4h máximo)
   </div>
 
-  <!-- Alerta de límite superado -->
   <div *ngIf="activeClockIn && hasExceededLimit()" class="alert alert-danger">
     🚨 Límite máximo alcanzado. La jornada se finalizará automáticamente.
   </div>
@@ -98,7 +97,7 @@
   <div class="form-card active-work-day" *ngIf="activeClockIn" 
        [ngClass]="getWorkStatusClass()">
     
-    <!-- ✅ CORREGIDO: Header con estado actual -->
+    <!-- ✅ Header con estado actual -->
     <div class="work-status-header">
       <h3 class="form-title">
         {{ getCurrentWorkStatus() }}
@@ -117,7 +116,7 @@
           <span class="info-value">{{ activeClockIn.startTime }}</span>
         </div>
         
-        <!-- ✅ CORREGIDO: Mostrar tiempo separado por regular/extras -->
+        <!-- ✅ Mostrar tiempo separado por regular/extras -->
         <div class="active-info-item" *ngIf="!isInOvertimeMode">
           <span class="info-label">Tiempo regular:</span>
           <span class="info-value" [ngClass]="{'text-warning': isNearingLimit(), 'text-danger': hasExceededLimit()}">
@@ -145,7 +144,7 @@
         </div>
       </div>
 
-      <!-- ✅ CORREGIDO: Barra de progreso con modo horas extras -->
+      <!-- ✅ Barra de progreso con modo horas extras -->
       <div class="progress-container">
         <div class="progress-bar">
           <div class="progress-fill" 
@@ -163,7 +162,7 @@
         </span>
       </div>
 
-      <!-- ✅ CORREGIDO: Indicador visual de horas extras -->
+      <!-- ✅ Indicador visual de horas extras -->
       <div class="overtime-indicator" *ngIf="isInOvertimeMode">
         <div class="overtime-badge">
           <span class="overtime-icon">🕐</span>
@@ -176,7 +175,7 @@
       </div>
     </div>
     
-    <!-- ✅ NUEVO: Información para jornada pausada -->
+    <!-- ✅ Información para jornada pausada -->
     <div class="info-panel" *ngIf="activeClockIn && activeClockIn.regularHoursCompleted && !isInOvertimeMode">
       <h4>⏰ Jornada Regular Completada</h4>
       <ul class="info-list">
@@ -184,6 +183,7 @@
         <li>Puedes <strong>finalizar tu jornada</strong> ahora</li>
         <li>O puedes <strong>solicitar horas extras</strong> si necesitas continuar</li>
         <li>Las horas extras tienen un máximo de 4 horas adicionales</li>
+        <li><strong>¡Importante!</strong> Si no decides en 10 minutos, se finalizará automáticamente</li>
       </ul>
     </div>
     
@@ -222,7 +222,7 @@
         <!-- ✅ Botón principal de finalizar -->
         <button type="submit" 
                 class="btn btn-danger btn-finish-work"
-                [disabled]="!canClockOut()"
+                [disabled]="!canClockOut() || showOvertimeDialog"
                 *ngIf="!showOvertimeDialog">
           <span *ngIf="loading">⏳ Procesando...</span>
           <span *ngIf="!loading">
@@ -231,32 +231,32 @@
           </span>
         </button>
 
-        <!-- ✅ NUEVO: Botón manual para solicitar horas extras -->
+        <!-- ✅ Botón manual para solicitar horas extras -->
         <button type="button" 
                 class="btn btn-warning"
                 (click)="requestOvertimeManually()"
-                [disabled]="!activeClockIn || !activeClockIn.regularHoursCompleted || showOvertimeDialog || loading"
-                *ngIf="activeClockIn && activeClockIn.regularHoursCompleted && !isInOvertimeMode && !showOvertimeDialog"
+                [disabled]="!activeClockIn || !activeClockIn.regularHoursCompleted || showOvertimeDialog || loading || hasShownOvertimeDialog"
+                *ngIf="activeClockIn && activeClockIn.regularHoursCompleted && !isInOvertimeMode && !showOvertimeDialog && !hasShownOvertimeDialog"
                 title="Solicitar horas extras manualmente">
           🕐 Solicitar Horas Extras
         </button>
 
-        <!-- ✅ CORREGIDO: Botón de finalización forzosa (solo en casos especiales) -->
+        <!-- ✅ Botón de finalización forzosa (solo en casos especiales) -->
         <button type="button" 
                 class="btn btn-warning btn-force-finish"
                 (click)="forceFinishWork()"
-                [disabled]="!canForceFinish()"
+                [disabled]="!canForceFinish() || showOvertimeDialog"
                 *ngIf="activeClockIn && activeClockIn.isActive && !showOvertimeDialog"
                 title="Usar solo en emergencias">
           🚨 Finalizar Forzosamente
         </button>
 
-        <!-- ✅ NUEVO: Botón de limpieza forzosa (solo para errores persistentes) -->
+        <!-- ✅ Botón de limpieza forzosa (solo para errores persistentes) -->
         <button type="button" 
                 class="btn btn-outline-danger btn-sm"
                 (click)="forceCleanup()"
                 [disabled]="loading"
-                *ngIf="activeClockIn && error && error.includes('422')"
+                *ngIf="activeClockIn && (error.includes('422') || error.includes('validación'))"
                 title="Usar solo si hay problemas persistentes">
           🧹 Limpiar Estado
         </button>
@@ -264,13 +264,14 @@
     </form>
   </div>
 
-  <!-- ✅ CORREGIDO: Panel de información sobre límites -->
+  <!-- ✅ Panel de información sobre límites -->
   <div class="info-panel" *ngIf="!activeClockIn">
     <h4>ℹ️ Información sobre Jornada Laboral</h4>
     <ul class="info-list">
       <li><strong>Jornada regular:</strong> Máximo 9 horas</li>
       <li><strong>Advertencia:</strong> A partir de las 8 horas</li>
-      <li><strong>Horas extras:</strong> Máximo 4 horas adicionales</li>
+      <li><strong>Horas extras:</strong> Máximo 4 horas adicionales (13h total)</li>
+      <li><strong>Decisión automática:</strong> Si no decides sobre horas extras en 10 minutos, se finaliza automáticamente</li>
       <li><strong>Descansos:</strong> Registra el tiempo total de pausas</li>
       <li><strong>Control automático:</strong> El sistema pausará automáticamente al alcanzar las 9 horas</li>
     </ul>
