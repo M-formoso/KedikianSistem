@@ -82,50 +82,40 @@ export class ExpenseService {
     throw new Error('Method not implemented.');
   }
   // ✅ URL corregida según tu backend
-  private apiUrl = `${environment.apiUrl}/gastos`;
+  private apiUrl = `${environment.apiUrl}/gastos/json`;
   
   constructor(private http: HttpClient) {}
 
-  // ✅ MÉTODO PRINCIPAL COMPLETAMENTE CORREGIDO
-  /**
-   * ✅ CREAR GASTO - ENVIANDO FORMDATA COMO ESPERA EL BACKEND
-   * Esta es la única corrección que necesitas para que funcione
-   */
-  // ✅ VERSIÓN ULTRA SIMPLIFICADA PARA TESTING
-// Reemplaza TEMPORALMENTE tu método createExpense con este
-
-/**
- * ✅ VERSIÓN DE PRUEBA SÚPER SIMPLE
- */
 createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-  console.log('🧪 === PRUEBA SIMPLE DE ENVÍO ===');
+  console.log('🧪 === ENVÍO JSON CORREGIDO ===');
   console.log('📤 Datos recibidos:', expense);
   
-  // ✅ FormData básico y simple
-  const formData = new FormData();
-  formData.append('usuario_id', expense.operator);
-  formData.append('tipo', expense.expenseType);
-  formData.append('importe_total', expense.amount.toString());
-  formData.append('fecha', expense.date);
-  formData.append('descripcion', expense.description || 'Sin descripción');
+  // ✅ CAMBIO CRÍTICO: Usar JSON en lugar de FormData
+  const jsonData = {
+    usuario_id: parseInt(expense.operator), // Convertir a número
+    maquina_id: 1, // Default machine ID como número
+    tipo: expense.expenseType,
+    importe_total: Math.round(expense.amount), // Como número entero
+    fecha: new Date(expense.date).toISOString(),
+    descripcion: this.buildDescription(expense)
+  };
   
-  console.log('📋 FormData creado:');
-  for (let [key, value] of formData.entries()) {
-    console.log(`  ${key}: ${value}`);
-  }
+  console.log('📋 JSON Data creado:', jsonData);
   
-  // ✅ Headers mínimos - Solo lo esencial
-  const headers = new HttpHeaders();
-  // No agregar Content-Type - FormData lo maneja automáticamente
+  // ✅ Headers para JSON
+  let headers = new HttpHeaders({
+    'Content-Type': 'application/json', // ← AHORA SÍ incluir Content-Type
+    'Accept': 'application/json'
+  });
   
-  // Obtener token si existe
+  // Agregar token si existe
   const usuarioActual = localStorage.getItem('usuarioActual');
   if (usuarioActual) {
     try {
       const usuario = JSON.parse(usuarioActual);
       const token = usuario.access_token || usuario.token;
       if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+        headers = headers.set('Authorization', `Bearer ${token}`);
         console.log('🔐 Token agregado');
       }
     } catch (e) {
@@ -133,34 +123,84 @@ createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
     }
   }
   
-  console.log('📡 Enviando petición a:', this.apiUrl);
+  console.log('📡 Enviando petición JSON a:', this.apiUrl);
   
-  // ✅ Petición HTTP simplificada al máximo
-  return this.http.post(this.apiUrl, formData, { headers }).pipe(
+  return this.http.post(this.apiUrl, jsonData, { headers }).pipe(
     map((response: any) => {
       console.log('✅ === RESPUESTA EXITOSA ===');
       console.log('📥 Respuesta completa:', response);
       
       return {
         success: true,
-        data: response, // Devolver tal como viene del backend
+        data: response,
         message: 'Gasto registrado correctamente'
       };
     }),
     catchError((error: any) => {
-      console.error('❌ === ERROR COMPLETO ===');
+      console.error('❌ === ERROR DETALLADO ===');
       console.error('🔍 Status:', error.status);
       console.error('🔍 StatusText:', error.statusText);
       console.error('🔍 URL:', error.url);
-      console.error('🔍 Error completo:', error);
-      console.error('🔍 Error.error:', error.error);
-      console.error('🔍 Error.message:', error.message);
+      console.error('🔍 Error body:', error.error);
       
-      // Devolver error simplificado
-      return throwError(() => new Error(`Error ${error.status}: ${error.message || 'Error desconocido'}`));
+      let errorMessage = 'Error desconocido';
+      
+      if (error.status === 422) {
+        if (error.error?.detail) {
+          // Formatear errores de validación de FastAPI
+          if (Array.isArray(error.error.detail)) {
+            const validationErrors = error.error.detail.map((err: any) => 
+              `${err.loc?.join('.')}: ${err.msg}`
+            ).join(', ');
+            errorMessage = `Error de validación: ${validationErrors}`;
+          } else {
+            errorMessage = `Error de validación: ${JSON.stringify(error.error.detail)}`;
+          }
+        } else {
+          errorMessage = 'Error de validación: datos inválidos';
+        }
+      } else if (error.status === 400) {
+        errorMessage = 'Datos inválidos';
+      } else if (error.status === 401) {
+        errorMessage = 'No autorizado - verifique su sesión';
+      } else {
+        errorMessage = `Error ${error.status}: ${error.message || 'Error desconocido'}`;
+      }
+      
+      return throwError(() => new Error(errorMessage));
     })
   );
 }
+
+/**
+ * ✅ Construir descripción completa con todos los datos adicionales
+ */
+private buildDescription(expense: ExpenseRequest): string {
+  let description = expense.description || 'Sin descripción';
+  
+  // Agregar información adicional
+  if (expense.paymentMethod) {
+    description += ` - Método: ${expense.paymentMethod}`;
+  }
+  
+  if (expense.receiptNumber) {
+    description += ` - Recibo: ${expense.receiptNumber}`;
+  }
+  
+  return description;
+}
+/**
+ * ✅ Formatear fecha para el backend
+ */
+private formatDateForBackend(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toISOString(); // Formato ISO que entiende el backend
+  } catch {
+    return new Date().toISOString(); // Fallback a fecha actual
+  }
+}
+
 
   /**
    * ✅ CORREGIDO: Obtener registros recientes
@@ -352,30 +392,33 @@ createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
   /**
    * ✅ CORREGIDO: Obtener headers HTTP con token dinámico
    */
-  private getHttpOptions() {
-    const usuarioActual = localStorage.getItem('usuarioActual');
-    let token: string | null = null;
+  /**
+ * ✅ REEMPLAZAR ESTE MÉTODO COMPLETO EN TU SERVICIO
+ */
+private getHttpOptions() {
+  const usuarioActual = localStorage.getItem('usuarioActual');
+  let token: string | null = null;
 
-    if (usuarioActual) {
-      try {
-        const usuario = JSON.parse(usuarioActual);
-        token = usuario.access_token || usuario.token || null;
-      } catch {
-        console.error('❌ Error parsing usuario actual');
-      }
+  if (usuarioActual) {
+    try {
+      const usuario = JSON.parse(usuarioActual);
+      token = usuario.access_token || usuario.token || null;
+    } catch {
+      console.error('❌ Error parsing usuario actual');
     }
-
-    const headers: any = {
-      'Accept': 'application/json'
-      // ✅ CRÍTICO: NO incluir Content-Type para FormData
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return { headers: new HttpHeaders(headers) };
   }
+
+  const headers: any = {
+    'Content-Type': 'application/json', // ← ✅ AGREGADO PARA JSON
+    'Accept': 'application/json'
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return { headers: new HttpHeaders(headers) };
+}
 
   /**
    * Formatear monto para mostrar

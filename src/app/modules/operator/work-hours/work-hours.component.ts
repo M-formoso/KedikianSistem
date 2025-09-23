@@ -154,63 +154,33 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   private checkForActiveJornada(): void {
     if (!this.currentUser?.id || this.isSyncing) return;
-
+  
     const usuarioId = this.getUsuarioIdAsNumber();
     if (!usuarioId) return;
-
+  
     this.isSyncing = true;
     console.log('🔍 Verificando jornada activa para usuario:', usuarioId);
-
-    // ✅ PASO 1: Limpiar jornadas fantasma primero
-    this.jornadaLaboralService.limpiarJornadasFantasma(usuarioId)
+  
+    this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
-          console.log('✅ Jornadas fantasma limpiadas');
+        next: (response) => {
+          console.log('📥 Respuesta del backend:', response);
           
-          // ✅ PASO 2: Verificar jornada activa después de la limpieza
-          this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
-            .pipe(takeUntil(this.destroy$))
-            .subscribe({
-              next: (response) => {
-                console.log('📥 Respuesta del backend después de limpieza:', response);
-                
-                if (response.success && response.data) {
-                  console.log('✅ Jornada activa encontrada en backend');
-                  this.processActiveJornada(response.data);
-                } else {
-                  console.log('ℹ️ No hay jornada activa en el backend');
-                  this.clearJornadaState();
-                }
-                
-                this.isSyncing = false;
-              },
-              error: (error) => {
-                console.error('❌ Error verificando jornada activa:', error);
-                this.isSyncing = false;
-                this.checkLocalStorageFallback();
-              }
-            });
+          if (response.success && response.data) {
+            console.log('✅ Jornada activa encontrada en backend');
+            this.processActiveJornada(response.data);
+          } else {
+            console.log('ℹ️ No hay jornada activa en el backend');
+            this.clearJornadaState();
+          }
+          
+          this.isSyncing = false;
         },
         error: (error) => {
-          console.error('❌ Error limpiando jornadas fantasma:', error);
-          // Continuar con la verificación normal
-          this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
-            .pipe(takeUntil(this.destroy$))
-            .subscribe({
-              next: (response) => {
-                if (response.success && response.data) {
-                  this.processActiveJornada(response.data);
-                } else {
-                  this.clearJornadaState();
-                }
-                this.isSyncing = false;
-              },
-              error: (error) => {
-                this.isSyncing = false;
-                this.checkLocalStorageFallback();
-              }
-            });
+          console.error('❌ Error verificando jornada activa:', error);
+          this.isSyncing = false;
+          this.checkLocalStorageFallback();
         }
       });
   }
@@ -385,18 +355,18 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       this.error = 'Usuario no disponible';
       return;
     }
-
+  
     const usuarioId = this.getUsuarioIdAsNumber();
     if (!usuarioId) return;
-
+  
     this.loading = true;
     this.error = '';
     this.success = false;
-
+  
     const formValues = this.clockInForm.value;
     
     console.log('🚀 Fichando entrada para usuario:', usuarioId);
-
+  
     this.jornadaLaboralService.ficharEntrada(usuarioId, formValues.notas)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -426,21 +396,21 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * ✅ CRÍTICO: Fichar salida - MEJORADO
    */
   clockOut(): void {
-    if (!this.activeClockIn || !this.currentJornada) {
+    if (!this.activeClockIn) {
       this.error = 'No hay jornada activa para finalizar';
       return;
     }
-
+  
     this.loading = true;
     this.error = '';
     this.showOvertimeDialog = false;
-
+  
     // Limpiar timer de finalización automática
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
     }
-
+  
     // ✅ Validar y completar formulario si está incompleto
     if (this.clockOutForm.invalid) {
       console.log('⚠️ Formulario inválido, completando con valores por defecto');
@@ -449,12 +419,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         notas: 'Fichaje de salida'
       });
     }
-
+  
     const formValues = this.clockOutForm.value;
     
     console.log('🛑 Finalizando jornada ID:', this.activeClockIn.jornadaId);
-    console.log('📋 Valores del formulario:', formValues);
-
+  
     this.jornadaLaboralService.finalizarJornada(
       this.activeClockIn.jornadaId,
       formValues.tiempoDescanso || 60,
@@ -470,9 +439,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         if (response.success) {
           console.log('✅ Jornada finalizada correctamente');
           
-          // ✅ CRÍTICO: Limpiar estado COMPLETAMENTE
           this.clearJornadaState();
-          
           this.success = true;
           this.loadRecentJornadas();
           this.loadMonthlyStats();
@@ -480,20 +447,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           setTimeout(() => { this.success = false; }, 5000);
         } else {
           this.error = response.message || 'Error al finalizar jornada';
-          console.error('❌ Error en respuesta del backend:', response);
         }
       },
       error: (error) => {
         this.loading = false;
+        this.error = error.message || 'Error al procesar la solicitud';
         console.error('❌ Error finalizando jornada:', error);
-        
-        // ✅ NUEVO: En caso de error, intentar limpieza forzosa
-        if (error.message && error.message.includes('422')) {
-          console.log('⚠️ Error 422 detectado, intentando limpieza forzosa');
-          this.forceCleanup();
-        } else {
-          this.error = error.message || 'Error al procesar la solicitud';
-        }
       }
     });
   }

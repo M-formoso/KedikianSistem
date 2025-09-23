@@ -1,9 +1,9 @@
-// jornada-laboral.service.ts - CORREGIDO COMPLETAMENTE
+// jornada-laboral.service.ts - VERSIÓN CORREGIDA
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, map, retry, switchMap } from 'rxjs/operators';
+import { catchError, map, retry } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 export interface JornadaLaboralCreate {
@@ -18,14 +18,7 @@ export interface JornadaLaboralCreate {
 
 export interface JornadaLaboralResponse {
   id: number;
-  maquina_id?: number;
   usuario_id: number;
-  fecha_asignacion: string;
-  horas_turno: number;
-  created?: string;
-  updated?: string;
-  
-  // Propiedades calculadas/mapeadas para compatibilidad
   fecha: string;
   hora_inicio: string;
   hora_fin?: string;
@@ -49,6 +42,8 @@ export interface JornadaLaboralResponse {
   ubicacion_fin?: string;
   advertencia_8h_mostrada: boolean;
   advertencia_limite_mostrada: boolean;
+  created: string;
+  updated?: string;
 }
 
 export interface EstadisticasJornada {
@@ -74,7 +69,8 @@ export interface ApiResponse<T> {
   providedIn: 'root'
 })
 export class JornadaLaboralService {
-  private readonly API_URL = `${environment.apiUrl}/reportes-laborales`;
+  // ✅ CORREGIDO: Usar el endpoint correcto para jornadas laborales
+  private readonly API_URL = `${environment.apiUrl}/jornadas-laborales`;
 
   constructor(private http: HttpClient) {}
 
@@ -104,33 +100,7 @@ export class JornadaLaboralService {
   }
 
   /**
-   * ✅ CRÍTICO: Obtener primera máquina disponible
-   */
-  private getFirstAvailableMachine(): Observable<number> {
-    return this.http.get<any[]>(`${environment.apiUrl}/maquinas`, this.getHttpOptions()).pipe(
-      map(maquinas => {
-        console.log('📋 Máquinas disponibles:', maquinas);
-        
-        if (!maquinas || maquinas.length === 0) {
-          console.warn('⚠️ No hay máquinas disponibles, usando ID por defecto');
-          return 1;
-        }
-        
-        const primeraMatera = maquinas.find(m => m.estado === true) || maquinas[0];
-        const maquinaId = primeraMatera.id;
-        
-        console.log('✅ Usando máquina ID:', maquinaId, 'Nombre:', primeraMatera.nombre);
-        return maquinaId;
-      }),
-      catchError(error => {
-        console.warn('⚠️ Error obteniendo máquinas, usando ID por defecto:', error);
-        return [1];
-      })
-    );
-  }
-
-  /**
-   * ✅ CRÍTICO: Fichar entrada - LÓGICA CORREGIDA
+   * ✅ CORREGIDO: Fichar entrada usando el endpoint correcto
    */
   ficharEntrada(
     usuario_id: number, 
@@ -139,38 +109,31 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🚀 Iniciando fichaje para usuario ID:', usuario_id);
 
-    return this.getFirstAvailableMachine().pipe(
-      switchMap((maquinaId: number) => {
-        // ✅ CRÍTICO: Crear payload correcto para inicio de jornada
-        const payload = {
-          maquina_id: maquinaId,
-          usuario_id: usuario_id,
-          fecha_asignacion: new Date().toISOString(),
-          horas_turno: 0  // ✅ 0 = jornada activa (sin finalizar)
-        };
+    const payload = {
+      usuario_id: usuario_id,
+      notas_inicio: notas_inicio,
+      ubicacion: ubicacion
+    };
 
-        console.log('📤 Payload para fichaje entrada:', payload);
+    console.log('📤 Payload para fichaje entrada:', payload);
 
-        return this.http.post<any>(this.API_URL, payload, this.getHttpOptions()).pipe(
-          retry(1),
-          map(response => {
-            console.log('📥 Respuesta fichaje entrada:', response);
-            const mappedResponse = this.mapReporteToJornada(response);
-            
-            return {
-              success: true,
-              data: mappedResponse,
-              message: 'Entrada fichada correctamente'
-            } as ApiResponse<JornadaLaboralResponse>;
-          }),
-          catchError(this.handleError.bind(this))
-        );
-      })
+    return this.http.post<JornadaLaboralResponse>(`${this.API_URL}/fichar-entrada`, payload, this.getHttpOptions()).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta fichaje entrada:', response);
+        
+        return {
+          success: true,
+          data: response,
+          message: 'Entrada fichada correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
+      }),
+      catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * ✅ CRÍTICO: Finalizar jornada - LÓGICA COMPLETAMENTE CORREGIDA
+   * ✅ CORREGIDO: Finalizar jornada usando el endpoint correcto
    */
   finalizarJornada(
     jornada_id: number,
@@ -180,79 +143,28 @@ export class JornadaLaboralService {
     forzado: boolean = false
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🛑 Finalizando jornada ID:', jornada_id);
-    console.log('📋 Parámetros:', { tiempo_descanso, notas_fin, forzado });
 
-    // ✅ PASO 1: Obtener el reporte actual para calcular horas trabajadas
-    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
-      switchMap(reporteActual => {
-        console.log('📋 Reporte actual obtenido:', reporteActual);
+    const payload = {
+      tiempo_descanso,
+      notas_fin,
+      ubicacion,
+      forzado
+    };
 
-        // ✅ PASO 2: Calcular horas trabajadas dinámicamente
-        const fechaInicio = new Date(reporteActual.fecha_asignacion);
-        const ahora = new Date();
-        const diffMs = ahora.getTime() - fechaInicio.getTime();
+    console.log('📤 Payload para finalizar jornada:', payload);
+
+    return this.http.put<JornadaLaboralResponse>(`${this.API_URL}/finalizar/${jornada_id}`, payload, this.getHttpOptions()).pipe(
+      retry(1),
+      map(response => {
+        console.log('📥 Respuesta finalización jornada:', response);
         
-        // Calcular horas trabajadas considerando tiempo de descanso
-        const horasTrabajadasDecimal = diffMs / (1000 * 60 * 60);
-        const tiempoDescansoHoras = tiempo_descanso / 60;
-        const horasNetas = Math.max(1, horasTrabajadasDecimal - tiempoDescansoHoras);
-        
-        // ✅ CRÍTICO: Convertir a entero pero respetando la lógica de negocio
-        let horasEntero: number;
-        
-        if (forzado) {
-          // Si es forzado, usar las horas reales trabajadas
-          horasEntero = Math.round(horasNetas);
-        } else {
-          // Lógica normal: máximo 9 horas regulares, después son extras
-          if (horasNetas <= 9) {
-            horasEntero = Math.round(horasNetas);
-          } else {
-            // Si supera 9 horas, registrar como máximo permitido (13h = 9 regulares + 4 extras)
-            horasEntero = Math.min(13, Math.round(horasNetas));
-          }
-        }
-
-        console.log('⏱️ Cálculo de horas:', {
-          fechaInicio: fechaInicio.toISOString(),
-          ahora: ahora.toISOString(),
-          horasTrabajadasDecimal: horasTrabajadasDecimal.toFixed(2),
-          tiempoDescansoHoras: tiempoDescansoHoras.toFixed(2),
-          horasNetas: horasNetas.toFixed(2),
-          horasEntero,
-          forzado
-        });
-
-        // ✅ PASO 3: Crear payload para actualización
-        const payload = {
-          maquina_id: reporteActual.maquina_id || 1,
-          usuario_id: reporteActual.usuario_id,
-          fecha_asignacion: reporteActual.fecha_asignacion,
-          horas_turno: horasEntero  // ✅ Horas finales calculadas
-        };
-
-        console.log('📤 Payload FINAL para actualizar jornada:', payload);
-
-        // ✅ PASO 4: Actualizar el reporte en el backend
-        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
-          retry(1),
-          map(response => {
-            console.log('📥 Respuesta finalización jornada:', response);
-            const mappedResponse = this.mapReporteToJornada(response);
-            
-            return {
-              success: true,
-              data: mappedResponse,
-              message: `Jornada finalizada correctamente. Horas trabajadas: ${horasEntero}h`
-            } as ApiResponse<JornadaLaboralResponse>;
-          }),
-          catchError(this.handleError.bind(this))
-        );
+        return {
+          success: true,
+          data: response,
+          message: `Jornada finalizada correctamente`
+        } as ApiResponse<JornadaLaboralResponse>;
       }),
-      catchError(error => {
-        console.error('❌ Error obteniendo reporte actual:', error);
-        return this.handleError(error);
-      })
+      catchError(this.handleError.bind(this))
     );
   }
 
@@ -265,45 +177,24 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🕐 Confirmando horas extras para jornada:', jornada_id);
     
-    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
-      switchMap(reporteActual => {
-        // Calcular horas extras (permitir hasta 4 horas adicionales = 13h total)
-        const fechaInicio = new Date(reporteActual.fecha_asignacion);
-        const ahora = new Date();
-        const diffMs = ahora.getTime() - fechaInicio.getTime();
-        const horasTrabajadasDecimal = diffMs / (1000 * 60 * 60);
-        
-        // Máximo 13 horas (9 regulares + 4 extras)
-        const horasConExtras = Math.min(13, Math.round(horasTrabajadasDecimal));
-        
-        const payload = {
-          maquina_id: reporteActual.maquina_id || 1,
-          usuario_id: reporteActual.usuario_id,
-          fecha_asignacion: reporteActual.fecha_asignacion,
-          horas_turno: horasConExtras
-        };
+    const payload = {
+      notas_overtime
+    };
 
-        console.log('📤 Confirmando horas extras con payload:', payload);
-
-        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
-          map(response => {
-            const mappedResponse = this.mapReporteToJornada(response);
-            mappedResponse.overtime_confirmado = true;
-            
-            return {
-              success: true,
-              data: mappedResponse,
-              message: `Horas extras confirmadas. Total: ${horasConExtras}h`
-            } as ApiResponse<JornadaLaboralResponse>;
-          })
-        );
+    return this.http.put<JornadaLaboralResponse>(`${this.API_URL}/confirmar-overtime/${jornada_id}`, payload, this.getHttpOptions()).pipe(
+      map(response => {
+        return {
+          success: true,
+          data: response,
+          message: 'Horas extras confirmadas correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
       }),
       catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * ✅ CORREGIDO: Rechazar horas extras (finalizar en 9 horas exactas)
+   * ✅ CORREGIDO: Rechazar horas extras
    */
   rechazarHorasExtras(
     jornada_id: number,
@@ -312,56 +203,37 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('❌ Rechazando horas extras para jornada:', jornada_id);
     
-    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
-      switchMap(reporteActual => {
-        // Finalizar exactamente en 9 horas (jornada regular completa)
-        const payload = {
-          maquina_id: reporteActual.maquina_id || 1,
-          usuario_id: reporteActual.usuario_id,
-          fecha_asignacion: reporteActual.fecha_asignacion,
-          horas_turno: 9  // ✅ Exactamente 9 horas regulares
-        };
+    const payload = {
+      tiempo_descanso,
+      notas_fin
+    };
 
-        console.log('📤 Rechazando horas extras con payload:', payload);
-
-        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
-          map(response => {
-            const mappedResponse = this.mapReporteToJornada(response);
-            
-            return {
-              success: true,
-              data: mappedResponse,
-              message: 'Jornada finalizada en 9 horas regulares'
-            } as ApiResponse<JornadaLaboralResponse>;
-          })
-        );
+    return this.http.put<JornadaLaboralResponse>(`${this.API_URL}/rechazar-overtime/${jornada_id}`, payload, this.getHttpOptions()).pipe(
+      map(response => {
+        return {
+          success: true,
+          data: response,
+          message: 'Jornada finalizada en 9 horas regulares'
+        } as ApiResponse<JornadaLaboralResponse>;
       }),
       catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * ✅ CRÍTICO: Obtener jornada activa
+   * ✅ CORREGIDO: Obtener jornada activa
    */
-  obtenerJornadaActiva(usuario_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
+  obtenerJornadaActiva(usuario_id: number): Observable<ApiResponse<JornadaLaboralResponse | null>> {
     console.log('📤 Consultando jornada activa para usuario:', usuario_id);
 
-    return this.http.get<any[]>(this.API_URL, this.getHttpOptions()).pipe(
+    return this.http.get<JornadaLaboralResponse>(`${this.API_URL}/activa/${usuario_id}`, this.getHttpOptions()).pipe(
       retry(1),
-      map(reportes => {
-        console.log('📥 Todos los reportes recibidos:', reportes);
-        
-        // ✅ CRÍTICO: Buscar reportes del usuario que tengan 0 horas (activos)
-        const activeReport = reportes.find(reporte => 
-          reporte.usuario_id === usuario_id && reporte.horas_turno === 0
-        );
-
-        if (activeReport) {
-          console.log('✅ Jornada activa encontrada:', activeReport);
-          const mappedJornada = this.mapReporteToJornada(activeReport);
+      map(response => {
+        if (response) {
+          console.log('✅ Jornada activa encontrada:', response);
           return {
             success: true,
-            data: mappedJornada,
+            data: response,
             message: 'Jornada activa encontrada'
           } as ApiResponse<JornadaLaboralResponse>;
         }
@@ -369,73 +241,20 @@ export class JornadaLaboralService {
         console.log('ℹ️ No se encontró jornada activa');
         return {
           success: true,
-          data: undefined,
+          data: null,
           message: 'No hay jornada activa'
-        } as ApiResponse<JornadaLaboralResponse>;
+        } as ApiResponse<JornadaLaboralResponse | null>;
       }),
       catchError(error => {
         if (error.status === 404) {
           return [{
             success: true,
-            data: undefined,
+            data: null,
             message: 'No hay jornada activa'
-          } as ApiResponse<JornadaLaboralResponse>];
+          } as ApiResponse<JornadaLaboralResponse | null>];
         }
         
         return this.handleError(error);
-      })
-    );
-  }
-
-  /**
-   * ✅ NUEVO: Limpiar jornadas fantasma (reportes con horas_turno = 0 antiguos)
-   */
-  limpiarJornadasFantasma(usuario_id: number): Observable<void> {
-    console.log('🧹 Limpiando jornadas fantasma para usuario:', usuario_id);
-    
-    return this.http.get<any[]>(this.API_URL, this.getHttpOptions()).pipe(
-      map(reportes => {
-        console.log('📋 Reportes para limpieza:', reportes.length);
-        
-        // Buscar reportes activos (horas_turno = 0) del usuario
-        const reportesActivos = reportes.filter(reporte => 
-          reporte.usuario_id === usuario_id && reporte.horas_turno === 0
-        );
-
-        console.log('🔍 Reportes activos encontrados:', reportesActivos.length);
-
-        // Si hay múltiples reportes activos, cerrar los más antiguos
-        if (reportesActivos.length > 1) {
-          // Ordenar por fecha y mantener solo el más reciente
-          reportesActivos.sort((a, b) => 
-            new Date(b.fecha_asignacion).getTime() - new Date(a.fecha_asignacion).getTime()
-          );
-
-          // Cerrar todos excepto el más reciente
-          const reportesAntiguos = reportesActivos.slice(1);
-          
-          reportesAntiguos.forEach(reporte => {
-            console.log('🧹 Cerrando reporte fantasma:', reporte.id);
-            
-            const payload = {
-              maquina_id: reporte.maquina_id || 1,
-              usuario_id: reporte.usuario_id,
-              fecha_asignacion: reporte.fecha_asignacion,
-              horas_turno: 8 // Cerrar con 8 horas por defecto
-            };
-
-            this.http.put(`${this.API_URL}/${reporte.id}`, payload, this.getHttpOptions()).subscribe({
-              next: () => console.log('✅ Jornada fantasma cerrada:', reporte.id),
-              error: err => console.error('❌ Error cerrando jornada fantasma:', err)
-            });
-          });
-        }
-
-        return;
-      }),
-      catchError(error => {
-        console.error('❌ Error limpiando jornadas fantasma:', error);
-        return [];
       })
     );
   }
@@ -448,18 +267,19 @@ export class JornadaLaboralService {
     limite: number = 10,
     offset: number = 0
   ): Observable<ApiResponse<JornadaLaboralResponse[]>> {
-    return this.http.get<any[]>(this.API_URL, this.getHttpOptions()).pipe(
+    const params = new HttpParams()
+      .set('limite', limite.toString())
+      .set('offset', offset.toString());
+
+    return this.http.get<JornadaLaboralResponse[]>(`${this.API_URL}/usuario/${usuario_id}`, {
+      ...this.getHttpOptions(),
+      params
+    }).pipe(
       retry(1),
-      map(reportes => {
-        const jornadasUsuario = reportes
-          .filter(reporte => reporte.usuario_id === usuario_id)
-          .filter(reporte => reporte.horas_turno > 0) // Solo jornadas finalizadas
-          .slice(offset, offset + limite)
-          .map(reporte => this.mapReporteToJornada(reporte));
-        
+      map(jornadas => {
         return {
           success: true,
-          data: jornadasUsuario,
+          data: jornadas,
           message: 'Jornadas obtenidas correctamente'
         } as ApiResponse<JornadaLaboralResponse[]>;
       }),
@@ -475,33 +295,9 @@ export class JornadaLaboralService {
     mes: number,
     anio: number
   ): Observable<ApiResponse<EstadisticasJornada>> {
-    return this.http.get<any[]>(this.API_URL, this.getHttpOptions()).pipe(
+    return this.http.get<EstadisticasJornada>(`${this.API_URL}/estadisticas/${usuario_id}/${mes}/${anio}`, this.getHttpOptions()).pipe(
       retry(1),
-      map(reportes => {
-        const reportesDelMes = reportes
-          .filter(reporte => {
-            if (reporte.usuario_id !== usuario_id) return false;
-            if (reporte.horas_turno === 0) return false; // Solo jornadas finalizadas
-            
-            const fechaReporte = new Date(reporte.fecha_asignacion);
-            return fechaReporte.getMonth() + 1 === mes && 
-                   fechaReporte.getFullYear() === anio;
-          })
-          .map(reporte => this.mapReporteToJornada(reporte));
-
-        const stats: EstadisticasJornada = {
-          mes,
-          año: anio,
-          total_jornadas: reportesDelMes.length,
-          total_horas_regulares: reportesDelMes.reduce((sum, j) => sum + Math.min(j.total_horas, 9), 0),
-          total_horas_extras: reportesDelMes.reduce((sum, j) => sum + Math.max(0, j.total_horas - 9), 0),
-          total_horas: reportesDelMes.reduce((sum, j) => sum + j.total_horas, 0),
-          jornadas_con_extras: reportesDelMes.filter(j => j.total_horas > 9).length,
-          promedio_horas_dia: reportesDelMes.length > 0 ? 
-            reportesDelMes.reduce((sum, j) => sum + j.total_horas, 0) / reportesDelMes.length : 0,
-          jornadas: reportesDelMes
-        };
-
+      map(stats => {
         return {
           success: true,
           data: stats,
@@ -516,80 +312,21 @@ export class JornadaLaboralService {
    * ✅ Actualizar estado de jornada
    */
   actualizarEstadoJornada(jornada_id: number): Observable<ApiResponse<JornadaLaboralResponse>> {
-    return this.http.get<any>(`${this.API_URL}/${jornada_id}`, this.getHttpOptions()).pipe(
-      switchMap(reporteActual => {
-        // Solo actualizar timestamp, mantener otros datos igual
-        const payload = {
-          maquina_id: reporteActual.maquina_id || 1,
-          usuario_id: reporteActual.usuario_id,
-          fecha_asignacion: reporteActual.fecha_asignacion,
-          horas_turno: reporteActual.horas_turno
-        };
-
-        return this.http.put<any>(`${this.API_URL}/${jornada_id}`, payload, this.getHttpOptions()).pipe(
-          map(response => {
-            const mappedResponse = this.mapReporteToJornada(response);
-            return {
-              success: true,
-              data: mappedResponse,
-              message: 'Estado actualizado correctamente'
-            } as ApiResponse<JornadaLaboralResponse>;
-          })
-        );
+    return this.http.put<JornadaLaboralResponse>(`${this.API_URL}/actualizar-estado/${jornada_id}`, {}, this.getHttpOptions()).pipe(
+      map(response => {
+        return {
+          success: true,
+          data: response,
+          message: 'Estado actualizado correctamente'
+        } as ApiResponse<JornadaLaboralResponse>;
       }),
       catchError(this.handleError.bind(this))
     );
   }
 
   /**
-   * ✅ CRÍTICO: Mapear ReporteLaboral del backend a JornadaLaboralResponse
+   * ✅ ELIMINADO: Ya no necesitamos limpiar jornadas fantasma porque usamos endpoints específicos
    */
-  private mapReporteToJornada(reporte: any): JornadaLaboralResponse {
-    const fechaInicio = new Date(reporte.fecha_asignacion);
-    const esActiva = reporte.horas_turno === 0;
-    
-    // Calcular fecha/hora de fin si la jornada está completada
-    let fechaFin: Date | null = null;
-    if (!esActiva) {
-      fechaFin = new Date(fechaInicio.getTime() + (reporte.horas_turno * 60 * 60 * 1000));
-    }
-
-    // Calcular horas regulares y extras
-    const totalHoras = reporte.horas_turno || 0;
-    const horasRegulares = Math.min(totalHoras, 9);
-    const horasExtras = Math.max(0, totalHoras - 9);
-
-    return {
-      id: reporte.id,
-      maquina_id: reporte.maquina_id,
-      usuario_id: reporte.usuario_id,
-      fecha_asignacion: reporte.fecha_asignacion,
-      horas_turno: reporte.horas_turno || 0,
-      created: reporte.created,
-      updated: reporte.updated,
-
-      // Propiedades calculadas para el frontend
-      fecha: fechaInicio.toISOString().split('T')[0],
-      hora_inicio: reporte.fecha_asignacion,
-      hora_fin: fechaFin ? fechaFin.toISOString() : undefined,
-      tiempo_descanso: 60, // Valor por defecto
-      horas_regulares: horasRegulares,
-      horas_extras: horasExtras,
-      total_horas: totalHoras,
-      estado: esActiva ? 'activa' : 'completada',
-      es_feriado: false,
-      limite_regular_alcanzado: totalHoras >= 9,
-      overtime_solicitado: totalHoras > 9,
-      overtime_confirmado: totalHoras > 9,
-      overtime_iniciado: totalHoras > 9 ? reporte.fecha_asignacion : undefined,
-      pausa_automatica: false,
-      finalizacion_forzosa: false,
-      notas_inicio: reporte.notas || '',
-      notas_fin: reporte.notas || '',
-      advertencia_8h_mostrada: false,
-      advertencia_limite_mostrada: false
-    };
-  }
 
   /**
    * ✅ Manejo de errores mejorado
@@ -617,7 +354,7 @@ export class JornadaLaboralService {
           errorMessage = 'Acceso prohibido. No tienes permisos suficientes.';
           break;
         case 404:
-          errorMessage = 'Recurso no encontrado. Verifica la configuración del servidor.';
+          errorMessage = 'Recurso no encontrado.';
           break;
         case 409:
           errorMessage = 'Conflicto. Ya existe una jornada activa.';
@@ -628,18 +365,6 @@ export class JornadaLaboralService {
           if (error.error && error.error.detail) {
             if (Array.isArray(error.error.detail)) {
               const validationErrors = error.error.detail.map((e: any) => {
-                if (e.loc && e.loc.includes('maquina_id')) {
-                  return 'ID de máquina es requerido';
-                }
-                if (e.loc && e.loc.includes('usuario_id')) {
-                  return 'ID de usuario es requerido';
-                }
-                if (e.loc && e.loc.includes('fecha_asignacion')) {
-                  return 'Fecha de asignación es requerida';
-                }
-                if (e.loc && e.loc.includes('horas_turno')) {
-                  return 'Horas de turno debe ser un número entero';
-                }
                 return e.msg || e.message || JSON.stringify(e);
               }).join(', ');
               errorMessage = 'Errores de validación: ' + validationErrors;

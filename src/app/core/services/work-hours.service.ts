@@ -1,41 +1,35 @@
+// src/app/core/services/work-hours.service.ts - CORREGIDO PARA USAR NUEVO SISTEMA
+
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
-// ✅ INTERFACES CORREGIDAS según el esquema del backend
-export interface WorkDay {
-  id?: number;
+// ✅ INTERFACES CORREGIDAS para el nuevo sistema de jornadas
+export interface JornadaLaboralCreate {
+  usuario_id: number;
+  notas_inicio?: string;
+  ubicacion?: any;
+}
+
+export interface JornadaLaboralResponse {
+  id: number;
+  usuario_id: number;
   fecha: string;
-  horaInicio: string;
-  horaFin?: string;
-  tiempoDescanso: number;
-  totalHoras: number;
-  usuarioId: number;
-  notas?: string;
+  hora_inicio: string;
+  hora_fin?: string;
+  tiempo_descanso: number;
+  horas_regulares: number;
+  horas_extras: number;
+  total_horas: number;
   estado: string;
-  fechaPago?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-// ✅ CORREGIDO: Interface según el modelo real del backend
-export interface ReporteLaboralCreate {
-  maquina_id?: number;
-  usuario_id: number;
-  fecha_asignacion: string; // DateTime ISO string
-  horas_turno: number; // 👈 CORREGIDO: INTEGER - número de horas trabajadas (NO DateTime)
-}
-
-// Interface para la respuesta del backend
-export interface ReporteLaboral {
-  id?: number;
-  maquina_id?: number;
-  usuario_id: number;
-  fecha_asignacion: string;
-  horas_turno: number; // 👈 CORREGIDO: INTEGER - número de horas trabajadas (NO DateTime)
-  created?: string;
+  es_feriado: boolean;
+  limite_regular_alcanzado: boolean;
+  overtime_confirmado: boolean;
+  notas_inicio?: string;
+  notas_fin?: string;
+  created: string;
   updated?: string;
 }
 
@@ -50,7 +44,8 @@ export interface ApiResponse<T> {
   providedIn: 'root'
 })
 export class WorkHoursService {
-  private apiUrl = `${environment.apiUrl}/reportes-laborales`;
+  // ✅ CORREGIDO: Usar el endpoint correcto del nuevo sistema
+  private apiUrl = `${environment.apiUrl}/jornadas-laborales`;
 
   private httpOptions = {
     headers: new HttpHeaders({
@@ -62,198 +57,165 @@ export class WorkHoursService {
   constructor(private http: HttpClient) {}
 
   /**
- * ✅ NUEVO: Obtener primera máquina disponible
- */
-private getFirstAvailableMachine(): Observable<number> {
-  return this.http.get<any[]>(`${environment.apiUrl}/maquinas`, this.httpOptions).pipe(
-    map(maquinas => {
-      console.log('📋 Máquinas disponibles:', maquinas);
-      
-      if (!maquinas || maquinas.length === 0) {
-        throw new Error('No hay máquinas disponibles en el sistema');
-      }
-      
-      // Usar la primera máquina activa
-      const primeraMatera = maquinas.find(m => m.estado === true) || maquinas[0];
-      const maquinaId = primeraMatera.id;
-      
-      console.log('✅ Usando máquina ID:', maquinaId, 'Nombre:', primeraMatera.nombre);
-      return maquinaId;
-    })
-  );
-}
-  /**
-   * ✅ CORREGIDO: Fichar entrada - Crear nuevo reporte laboral
-   * horas_turno se inicializa como 0 (entero) para indicar que el trabajo está activo
+   * ✅ CORREGIDO: Fichar entrada usando el nuevo sistema
    */
+  clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
+    console.log('🚀 Iniciando fichaje con nuevo sistema para usuario:', usuarioId);
+
+    const payload = {
+      usuario_id: usuarioId,
+      notas_inicio: notas || '',
+      ubicacion: null
+    };
+
+    console.log('📤 Payload para fichar-entrada:', payload);
+
+    // ✅ Usar endpoint correcto
+    return this.http.post<JornadaLaboralResponse>(
+      `${this.apiUrl}/fichar-entrada`,
+      null, // ✅ No body, usar query params
+      {
+        ...this.httpOptions,
+        params: new HttpParams()
+          .set('usuario_id', usuarioId.toString())
+          .set('notas_inicio', notas || '')
+      }
+    ).pipe(
+      map((response: JornadaLaboralResponse) => ({
+        success: true,
+        data: response,
+        message: 'Fichaje de entrada registrado correctamente'
+      })),
+      catchError(this.handleError)
+    );
+  }
+
   /**
- * ✅ CORREGIDO: Fichar entrada con máquina real del backend
- */
-clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
-  console.log('🚀 Iniciando fichaje para usuario ID:', usuarioId);
+   * ✅ CORREGIDO: Fichar salida usando el nuevo sistema
+   */
+  clockOut(jornadaId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
+    console.log('🛑 Finalizando jornada con nuevo sistema:', jornadaId);
 
-  // Paso 1: Obtener máquina disponible
-  return this.getFirstAvailableMachine().pipe(
-    switchMap((maquinaId: number) => {
-      // Paso 2: Crear reporte con máquina real
-      const payload: ReporteLaboralCreate = {
-        maquina_id: maquinaId, // ✅ Máquina real del backend
-        usuario_id: usuarioId,
-        fecha_asignacion: new Date().toISOString(),
-        horas_turno: 0 // ✅ 0 = trabajo activo
-      };
+    // ✅ Usar endpoint correcto
+    return this.http.put<JornadaLaboralResponse>(
+      `${this.apiUrl}/finalizar/${jornadaId}`,
+      null, // ✅ No body, usar query params
+      {
+        ...this.httpOptions,
+        params: new HttpParams()
+          .set('tiempo_descanso', tiempoDescanso.toString())
+          .set('notas_fin', notas || '')
+          .set('forzado', 'false')
+      }
+    ).pipe(
+      map((response: JornadaLaboralResponse) => ({
+        success: true,
+        data: response,
+        message: 'Fichaje de salida registrado correctamente'
+      })),
+      catchError(this.handleError)
+    );
+  }
 
-      console.log('✅ Enviando clockIn con máquina real:', payload);
+  /**
+   * ✅ NUEVO: Confirmar horas extras
+   */
+  confirmOvertime(jornadaId: number, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
+    return this.http.put<JornadaLaboralResponse>(
+      `${this.apiUrl}/confirmar-overtime/${jornadaId}`,
+      null,
+      {
+        ...this.httpOptions,
+        params: new HttpParams().set('notas_overtime', notas || '')
+      }
+    ).pipe(
+      map((response: JornadaLaboralResponse) => ({
+        success: true,
+        data: response,
+        message: 'Horas extras confirmadas'
+      })),
+      catchError(this.handleError)
+    );
+  }
 
-      return this.http.post<ReporteLaboral>(
-        this.apiUrl, 
-        payload, 
-        this.httpOptions
-      );
-    }),
-    map((response: ReporteLaboral) => ({
-      success: true,
-      data: response,
-      message: 'Fichaje de entrada registrado correctamente'
-    })),
-    catchError(error => {
-      console.error('❌ Error en clockIn:', error);
-      
-      // Si falla con máquina, intentar sin máquina
-      if (error.message?.includes('maquina_id')) {
-        console.warn('⚠️ Falló con máquina, intentando sin máquina...');
-        
-        const payloadSinMaquina = {
-          usuario_id: usuarioId,
-          fecha_asignacion: new Date().toISOString(),
-          horas_turno: 0
-        };
+  /**
+   * ✅ NUEVO: Rechazar horas extras
+   */
+  declineOvertime(jornadaId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
+    return this.http.put<JornadaLaboralResponse>(
+      `${this.apiUrl}/rechazar-overtime/${jornadaId}`,
+      null,
+      {
+        ...this.httpOptions,
+        params: new HttpParams()
+          .set('tiempo_descanso', tiempoDescanso.toString())
+          .set('notas_fin', notas || '')
+      }
+    ).pipe(
+      map((response: JornadaLaboralResponse) => ({
+        success: true,
+        data: response,
+        message: 'Jornada finalizada en 9 horas regulares'
+      })),
+      catchError(this.handleError)
+    );
+  }
 
-        console.log('📤 Enviando clockIn SIN máquina:', payloadSinMaquina);
-
-        return this.http.post<ReporteLaboral>(
-          this.apiUrl, 
-          payloadSinMaquina, 
-          this.httpOptions
-        ).pipe(
-          map(response => ({
+  /**
+   * ✅ CORREGIDO: Obtener jornada activa
+   */
+  getActiveWorkDay(usuarioId: number): Observable<ApiResponse<JornadaLaboralResponse | null>> {
+    return this.http.get<JornadaLaboralResponse>(
+      `${this.apiUrl}/activa/${usuarioId}`,
+      this.httpOptions
+    ).pipe(
+      map((response: JornadaLaboralResponse) => ({
+        success: true,
+        data: response,
+        message: 'Jornada activa encontrada'
+      })),
+      catchError((error) => {
+        if (error.status === 404) {
+          return [{
             success: true,
-            data: response,
-            message: 'Fichaje de entrada registrado correctamente'
-          })),
-          catchError(this.handleError)
-        );
-      }
-      
-      return this.handleError(error);
-    })
-  );
-}
+            data: null,
+            message: 'No hay jornada activa'
+          } as ApiResponse<JornadaLaboralResponse | null>];
+        }
+        return this.handleError(error);
+      })
+    );
+  }
 
   /**
-   * ✅ CORREGIDO: Fichar salida - Actualizar reporte laboral existente
-   * Calcula las horas trabajadas como entero basado en el tiempo transcurrido
+   * ✅ CORREGIDO: Obtener jornadas recientes
    */
-  clockOut(reporteId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
-    // Calculamos horas trabajadas dinámicamente desde el localStorage
-    const activeClockIn = localStorage.getItem('activeWorkClockIn');
-    let horasTrabajadasEntero = 8; // Default fallback
-    
-    if (activeClockIn) {
+  getRecentWorkDays(limit: number = 10): Observable<ApiResponse<JornadaLaboralResponse[]>> {
+    // Necesitamos el usuario_id, lo obtenemos del localStorage o AuthService
+    const usuarioActual = localStorage.getItem('usuarioActual');
+    let usuarioId = 1; // fallback
+
+    if (usuarioActual) {
       try {
-        const parsed = JSON.parse(activeClockIn);
-        const startTime = new Date(parsed.startTimestamp);
-        const now = new Date();
-        const diffMs = now.getTime() - startTime.getTime();
-        
-        // 👈 CORREGIDO: Calcular horas como entero, considerando tiempo de descanso
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60)); // Horas completas
-        const minutesWorked = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-        
-        // Si hay más de 30 minutos, redondear hacia arriba
-        const totalHours = minutesWorked >= 30 ? diffHours + 1 : diffHours;
-        
-        // Restar tiempo de descanso (convertir minutos a horas y redondear)
-        const breakHours = Math.round(tiempoDescanso / 60);
-        horasTrabajadasEntero = Math.max(1, totalHours - breakHours); // Mínimo 1 hora
-        
-        console.log(`Cálculo de horas: ${diffHours}h ${minutesWorked}m - Descanso: ${tiempoDescanso}min = ${horasTrabajadasEntero}h`);
+        const usuario = JSON.parse(usuarioActual);
+        usuarioId = usuario.id || 1;
       } catch (error) {
-        console.error('Error calculando horas trabajadas:', error);
+        console.error('Error parsing usuario actual:', error);
       }
     }
 
-    const payload: Partial<ReporteLaboralCreate> = {
-      horas_turno: horasTrabajadasEntero // 👈 CORREGIDO: ENTERO de horas trabajadas
-    };
-
-    console.log('✅ Enviando clockOut CORREGIDO:', { reporteId, payload });
-
-    return this.http.put<ReporteLaboral>(
-      `${this.apiUrl}/${reporteId}`, 
-      payload, 
-      this.httpOptions
+    return this.http.get<JornadaLaboralResponse[]>(
+      `${this.apiUrl}/usuario/${usuarioId}`,
+      {
+        ...this.httpOptions,
+        params: new HttpParams()
+          .set('limite', limit.toString())
+          .set('offset', '0')
+      }
     ).pipe(
-      map(response => ({
+      map((response: JornadaLaboralResponse[]) => ({
         success: true,
         data: response,
-        message: `Fichaje de salida registrado correctamente. Horas trabajadas: ${horasTrabajadasEntero}`
-      })),
-      catchError(this.handleError)
-    );
-  }
-
-  /**
-   * ✅ CORREGIDO: Fichar salida con cálculo dinámico de horas
-   * Usa enteros para horas_turno y calcula correctamente el tiempo trabajado
-   */
-  clockOutWithDynamicHours(reporteId: number, startTime: Date, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<ReporteLaboral>> {
-    // Calcular horas trabajadas dinámicamente
-    const now = new Date();
-    const diffMs = now.getTime() - startTime.getTime();
-    
-    // 👈 CORREGIDO: Calcular horas como entero considerando descanso
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutesWorked = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
-    // Si hay más de 30 minutos, redondear hacia arriba
-    const totalHours = minutesWorked >= 30 ? diffHours + 1 : diffHours;
-    
-    // Restar tiempo de descanso
-    const breakHours = Math.round(tiempoDescanso / 60);
-    const hoursWorked = Math.max(1, totalHours - breakHours);
-    
-    const payload: Partial<ReporteLaboralCreate> = {
-      horas_turno: hoursWorked // 👈 CORREGIDO: ENTERO de horas calculadas dinámicamente
-    };
-
-    console.log('✅ Enviando clockOut dinámico CORREGIDO:', { reporteId, hoursWorked, detalles: { diffHours, minutesWorked, totalHours, breakHours } });
-
-    return this.http.put<ReporteLaboral>(
-      `${this.apiUrl}/${reporteId}`, 
-      payload, 
-      this.httpOptions
-    ).pipe(
-      map(response => ({
-        success: true,
-        data: response,
-        message: `Fichaje de salida registrado correctamente. Horas trabajadas: ${hoursWorked}`
-      })),
-      catchError(this.handleError)
-    );
-  }
-
-  /**
-   * Obtener reportes laborales recientes
-   */
-  getRecentWorkDays(limit: number = 10): Observable<ApiResponse<WorkDay[]>> {
-    return this.http.get<ReporteLaboral[]>(
-      this.apiUrl,
-      this.httpOptions
-    ).pipe(
-      map(reportes => ({
-        success: true,
-        data: this.mapReportesToWorkDays(reportes.slice(0, limit)),
         message: 'Registros obtenidos correctamente'
       })),
       catchError(this.handleError)
@@ -261,83 +223,43 @@ clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLabora
   }
 
   /**
-   * Buscar reporte laboral activo para un usuario
+   * ✅ NUEVO: Obtener estadísticas del mes
    */
-  getActiveWorkDay(usuarioId: number): Observable<ApiResponse<ReporteLaboral | null>> {
-    return this.http.get<ReporteLaboral[]>(
-      this.apiUrl,
+  getMonthlyStats(usuarioId: number, mes: number, anio: number): Observable<any> {
+    return this.http.get(
+      `${this.apiUrl}/estadisticas/${usuarioId}/${mes}/${anio}`,
       this.httpOptions
     ).pipe(
-      map(reportes => {
-        // Buscar reportes del usuario que tengan 0 horas (no finalizados)
-        const activeReport = reportes.find(reporte => 
-          reporte.usuario_id === usuarioId && reporte.horas_turno === 0
-        );
-
-        return {
-          success: true,
-          data: activeReport || null,
-          message: activeReport ? 'Reporte activo encontrado' : 'No hay reportes activos'
-        };
-      }),
       catchError(this.handleError)
     );
   }
 
+  // ============ MÉTODOS DE UTILIDAD COMPATIBLES ============
+
   /**
-   * Eliminar reporte laboral
+   * ✅ Mapear JornadaLaboralResponse a WorkDay para compatibilidad
    */
-  deleteWorkDay(reporteId: number): Observable<ApiResponse<any>> {
-    return this.http.delete<any>(
-      `${this.apiUrl}/${reporteId}`,
-      this.httpOptions
-    ).pipe(
-      map(() => ({
-        success: true,
-        data: null,
-        message: 'Registro eliminado correctamente'
-      })),
-      catchError(this.handleError)
-    );
+  private mapJornadaToWorkDay(jornada: JornadaLaboralResponse): any {
+    return {
+      id: jornada.id,
+      fecha: jornada.fecha,
+      horaInicio: this.extractTime(jornada.hora_inicio),
+      horaFin: jornada.hora_fin ? this.extractTime(jornada.hora_fin) : null,
+      tiempoDescanso: jornada.tiempo_descanso,
+      totalHoras: jornada.total_horas,
+      horasRegulares: jornada.horas_regulares,
+      horasExtras: jornada.horas_extras,
+      usuarioId: jornada.usuario_id,
+      estado: jornada.estado,
+      notas: jornada.notas_inicio || '',
+      esFeriado: jornada.es_feriado,
+      createdAt: new Date(jornada.created),
+      updatedAt: jornada.updated ? new Date(jornada.updated) : new Date()
+    };
   }
 
   /**
-   * Obtener reportes por usuario
-   */
-  getWorkDaysByUser(usuarioId: number): Observable<ApiResponse<WorkDay[]>> {
-    // Filtrar en el frontend ya que el backend no parece tener filtro por usuario
-    return this.getRecentWorkDays(100).pipe(
-      map(response => ({
-        ...response,
-        data: response.data?.filter(workDay => workDay.usuarioId === usuarioId) || []
-      }))
-    );
-  }
-
-  // ============ MÉTODOS DE UTILIDAD ============
-
-  /**
-   * ✅ CORREGIDO: Mapear reportes del backend a WorkDay del frontend
-   * Ahora maneja horas_turno como entero correctamente
-   */
-  private mapReportesToWorkDays(reportes: ReporteLaboral[]): WorkDay[] {
-    return reportes.map(reporte => ({
-      id: reporte.id,
-      fecha: reporte.fecha_asignacion.split('T')[0],
-      horaInicio: this.extractTime(reporte.fecha_asignacion),
-      horaFin: reporte.horas_turno > 0 ? this.calculateEndTime(reporte.fecha_asignacion, reporte.horas_turno) : undefined,
-      tiempoDescanso: 60, // Valor por defecto
-      totalHoras: reporte.horas_turno, // 👈 CORREGIDO: Usar directamente el entero del backend
-      usuarioId: reporte.usuario_id,
-      notas: '',
-      estado: reporte.horas_turno > 0 ? 'completado' : 'activo',
-      createdAt: reporte.created ? new Date(reporte.created) : new Date(reporte.fecha_asignacion),
-      updatedAt: reporte.updated ? new Date(reporte.updated) : new Date(reporte.fecha_asignacion)
-    }));
-  }
-
-  /**
-   * Extraer tiempo de un timestamp ISO
+   * ✅ Extraer tiempo de un timestamp ISO
    */
   private extractTime(isoString: string): string {
     return new Date(isoString).toLocaleTimeString('es-ES', { 
@@ -347,17 +269,7 @@ clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLabora
   }
 
   /**
-   * ✅ CORREGIDO: Calcular hora de fin basada en hora de inicio y horas trabajadas (entero)
-   * hoursWorked es ahora un entero de horas, no un timestamp
-   */
-  private calculateEndTime(startTime: string, hoursWorked: number): string {
-    const start = new Date(startTime);
-    const end = new Date(start.getTime() + (hoursWorked * 60 * 60 * 1000)); // 👈 Multiplicar por horas enteras
-    return this.extractTime(end.toISOString());
-  }
-
-  /**
-   * Calcular tiempo transcurrido desde un momento dado
+   * ✅ Calcular tiempo transcurrido
    */
   calculateElapsedTime(startTime: Date): { hours: number; minutes: number; seconds: number } {
     const now = new Date();
@@ -371,33 +283,28 @@ clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLabora
   }
 
   /**
-   * Verificar si está cerca del límite de 9 horas
+   * ✅ Verificar si está cerca del límite
    */
   isNearingLimit(startTime: Date): boolean {
     const elapsed = this.calculateElapsedTime(startTime);
     const totalHours = elapsed.hours + (elapsed.minutes / 60);
-    return totalHours >= 8; // Alerta a partir de 8 horas
+    return totalHours >= 8;
   }
 
   /**
-   * Verificar si ha superado el límite de 9 horas
+   * ✅ Verificar si ha superado el límite
    */
   hasExceededLimit(startTime: Date): boolean {
     const elapsed = this.calculateElapsedTime(startTime);
     const totalHours = elapsed.hours + (elapsed.minutes / 60);
-    return totalHours >= 9; // Límite a las 9 horas
+    return totalHours >= 9;
   }
 
   /**
-   * Formatear horas para mostrar
+   * ✅ Manejo de errores mejorado
    */
-  formatHours(hours: number): string {
-    return `${hours.toFixed(1)}h`;
-  }
-
-  // ✅ CORREGIDO: Manejo de errores mejorado
   private handleError(error: any): Observable<never> {
-    console.error('❌ Error en WorkHoursService:', error);
+    console.error('❌ Error en WorkHoursService (nuevo sistema):', error);
     
     let errorMessage = 'Ocurrió un error inesperado';
     
@@ -405,47 +312,32 @@ clockIn(usuarioId: number, notas?: string): Observable<ApiResponse<ReporteLabora
       errorMessage = `Error: ${error.error.message}`;
     } else {
       switch (error.status) {
+        case 0:
+          errorMessage = 'Error de conexión. Verifique su conexión a internet.';
+          break;
         case 400:
-          errorMessage = 'Datos inválidos. Verifique la información ingresada.';
+          errorMessage = 'Solicitud incorrecta. Verifique los datos enviados.';
           break;
         case 401:
-          errorMessage = 'No autorizado. Inicie sesión nuevamente.';
+          errorMessage = 'No autorizado. Tu sesión ha expirado.';
           break;
         case 403:
-          errorMessage = 'No tiene permisos para realizar esta acción.';
+          errorMessage = 'Acceso prohibido. No tienes permisos suficientes.';
           break;
         case 404:
-          errorMessage = 'Recurso no encontrado.';
+          errorMessage = 'Recurso no encontrado. El endpoint puede no estar disponible.';
           break;
         case 409:
-          errorMessage = 'Ya existe un fichaje activo.';
+          errorMessage = 'Conflicto. Ya existe una jornada activa.';
           break;
         case 422:
-          errorMessage = 'Error de validación. Verifique los datos ingresados.';
-          if (error.error && error.error.detail) {
-            // ✅ Manejo específico para errores de validación de Pydantic
-            if (Array.isArray(error.error.detail)) {
-              const validationErrors = error.error.detail.map((e: any) => {
-                if (e.type === 'int_parsing' && e.loc?.includes('horas_turno')) {
-                  return 'El campo horas_turno debe ser un número entero';
-                }
-                return e.msg || e.message || JSON.stringify(e);
-              }).join(', ');
-              errorMessage = 'Error de validación: ' + validationErrors;
-            } else {
-              errorMessage = 'Error de validación: ' + JSON.stringify(error.error.detail);
-            }
-          }
+          errorMessage = 'Error de validación en el servidor.';
           break;
         case 500:
           errorMessage = 'Error interno del servidor. Intente nuevamente más tarde.';
           break;
         default:
-          errorMessage = `Error ${error.status}: ${error.message}`;
-      }
-      
-      if (error.error && error.error.message) {
-        errorMessage = error.error.message;
+          errorMessage = `Error ${error.status}: ${error.message || error.statusText}`;
       }
     }
     
