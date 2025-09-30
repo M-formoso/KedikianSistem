@@ -1,248 +1,271 @@
+// src/app/services/auth.service.ts - SOLUCIÓN DEFINITIVA
+
 import { Injectable } from '@angular/core';
-import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
-import { tap, switchMap, catchError } from 'rxjs/operators';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, BehaviorSubject } from 'rxjs';
+import { tap, catchError } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 
 export interface Usuario {
+  id: number;
+  nombre: string;
   email: string;
-  id: string;
-  nombreUsuario: string;
+  estado: boolean;
   roles: string[];
-  token?: string;
-  // 🚀 AGREGADO: Para mantener compatibilidad con el interceptor
-  access_token?: string;
-}
-
-// Interfaz para la respuesta del login OAuth2
-export interface LoginResponse {
-  access_token: string;
-  token_type: string;
-}
-
-const apiUrl = `${environment.apiUrl}`;
-
-export type User = Usuario;
-
-export interface CredencialesLogin {
-  nombreUsuario: string;
-  contraseña: string;
 }
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class AuthService {
-  private usuarioActualSubject = new BehaviorSubject<Usuario | null>(null);
-  public usuarioActual$ = this.usuarioActualSubject.asObservable();
+  private apiUrl = `${environment.apiUrl}/auth`;
+  private currentUserSubject = new BehaviorSubject<Usuario | null>(null);
+  public currentUser$ = this.currentUserSubject.asObservable();
 
-  // Alias para componentes que usan nombres en inglés
-  public currentUser$ = this.usuarioActual$;
-
-  constructor(private router: Router, private http: HttpClient) {
-    this.cargarUsuarioDesdeAlmacenamiento();
+  constructor(
+    private http: HttpClient,
+    private router: Router
+  ) {
+    // Al iniciar, verificar si hay sesión guardada
+    this.loadStoredUser();
   }
 
-  private cargarUsuarioDesdeAlmacenamiento(): void {
-    const usuarioAlmacenado = localStorage.getItem('usuarioActual');
-    if (usuarioAlmacenado) {
+  /**
+   * ✅ Cargar usuario guardado al iniciar la app
+   */
+  private loadStoredUser(): void {
+    const token = localStorage.getItem('access_token');
+    const userStr = localStorage.getItem('current_user');
+    
+    if (token && userStr) {
       try {
-        const usuario = JSON.parse(usuarioAlmacenado);
-        this.usuarioActualSubject.next(usuario);
-      } catch (error) {
-        localStorage.removeItem('usuarioActual');
+        const user = JSON.parse(userStr);
+        this.currentUserSubject.next(user);
+        console.log('✅ Sesión restaurada:', user);
+      } catch (e) {
+        console.error('❌ Error restaurando sesión:', e);
+        this.clearSession();
       }
     }
   }
 
-  login(username: string, password: string): Observable<Usuario> {
-    // 🔒 LOGS SEGUROS - Sin exponer credenciales
+  /**
+   * ✅ CORREGIDO: Login que GUARDA el token
+   */
+  login(username: string, password: string): Observable<any> {
     console.log('🚀 Iniciando autenticación...');
-    console.log('📧 Username length:', username?.length || 0);
-    console.log('🔒 Password length:', password?.length || 0);
-    console.log('🌐 Endpoint:', `${apiUrl}/auth/login`);
-  
-    // Codificar en base64 (sin mostrar en logs)
-    const usernameBase64 = btoa(username);
-    const passwordBase64 = btoa(password);
-  
-    const body = new HttpParams()
-      .set('username', usernameBase64)
-      .set('password', passwordBase64);
-      
+    console.log('📧 Username length:', username.length);
+    console.log('🔒 Password length:', password.length);
+
+    // Codificar credenciales en base64
+    const usernameEncoded = btoa(username);
+    const passwordEncoded = btoa(password);
+
+    // Crear body en formato x-www-form-urlencoded
+    const body = new URLSearchParams();
+    body.set('username', usernameEncoded);
+    body.set('password', passwordEncoded);
+
     const headers = new HttpHeaders({
       'Content-Type': 'application/x-www-form-urlencoded'
     });
-    
-    const loginUrl = `${apiUrl}/auth/login`;
-    
-    // 🔒 LOG SEGURO - Solo confirmar que se está enviando
+
+    console.log('🌐 Endpoint:', `${this.apiUrl}/login`);
     console.log('📤 Enviando petición de autenticación...');
-    
-    return this.http.post<LoginResponse>(
-      loginUrl,
-      body.toString(),
-      { headers }
-    ).pipe(
-      switchMap((loginResponse: LoginResponse) => {
-        // 🔒 LOG SEGURO - No mostrar token completo
+
+    return this.http.post<any>(`${this.apiUrl}/login`, body.toString(), { headers }).pipe(
+      tap(response => {
         console.log('✅ Respuesta de autenticación recibida');
-        console.log('🎫 Token type:', loginResponse.token_type);
-        console.log('🎫 Token recibido:', loginResponse.access_token ? 'SÍ' : 'NO');
-        
-        const tokenData = {
-          access_token: loginResponse.access_token,
-          token_type: loginResponse.token_type,
-          token: loginResponse.access_token
-        };
-        
-        localStorage.setItem('usuarioActual', JSON.stringify(tokenData));
-        
-        return this.obtenerInformacionUsuario(loginResponse.access_token).pipe(
-          tap((usuarioInfo: any) => {
-            // 🔒 LOG SEGURO - Solo información no sensible
-            console.log('✅ Información del usuario obtenida');
-            console.log('👤 Usuario ID:', usuarioInfo.id);
-            console.log('📧 Email:', usuarioInfo.email);
-            console.log('🏷️ Nombre:', usuarioInfo.nombre);
-            console.log('🎯 Roles:', usuarioInfo.roles);
-            console.log('✅ Estado activo:', usuarioInfo.estado);
-            
-            const usuarioCompleto: Usuario = {
-              id: usuarioInfo.id || 'temp',
-              nombreUsuario: usuarioInfo.email || usuarioInfo.nombreUsuario || username,
-              roles: usuarioInfo.roles || ['administrador'],
-              token: loginResponse.access_token,
-              access_token: loginResponse.access_token,
-              ...usuarioInfo
-            };
-            
-            localStorage.setItem('usuarioActual', JSON.stringify(usuarioCompleto));
-            this.usuarioActualSubject.next(usuarioCompleto);
-            
-            console.log('✅ Usuario autenticado y guardado correctamente');
-            
-            return usuarioCompleto;
-          }),
-          catchError((error) => {
-            console.warn('⚠️ No se pudo obtener información detallada del usuario');
-            console.warn('⚠️ Error status:', error.status);
-            
-            const usuarioPorDefecto: Usuario = {
-              id: 'temp',
-              nombreUsuario: username,
-              email: 'default@example.com', // Default email added
-              roles: ['administrador'],
-              token: loginResponse.access_token,
-              access_token: loginResponse.access_token
-            };
-            
-            localStorage.setItem('usuarioActual', JSON.stringify(usuarioPorDefecto));
-            this.usuarioActualSubject.next(usuarioPorDefecto);
-            
-            console.log('✅ Usuario creado con datos por defecto');
-            
-            return of(usuarioPorDefecto);
-          })
-        );
-      }),
-      tap((usuario: Usuario) => {
-        console.log('🎯 Login completado exitosamente');
-        console.log('👤 Usuario final - ID:', usuario.id);
-        console.log('🎯 Roles asignados:', usuario.roles);
-        console.log('🔐 Token presente:', !!usuario.access_token);
-      }),
-      catchError((error) => {
-        // 🔒 LOG SEGURO DE ERRORES - Sin exponer información sensible
-        console.error('❌ Error en autenticación');
-        console.error('📊 Status:', error.status);
-        console.error('📊 StatusText:', error.statusText);
-        
-        // Solo en desarrollo (puedes controlar esto con environment)
-        if (!environment.production) {
-          console.error('🔧 [DEV] Error URL:', error.url);
-          console.error('🔧 [DEV] Error details:', error.error);
+        console.log('🎫 Token type:', response.token_type);
+        console.log('🎫 Token recibido:', response.access_token ? 'SÍ' : 'NO');
+
+        // ✅ CRÍTICO: Guardar el token en localStorage
+        if (response.access_token) {
+          localStorage.setItem('access_token', response.access_token);
+          localStorage.setItem('token_type', response.token_type || 'bearer');
+          console.log('💾 Token guardado en localStorage');
+          console.log('🔐 Verificación - Token en storage:', localStorage.getItem('access_token') ? 'SÍ' : 'NO');
+        } else {
+          console.error('❌ No se recibió access_token en la respuesta');
         }
-        
-        return throwError(() => error);
+
+        // Obtener información del usuario
+        this.getUserInfo().subscribe({
+          next: (user) => {
+            console.log('✅ Usuario obtenido de /auth/me:', user);
+            this.setCurrentUser(user);
+          },
+          error: (error) => {
+            console.error('❌ Error obteniendo usuario:', error);
+          }
+        });
+      }),
+      catchError(error => {
+        console.error('❌ Error en login:', error);
+        throw error;
       })
     );
-  }  
+  }
 
-  cerrarSesion(): void {
-    localStorage.removeItem('usuarioActual');
-    this.usuarioActualSubject.next(null);
+  /**
+   * ✅ Obtener información del usuario autenticado
+   */
+  getUserInfo(): Observable<Usuario> {
+    return this.http.get<Usuario>(`${this.apiUrl}/me`).pipe(
+      tap(user => {
+        console.log('✅ Información del usuario obtenida');
+        console.log('👤 Usuario ID:', user.id);
+        console.log('📧 Email:', user.email);
+        console.log('🏷️ Nombre:', user.nombre);
+        console.log('🎯 Roles:', user.roles);
+        console.log('✅ Estado activo:', user.estado);
+      })
+    );
+  }
+
+  /**
+   * ✅ Establecer usuario actual
+   */
+  setCurrentUser(user: Usuario): void {
+    this.currentUserSubject.next(user);
+    localStorage.setItem('current_user', JSON.stringify(user));
+    console.log('✅ Usuario autenticado y guardado correctamente');
+  }
+
+  /**
+   * ✅ Obtener usuario actual
+   */
+  getCurrentUser(): Usuario | null {
+    return this.currentUserSubject.value;
+  }
+
+  /**
+   * ✅ Verificar si está autenticado
+   */
+  isAuthenticated(): boolean {
+    const token = localStorage.getItem('access_token');
+    const hasToken = !!token;
+    console.log('🔐 isAuthenticated - Token presente:', hasToken);
+    return hasToken;
+  }
+
+  /**
+   * ✅ Obtener token
+   */
+  getToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
+  /**
+   * ✅ Verificar si tiene rol específico
+   */
+  hasRole(role: string): boolean {
+    const user = this.getCurrentUser();
+    if (!user || !user.roles) {
+      return false;
+    }
+    return user.roles.includes(role);
+  }
+
+  /**
+   * ✅ Logout
+   */
+  logout(): void {
+    console.log('👋 Cerrando sesión...');
+    this.clearSession();
     this.router.navigate(['/login']);
   }
 
-  // Alias para cerrarSesion
-  logout(): void {
-    this.cerrarSesion();
+  /**
+   * ✅ Limpiar sesión
+   */
+  private clearSession(): void {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token_type');
+    localStorage.removeItem('current_user');
+    this.currentUserSubject.next(null);
+    console.log('🧹 Sesión limpiada');
   }
 
+  /**
+   * ✅ Verificar si es admin
+   */
+  isAdmin(): boolean {
+    return this.hasRole('admin');
+  }
+
+  /**
+   * ✅ Verificar si es operario
+   */
+  isOperator(): boolean {
+    return this.hasRole('operario');
+  }
+
+  // ============================================
+  // ✅ ALIAS EN ESPAÑOL PARA COMPATIBILIDAD
+  // ============================================
+
+  /**
+   * Alias: obtenerUsuarioActual
+   */
   obtenerUsuarioActual(): Usuario | null {
-    return this.usuarioActualSubject.value;
+    return this.getCurrentUser();
   }
 
-  // Alias para obtenerUsuarioActual
-  getCurrentUser(): Usuario | null {
-    return this.obtenerUsuarioActual();
+  /**
+   * Alias: cerrarSesion
+   */
+  cerrarSesion(): void {
+    this.logout();
   }
 
+  /**
+   * Alias: estaAutenticado
+   */
   estaAutenticado(): boolean {
-    return !!this.usuarioActualSubject.value;
+    return this.isAuthenticated();
   }
 
-  // Alias para estaAutenticado
-  isAuthenticated(): boolean {
-    return this.estaAutenticado();
+  /**
+   * Alias: obtenerToken
+   */
+  obtenerToken(): string | null {
+    return this.getToken();
   }
 
-  esAdministrador(): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles.includes('administrador');
+  /**
+   * Alias: tieneRol
+   */
+  tieneRol(role: string): boolean {
+    return this.hasRole(role);
   }
 
+  /**
+   * Alias: esAdmin
+   */
+  esAdmin(): boolean {
+    return this.isAdmin();
+  }
+
+  /**
+   * Alias: esOperario
+   */
   esOperario(): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles.includes('operario');
+    return this.isOperator();
   }
 
-  // Método para verificar el rol (alias)
-  hasRole(role: string): boolean {
-    const usuario = this.usuarioActualSubject.value;
-    return !!usuario && usuario.roles.includes(role);
+  /**
+   * Alias: obtenerInformacionUsuario
+   */
+  obtenerInformacionUsuario(): Observable<Usuario> {
+    return this.getUserInfo();
   }
 
-  // 🚀 MEJORADO: Obtener token de múltiples fuentes
-  obtenerTokenAuth(): string | null {
-    const usuario = this.usuarioActualSubject.value;
-    return usuario?.access_token || usuario?.token || null;
+  /**
+   * Alias: establecerUsuarioActual
+   */
+  establecerUsuarioActual(user: Usuario): void {
+    this.setCurrentUser(user);
   }
-
-  refrescarToken(): Observable<Usuario> {
-    return throwError(
-      () => new Error('Token refresh no disponible en modo simulado')
-    );
-  }
-
-  // 🚀 MEJORADO: Pasar token como parámetro para evitar referencias circulares
-  private obtenerInformacionUsuario(token: string): Observable<any> {
-    // Obtener información del usuario desde el backend
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${token}`
-    });
-    
-    return this.http.get<any>(`${apiUrl}/auth/me`, { headers }).pipe(
-      tap((userInfo) => {
-        console.log('✅ Usuario obtenido de /auth/me:', userInfo);
-      }),
-      catchError((error) => {
-        console.warn('⚠️ Error al obtener información del usuario desde /auth/me:', error);
-        throw error; // Re-lanzar el error para que sea manejado en el switchMap
-      })
-    );
-  }
-  
 }

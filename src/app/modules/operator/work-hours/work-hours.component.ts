@@ -10,8 +10,17 @@ import {
   JornadaLaboralResponse,
   EstadisticasJornada
 } from '../../../core/services/jornada-laboral.service';
-import { AuthService, Usuario } from '../../../core/services/auth.service';
+// ✅ DESPUÉS - Importar Usuario desde una interfaz separada o definirla localmente
+import { AuthService } from '../../../core/services/auth.service';
 
+// Y agrega la interfaz Usuario localmente en el componente:
+interface Usuario {
+  id: number;
+  nombre: string;
+  email: string;
+  estado: boolean;
+  roles: string[];
+}
 // ✅ Interface para el estado local simplificado
 interface LocalJornadaState {
   isActive: boolean;
@@ -140,7 +149,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    * ✅ Cargar usuario actual
    */
   private loadCurrentUser(): void {
-    this.currentUser = this.authService.obtenerUsuarioActual();
+    this.currentUser = this.authService.getCurrentUser();
     if (!this.currentUser) {
       this.error = 'No se pudo cargar la información del usuario. Inicie sesión nuevamente.';
       this.authService.cerrarSesion();

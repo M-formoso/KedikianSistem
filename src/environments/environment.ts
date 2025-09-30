@@ -1,10 +1,10 @@
-// src/environments/environment.ts
+// src/environments/environment.ts - CORREGIDO CRÍTICO
 export const environment = {
   production: false,
   useSimulatedData: false,
   
-  // 🔧 URL del API - CORREGIDA para conectar con tu backend
-  apiUrl: 'https://kedikian.site/api/v1',  // ← URL de tu servidor real
+  // ✅ URL correcta
+  apiUrl: 'https://kedikian.site/api/v1',
   
   // 📱 Configuración de la aplicación
   appName: 'Sistema Movimiento de Suelo - Operario',
@@ -94,7 +94,7 @@ export const environment = {
     logEndpoint: null
   },
   
-  // 🌐 URLs del backend por funcionalidad - CORREGIDAS según tu backend
+  // 🌐 URLs del backend por funcionalidad - ✅ CORREGIDAS CRÍTICAMENTE
   endpoints: {
     auth: {
       login: '/auth/login',
@@ -102,34 +102,39 @@ export const environment = {
       me: '/auth/me',
       refresh: '/auth/refresh'
     },
+    // ❌ PROBLEMA CRÍTICO AQUÍ - workHours debe usar jornadas-laborales
     workHours: {
-      clockIn: '/reportes-laborales',
-      clockOut: '/reportes-laborales',
-      recent: '/reportes-laborales',
-      byUser: '/reportes-laborales'
+      clockIn: '/jornadas-laborales/fichar-entrada',        // ✅ CORREGIDO
+      clockOut: '/jornadas-laborales/finalizar',            // ✅ CORREGIDO  
+      recent: '/jornadas-laborales/usuario',                // ✅ CORREGIDO
+      byUser: '/jornadas-laborales/usuario',                // ✅ CORREGIDO
+      active: '/jornadas-laborales/activa',                 // ✅ AGREGADO
+      confirmOvertime: '/jornadas-laborales/confirmar-overtime', // ✅ AGREGADO
+      rejectOvertime: '/jornadas-laborales/rechazar-overtime',   // ✅ AGREGADO
+      statistics: '/jornadas-laborales/estadisticas',       // ✅ AGREGADO
+      updateStatus: '/jornadas-laborales/actualizar-estado' // ✅ AGREGADO
     },
+    // ✅ machineHours SÍ debe usar reportes-laborales (para trabajos con máquinas)
     machineHours: {
       create: '/reportes-laborales',
       list: '/reportes-laborales', 
       machines: '/maquinas',
       projects: '/proyectos',
-      machineTypes: '/maquinas' // Los tipos se extraen de las máquinas
+      machineTypes: '/maquinas'
     },
     expenses: {
       create: '/gastos',
       list: '/gastos',
-      types: '/gastos', // Los tipos serán hardcodeados o desde catálogos
-      methods: '/gastos' // Los métodos serán hardcodeados o desde catálogos
+      types: '/gastos',
+      methods: '/gastos'
     },
     materials: {
-      deliveries: '/entregas-arido', // Según tu router
+      deliveries: '/entregas-arido',
       projects: '/proyectos',
-      vehicles: '/maquinas', // Vehículos podrían ser un tipo de máquina
-      materials: '/productos' // Materiales podrían estar en productos
+      vehicles: '/maquinas',
+      materials: '/productos'
     },
     users: '/usuarios',
-    
-    // Endpoints adicionales según tu backend
     contracts: '/contratos',
     payments: '/pagos',
     products: '/productos',

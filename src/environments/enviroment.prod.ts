@@ -1,10 +1,10 @@
-// src/environments/environment.prod.ts  
+// src/environments/environment.prod.ts - CORREGIDO
 export const environment = {
   production: true,
   useSimulatedData: false,
   
-  // ✅ URL de producción - usar la URL de tu servidor
-  apiUrl: 'https://kedikian.site/api/v1',  // ← Tu servidor real
+  // ✅ URL de producción
+  apiUrl: 'https://kedikian.site/api/v1',
   
   // 📱 Configuración de la aplicación
   appName: 'Sistema Movimiento de Suelo - Operario',
@@ -94,7 +94,7 @@ export const environment = {
     logEndpoint: null
   },
   
-  // 🌐 URLs del backend por funcionalidad
+  // 🌐 URLs del backend por funcionalidad - ✅ CORREGIDAS
   endpoints: {
     auth: {
       login: '/auth/login',
@@ -102,12 +102,19 @@ export const environment = {
       me: '/auth/me',
       refresh: '/auth/refresh'
     },
+    // ✅ CORREGIDO: workHours usa jornadas-laborales
     workHours: {
-      clockIn: '/reportes-laborales',
-      clockOut: '/reportes-laborales',
-      recent: '/reportes-laborales',
-      byUser: '/reportes-laborales'
+      clockIn: '/jornadas-laborales/fichar-entrada',
+      clockOut: '/jornadas-laborales/finalizar',
+      recent: '/jornadas-laborales/usuario',
+      byUser: '/jornadas-laborales/usuario',
+      active: '/jornadas-laborales/activa',
+      confirmOvertime: '/jornadas-laborales/confirmar-overtime',
+      rejectOvertime: '/jornadas-laborales/rechazar-overtime',
+      statistics: '/jornadas-laborales/estadisticas',
+      updateStatus: '/jornadas-laborales/actualizar-estado'
     },
+    // ✅ machineHours usa reportes-laborales
     machineHours: {
       create: '/reportes-laborales',
       list: '/reportes-laborales',

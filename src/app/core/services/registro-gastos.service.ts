@@ -82,7 +82,7 @@ export class ExpenseService {
     throw new Error('Method not implemented.');
   }
   // ✅ URL corregida según tu backend
-  private apiUrl = `${environment.apiUrl}/gastos/json`;
+  private apiUrl = `${environment.apiUrl}/gastos/`;
   
   constructor(private http: HttpClient) {}
 

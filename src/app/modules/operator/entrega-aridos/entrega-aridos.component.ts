@@ -107,9 +107,9 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
         id: Number(currentUser.id) || 999,
-        nombre: currentUser.nombreUsuario, // Usar nombreUsuario en lugar de nombre
-        name: currentUser.nombreUsuario, // Alias para compatibilidad
-        email: `${currentUser.nombreUsuario}@temp.com`, // Generar email temporal
+        nombre: currentUser.nombre,
+        name: currentUser.nombre,
+        email: currentUser.email,
         roles: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : currentUser.roles || 'operario',
         estado: true, // Por defecto activo
         status: 'active'

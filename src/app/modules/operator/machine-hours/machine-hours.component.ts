@@ -136,8 +136,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     if (user) {
       this.currentOperator = {
         id: Number(user.id) || 999,
-        nombre: user.nombreUsuario || 'Usuario Test',
-        name: user.nombreUsuario || 'Usuario Test',
+        nombre: user.nombre || 'Usuario Test',
+        name: user.nombre || 'Usuario Test',
         email: user.email || 'test@test.com',
         roles: Array.isArray(user.roles) ? user.roles.join(',') : (typeof user.roles === 'string' ? user.roles : 'operario')
       };

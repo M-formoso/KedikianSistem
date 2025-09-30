@@ -1,13 +1,17 @@
-import { ApplicationConfig } from '@angular/core';
+// src/app/app.config.ts - CONFIGURACIÓN PARA ANGULAR STANDALONE
+
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { appRouterProviders } from './app.routes';
-import { AuthInterceptor } from './core/interceptors/auth.interceptor';
-import { DebugService } from './core/services/debug.service';
+import { routes } from './app.routes';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideHttpClient(withInterceptors([AuthInterceptor])), // ✅ Interceptor corregido
-    appRouterProviders,
-    DebugService, // ✅ Servicio de debug añadido
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideHttpClient(
+      withInterceptors([authInterceptor]) // ⬅️ REGISTRAR INTERCEPTOR AQUÍ
+    )
   ]
 };

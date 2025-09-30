@@ -113,7 +113,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
         id: userId.toString(),
-        name: currentUser.nombreUsuario || 'Usuario Test',
+        name: currentUser.nombre || 'Usuario Test',
         position: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : (currentUser.roles || 'operario'),
         isActive: true
       };
