@@ -19,7 +19,7 @@
     <div class="work-active-header">
       <h3>🚜 Trabajo en Progreso</h3>
       <div class="work-details">
-        <span>{{ getProjectName(machineHoursForm.get('project')?.value) }}</span>
+        <span>{{ activeMachineWork?.projectName || getProjectName(machineHoursForm.get('project')?.value) }}</span>
         <span>•</span>
         <span>{{ getMachineName(machineHoursForm.get('machineId')?.value) }}</span>
       </div>
@@ -30,6 +30,8 @@
         <span>Inicio: {{ formattedStartTime }}</span>
         <span>•</span>
         <span>{{ elapsedTimeDecimal | number:'1.2-2' }} horas</span>
+        <span>•</span>
+        <span>{{ elapsedTimeMinutes | number:'1.0-0' }} minutos</span>
       </div>
     </div>
   </div>
@@ -90,60 +92,29 @@
           </div>
         </div>
 
-        <!-- ✅ SIMPLIFICADO: Solo horómetro inicial y final -->
+        <!-- ✅ SIMPLIFICADO: Solo horómetro inicial -->
         <div class="machine-hours-section">
           <h4 class="section-subtitle">
             🔧 Lectura del Horómetro
-            <small>Registre las horas que muestra el horómetro de la máquina</small>
+            <small>Registre las horas que muestra el horómetro de la máquina al inicio</small>
           </h4>
           
-          <div class="form-row">
-            <!-- Horómetro inicial -->
-            <div class="form-group half-width">
-              <label for="hourMeterStart">
-                Horómetro Inicial *
-                <span class="help-icon" title="Horas que muestra el horómetro al iniciar">ℹ️</span>
-              </label>
-              <input type="number" 
-                     id="hourMeterStart" 
-                     formControlName="hourMeterStart" 
-                     class="form-control" 
-                     step="0.1"
-                     placeholder="ej: 1250.5"
-                     [disabled]="isTimerActive">
-              <small class="form-text">Lectura del horómetro al arrancar la máquina</small>
-              <div *ngIf="hasFieldError('hourMeterStart')" class="error-message">
-                Horómetro inicial es requerido
-              </div>
-            </div>
-            
-            <!-- Horómetro final -->
-            <div class="form-group half-width">
-              <label for="hourMeterEnd">
-                Horómetro Final *
-                <span class="help-icon" title="Horas que muestra el horómetro al finalizar">ℹ️</span>
-              </label>
-              <input type="number" 
-                     id="hourMeterEnd" 
-                     formControlName="hourMeterEnd" 
-                     class="form-control" 
-                     step="0.1"
-                     placeholder="ej: 1257.3"
-                     [disabled]="!isTimerActive"
-                     (blur)="calculateOperatingHours()">
-              <small class="form-text">Lectura del horómetro al apagar la máquina</small>
-              <div *ngIf="machineHoursForm.errors?.['invalidHourMeter']" class="error-message">
-                Horómetro final debe ser mayor al inicial
-              </div>
-            </div>
-          </div>
-
-          <!-- ✅ SIMPLIFICADO: Solo mostrar horas operativas calculadas -->
-          <div class="calculated-hours" *ngIf="operatingHours > 0">
-            <div class="hours-display">
-              <span class="hours-label">Horas de Operación de la Máquina:</span>
-              <span class="hours-value">{{ operatingHours.toFixed(1) }} hrs</span>
-              <span class="hours-subtext">(Diferencia entre horómetro final e inicial)</span>
+          <!-- Solo horómetro inicial -->
+          <div class="form-group">
+            <label for="hourMeterStart">
+              Horómetro Inicial *
+              <span class="help-icon" title="Horas que muestra el horómetro al iniciar">ℹ️</span>
+            </label>
+            <input type="number" 
+                   id="hourMeterStart" 
+                   formControlName="hourMeterStart" 
+                   class="form-control" 
+                   step="0.1"
+                   placeholder="ej: 1250.5"
+                   [disabled]="isTimerActive">
+            <small class="form-text">Lectura del horómetro al arrancar la máquina</small>
+            <div *ngIf="hasFieldError('hourMeterStart')" class="error-message">
+              Horómetro inicial es requerido
             </div>
           </div>
         </div>
@@ -216,8 +187,8 @@
           <li>Ingrese el <strong>horómetro inicial</strong> (lectura actual del horómetro)</li>
           <li>Agregue <strong>observaciones</strong> si es necesario</li>
           <li>Haga clic en <strong>"Iniciar Trabajo"</strong> para comenzar el contador</li>
-          <li>Al finalizar, ingrese el <strong>horómetro final</strong></li>
-          <li>Haga clic en <strong>"Finalizar y Guardar"</strong></li>
+          <li>Al finalizar, haga clic en <strong>"Finalizar y Guardar"</strong></li>
+          <li>El tiempo trabajado se registrará automáticamente en <strong>minutos</strong></li>
         </ol>
       </div>
     </form>
@@ -246,8 +217,6 @@
             <th>Máquina</th>
             <th>Horas Trabajo</th>
             <th>Horómetro Inicial</th>
-            <th>Horómetro Final</th>
-            <th>Horas Máquina</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -271,26 +240,11 @@
                 <small class="hours-detail">{{ record.startHour | number:'1.1-1' }}h - {{ record.endHour | number:'1.1-1' }}h</small>
               </div>
             </td>
-            <!-- ✅ SIMPLIFICADO: Columnas de horómetro -->
             <td [attr.data-label]="'Horómetro Inicial'">
               <span *ngIf="record.hourMeterStart; else noStartMeter">{{ record.hourMeterStart | number:'1.1-1' }}</span>
               <ng-template #noStartMeter>
                 <span class="text-muted">No registrado</span>
               </ng-template>
-            </td>
-            <td [attr.data-label]="'Horómetro Final'">
-              <span *ngIf="record.hourMeterEnd; else noEndMeter">{{ record.hourMeterEnd | number:'1.1-1' }}</span>
-              <ng-template #noEndMeter>
-                <span class="text-muted">No registrado</span>
-              </ng-template>
-            </td>
-            <td [attr.data-label]="'Horas Máquina'">
-              <div class="machine-hours-breakdown">
-                <span class="hours-main" *ngIf="record.operatingHours; else noMachineHours">{{ record.operatingHours | number:'1.1-1' }}h</span>
-                <ng-template #noMachineHours>
-                  <span class="hours-main text-muted">No calculado</span>
-                </ng-template>
-              </div>
             </td>
             <td [attr.data-label]="'Estado'" class="status-cell">
               <span class="status-badge status-completed">Completado</span>
@@ -299,7 +253,7 @@
           
           <!-- Fila vacía -->
           <tr *ngIf="recentRecords.length === 0">
-            <td colspan="8" class="empty-table">
+            <td colspan="6" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">📋</span>
                 <p>No hay registros recientes</p>

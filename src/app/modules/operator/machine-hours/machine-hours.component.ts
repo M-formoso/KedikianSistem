@@ -1,4 +1,4 @@
-// machine-hours.component.ts - VERSIÓN SIMPLIFICADA SIN CÁLCULOS COMPLEJOS
+// machine-hours.component.ts - VERSIÓN CORREGIDA CON CAMBIOS SOLICITADOS
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -20,10 +20,11 @@ interface MachineWorkStatus {
   startTimestamp: string;
   usuarioId: number;
   project: string;
+  projectName: string; // ✅ NUEVO: Guardar nombre del proyecto
   machineId: string;
   machineType: string;
   notes: string;
-  hourMeterStart: number; // ✅ SIMPLIFICADO: Solo horómetro inicial
+  hourMeterStart: number; // ✅ Solo horómetro inicial
 }
 
 interface CurrentOperator {
@@ -52,7 +53,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   loading = false;
   loadingMasterData = false;
   
-  // ✅ Estados del contador - simplificados
+  // ✅ Estados del contador
   isTimerActive = false;
   startTime: Date | null = null;
   currentTime: Date = new Date();
@@ -62,9 +63,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   
   // ✅ Flag para evitar restauración después de finalizar
   private isFinishing = false;
-  
-  // 🆕 SIMPLIFICADO: Solo horas operativas básicas
-  operatingHours = 0;
   
   // Estado de trabajo de máquina activo
   activeMachineWork: MachineWorkStatus | null = null;
@@ -106,7 +104,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ SIMPLIFICADO: Inicializar formulario solo con campos esenciales
+   * ✅ MODIFICADO: Solo horómetro inicial
    */
   private initializeForm(): void {
     const today = new Date().toISOString().split('T')[0];
@@ -118,12 +116,8 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       machineId: ['', [Validators.required]],
       notes: [''],
       
-      // 🆕 SIMPLIFICADO: Solo horómetro inicial y final
-      hourMeterStart: ['', [Validators.required, Validators.min(0)]],
-      hourMeterEnd: ['', [Validators.min(0)]]
-    }, {
-      // ✅ Validador simple para horómetro
-      validators: [this.hourMeterValidator]
+      // ✅ SOLO horómetro inicial (eliminado hourMeterEnd)
+      hourMeterStart: ['', [Validators.required, Validators.min(0)]]
     });
   }
 
@@ -187,7 +181,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         // Deshabilitar campos
         this.machineHoursForm.get('project')?.disable();
         this.machineHoursForm.get('machineId')?.disable();
-        this.machineHoursForm.get('hourMeterStart')?.disable(); // ✅ También deshabilitar horómetro inicial
+        this.machineHoursForm.get('hourMeterStart')?.disable();
         
         console.log('✅ Trabajo activo restaurado');
         return;
@@ -230,7 +224,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Iniciar nuevo trabajo - SIMPLIFICADO
+   * ✅ MODIFICADO: Iniciar nuevo trabajo con nombre de proyecto
    */
   startTimer(): void {
     console.log('🚀 Iniciando nuevo trabajo...');
@@ -252,17 +246,20 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.success = false;
 
-    // ✅ SIMPLIFICADO: Estado de trabajo con horómetro inicial
+    // ✅ MODIFICADO: Guardar nombre del proyecto también
+    const projectName = this.getProjectName(formValues.project);
+    
     this.activeMachineWork = {
       isActive: true,
       startTime: this.extractTime(this.startTime.toISOString()),
       startTimestamp: this.startTime.toISOString(),
       usuarioId: this.currentOperator!.id,
       project: formValues.project,
+      projectName: projectName, // ✅ NUEVO
       machineId: formValues.machineId,
       machineType: 'excavadora',
       notes: formValues.notes || '',
-      hourMeterStart: parseFloat(formValues.hourMeterStart) // ✅ Guardar horómetro inicial
+      hourMeterStart: parseFloat(formValues.hourMeterStart)
     };
 
     console.log('✅ Estado de trabajo creado:', this.activeMachineWork);
@@ -272,13 +269,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     // Deshabilitar campos
     this.machineHoursForm.get('project')?.disable();
     this.machineHoursForm.get('machineId')?.disable();
-    this.machineHoursForm.get('hourMeterStart')?.disable(); // ✅ Deshabilitar horómetro inicial
+    this.machineHoursForm.get('hourMeterStart')?.disable();
 
     console.log('✅ Trabajo iniciado correctamente');
   }
 
   /**
-   * ✅ SIMPLIFICADO: Finalizar trabajo solo validando horómetro final
+   * ✅ MODIFICADO: Finalizar trabajo - tiempo en MINUTOS
    */
   stopTimer(): void {
     console.log('🛑 FINALIZANDO TRABAJO - INICIO DEL PROCESO');
@@ -287,22 +284,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       this.error = 'No hay trabajo activo para finalizar';
       return;
     }
-
-    // ✅ SIMPLIFICADO: Solo validar horómetro final
-    const hourMeterEnd = this.machineHoursForm.get('hourMeterEnd')?.value;
-    if (!hourMeterEnd || hourMeterEnd <= 0) {
-      this.error = 'Debe ingresar la lectura final del horómetro antes de finalizar';
-      return;
-    }
-
-    const hourMeterStart = this.activeMachineWork.hourMeterStart;
-    if (hourMeterEnd <= hourMeterStart) {
-      this.error = 'El horómetro final debe ser mayor al inicial';
-      return;
-    }
-
-    // ✅ SIMPLIFICADO: Calcular solo horas operativas
-    this.operatingHours = hourMeterEnd - hourMeterStart;
 
     this.isFinishing = true;
     this.isTimerActive = false;
@@ -314,7 +295,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ SIMPLIFICADO: Guardar en backend solo con datos básicos
+   * ✅ MODIFICADO: Guardar en backend - tiempo en MINUTOS
    */
   private saveToBackend(): void {
     console.log('💾 Guardando en backend...');
@@ -330,18 +311,17 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     const endTime = new Date();
     const startHour = this.getDecimalHours(this.startTime);
     const endHour = this.getDecimalHours(endTime);
-    const totalHours = Math.round(endHour - startHour);
     
-    const hourMeterEnd = this.machineHoursForm.get('hourMeterEnd')?.value;
+    // ✅ CAMBIO CRÍTICO: Calcular tiempo total en MINUTOS
+    const totalMinutes = Math.round((endTime.getTime() - this.startTime.getTime()) / (1000 * 60));
+    
+    console.log('⏱️ Tiempo total trabajado:', totalMinutes, 'minutos');
 
-    // ✅ SIMPLIFICADO: Datos básicos para el backend
+    // ✅ MODIFICADO: Notas simplificadas (sin horómetro final)
     const notasConDatos = {
       notas_usuario: this.activeMachineWork.notes || '',
-      horometro: {
-        inicial: this.activeMachineWork.hourMeterStart,
-        final: hourMeterEnd,
-        operacion: this.operatingHours
-      },
+      horometro_inicial: this.activeMachineWork.hourMeterStart,
+      tiempo_trabajado_minutos: totalMinutes,
       timestamp: new Date().toISOString()
     };
     
@@ -351,13 +331,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       machineId: this.activeMachineWork.machineId,
       startHour: startHour,
       endHour: endHour,
-      totalHours: Math.max(1, totalHours),
+      totalHours: Math.max(1, Math.round(totalMinutes / 60)), // Backend espera horas enteras
       project: this.activeMachineWork.project,
       operator: this.currentOperator.id.toString(),
       notes: JSON.stringify(notasConDatos)
     };
 
-    console.log('📤 Datos para backend (SIMPLIFICADOS):', machineHoursData);
+    console.log('📤 Datos para backend (TIEMPO EN MINUTOS):', machineHoursData);
 
     this.machineHoursService.createMachineHours(machineHoursData)
       .pipe(takeUntil(this.destroy$))
@@ -391,7 +371,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ SIMPLIFICADO: Completar finalización - limpiar estado
+   * ✅ Completar finalización - limpiar estado
    */
   private completeFinalization(): void {
     console.log('🧹 Completando finalización - limpieza final');
@@ -403,7 +383,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.elapsedMinutes = 0;
     this.elapsedSeconds = 0;
     this.isFinishing = false;
-    this.operatingHours = 0;
     
     // Rehabilitar formulario
     this.machineHoursForm.get('project')?.enable();
@@ -416,8 +395,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       project: '',
       machineId: '',
       notes: '',
-      hourMeterStart: '',
-      hourMeterEnd: ''
+      hourMeterStart: ''
     });
     
     this.submitted = false;
@@ -437,42 +415,12 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     
     console.log('🔄 Reset manual');
     this.isFinishing = true;
-    this.operatingHours = 0;
     
     this.machineHoursForm.patchValue({
-      hourMeterStart: '',
-      hourMeterEnd: ''
+      hourMeterStart: ''
     });
     
     this.completeFinalization();
-  }
-
-  /**
-   * ✅ SIMPLIFICADO: Calcular horas operativas automáticamente
-   */
-  calculateOperatingHours(): void {
-    const start = this.activeMachineWork?.hourMeterStart;
-    const end = this.machineHoursForm.get('hourMeterEnd')?.value;
-    
-    if (start && end && parseFloat(end) > start) {
-      this.operatingHours = parseFloat(end) - start;
-      console.log('✅ Horas operativas calculadas:', this.operatingHours);
-    } else {
-      this.operatingHours = 0;
-    }
-  }
-
-  /**
-   * ✅ SIMPLIFICADO: Validador solo para horómetro
-   */
-  private hourMeterValidator(formGroup: FormGroup) {
-    const start = formGroup.get('hourMeterStart')?.value;
-    const end = formGroup.get('hourMeterEnd')?.value;
-    
-    if (start && end && parseFloat(end) <= parseFloat(start)) {
-      return { invalidHourMeter: true };
-    }
-    return null;
   }
 
   /**
@@ -570,6 +518,9 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     return this.machineHoursForm.controls; 
   }
   
+  /**
+   * ✅ Obtener nombre del proyecto por ID
+   */
   getProjectName(projectId: string | number): string {
     if (!projectId) return 'Sin proyecto';
     const project = this.projects.find(p => p.id.toString() === projectId.toString());
@@ -604,7 +555,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       'project': 'El proyecto',
       'machineId': 'La máquina',
       'hourMeterStart': 'El horómetro inicial',
-      'hourMeterEnd': 'El horómetro final',
       'notes': 'Las observaciones'
     };
     return labels[fieldName] || fieldName;
@@ -631,6 +581,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
 
   get elapsedTimeDecimal(): number {
     return this.elapsedHours + (this.elapsedMinutes / 60) + (this.elapsedSeconds / 3600);
+  }
+
+  /**
+   * ✅ NUEVO: Tiempo transcurrido en minutos
+   */
+  get elapsedTimeMinutes(): number {
+    return (this.elapsedHours * 60) + this.elapsedMinutes + (this.elapsedSeconds / 60);
   }
 
   get formattedCurrentTime(): string {
@@ -663,7 +620,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ SIMPLIFICADO: Verificar si se puede iniciar timer
+   * ✅ MODIFICADO: Verificación sin horómetro final
    */
   canStartTimer(): boolean {
     if (this.isTimerActive || this.isFinishing) {

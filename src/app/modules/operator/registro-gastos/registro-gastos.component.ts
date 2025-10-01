@@ -279,6 +279,19 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
           this.error = error.message || error || 'Error al procesar la solicitud';
         }
       });
+
+       // ✅ TEST: Imprimir datos exactos que se enviarán
+  console.group('🧪 VALIDACIÓN DE DATOS');
+  console.log('Usuario ID:', this.currentOperator?.id);
+  console.log('Tipo usuario ID:', typeof this.currentOperator?.id);
+  console.log('Tipo de gasto:', formValues.expenseType);
+  console.log('Monto:', formValues.amount);
+  console.log('Tipo monto:', typeof formValues.amount);
+  console.groupEnd();
+  
+  // Continuar con el envío...
+
+
   }
 
   /**

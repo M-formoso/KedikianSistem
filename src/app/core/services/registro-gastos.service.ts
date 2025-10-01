@@ -82,29 +82,37 @@ export class ExpenseService {
     throw new Error('Method not implemented.');
   }
   // ✅ URL corregida según tu backend
-  private apiUrl = `${environment.apiUrl}/gastos/`;
+  private apiUrl = `${environment.apiUrl}/gastos/json`;
   
   constructor(private http: HttpClient) {}
 
+  // src/app/core/services/registro-gastos.service.ts - LÍNEA 150-170
+
 createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-  console.log('🧪 === ENVÍO JSON CORREGIDO ===');
-  console.log('📤 Datos recibidos:', expense);
+  console.log('📤 Datos recibidos del formulario:', expense);
   
-  // ✅ CAMBIO CRÍTICO: Usar JSON en lugar de FormData
-  const jsonData = {
-    usuario_id: parseInt(expense.operator), // Convertir a número
-    maquina_id: 1, // Default machine ID como número
+  // ✅ CRÍTICO: Transformar correctamente al formato del backend
+  const backendData = {
+    usuario_id: parseInt(expense.operator), // ✅ Convertir a número
+    maquina_id: 1, // ✅ ID de máquina por defecto (ajusta según necesites)
     tipo: expense.expenseType,
-    importe_total: Math.round(expense.amount), // Como número entero
+    importe_total: Math.round(expense.amount), // ✅ Como entero
     fecha: new Date(expense.date).toISOString(),
     descripcion: this.buildDescription(expense)
   };
-  
-  console.log('📋 JSON Data creado:', jsonData);
-  
-  // ✅ Headers para JSON
+
+  console.log('📋 Datos transformados para backend:', backendData);
+  console.log('🔍 Tipos verificados:');
+  console.log('  - usuario_id:', typeof backendData.usuario_id, '=', backendData.usuario_id);
+  console.log('  - maquina_id:', typeof backendData.maquina_id, '=', backendData.maquina_id);
+  console.log('  - tipo:', typeof backendData.tipo, '=', backendData.tipo);
+  console.log('  - importe_total:', typeof backendData.importe_total, '=', backendData.importe_total);
+  console.log('  - fecha:', typeof backendData.fecha, '=', backendData.fecha);
+  console.log('  - descripcion:', typeof backendData.descripcion, '=', backendData.descripcion);
+
+  // Headers para JSON
   let headers = new HttpHeaders({
-    'Content-Type': 'application/json', // ← AHORA SÍ incluir Content-Type
+    'Content-Type': 'application/json',
     'Accept': 'application/json'
   });
   
@@ -123,13 +131,12 @@ createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
     }
   }
   
-  console.log('📡 Enviando petición JSON a:', this.apiUrl);
+  console.log('📡 Enviando petición a:', `${this.apiUrl}json`);
   
-  return this.http.post(this.apiUrl, jsonData, { headers }).pipe(
+  // ✅ CRÍTICO: Usar el endpoint /json específicamente
+  return this.http.post(this.apiUrl, backendData, { headers }).pipe(
     map((response: any) => {
-      console.log('✅ === RESPUESTA EXITOSA ===');
-      console.log('📥 Respuesta completa:', response);
-      
+      console.log('✅ Respuesta exitosa:', response);
       return {
         success: true,
         data: response,
@@ -137,17 +144,14 @@ createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
       };
     }),
     catchError((error: any) => {
-      console.error('❌ === ERROR DETALLADO ===');
-      console.error('🔍 Status:', error.status);
-      console.error('🔍 StatusText:', error.statusText);
-      console.error('🔍 URL:', error.url);
-      console.error('🔍 Error body:', error.error);
+      console.error('❌ Error completo:', error);
+      console.error('Status:', error.status);
+      console.error('Error body:', error.error);
       
       let errorMessage = 'Error desconocido';
       
       if (error.status === 422) {
         if (error.error?.detail) {
-          // Formatear errores de validación de FastAPI
           if (Array.isArray(error.error.detail)) {
             const validationErrors = error.error.detail.map((err: any) => 
               `${err.loc?.join('.')}: ${err.msg}`
@@ -156,22 +160,17 @@ createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
           } else {
             errorMessage = `Error de validación: ${JSON.stringify(error.error.detail)}`;
           }
-        } else {
-          errorMessage = 'Error de validación: datos inválidos';
         }
       } else if (error.status === 400) {
         errorMessage = 'Datos inválidos';
       } else if (error.status === 401) {
         errorMessage = 'No autorizado - verifique su sesión';
-      } else {
-        errorMessage = `Error ${error.status}: ${error.message || 'Error desconocido'}`;
       }
       
       return throwError(() => new Error(errorMessage));
     })
   );
 }
-
 /**
  * ✅ Construir descripción completa con todos los datos adicionales
  */
