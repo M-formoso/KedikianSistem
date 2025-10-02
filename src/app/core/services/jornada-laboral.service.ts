@@ -32,7 +32,6 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// ✅ AGREGA ESTA INTERFAZ
 export interface EstadisticasJornada {
   mes: number;
   año: number;
@@ -53,29 +52,40 @@ export class JornadaLaboralService {
 
   constructor(private http: HttpClient) {}
 
-  // ✅ CORREGIDO: Usar el endpoint correcto /iniciar
+  // ✅ CORREGIDO: Cambiar de /iniciar a /fichar-entrada
   ficharEntrada(usuarioId: number, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🚀 Iniciando jornada para usuario:', usuarioId);
     
-    const params = new HttpParams()
-      .set('usuario_id', usuarioId.toString())
-      .set('notas_inicio', notas || '');
+    const body = {
+      usuario_id: usuarioId,
+      notas_inicio: notas || null,
+      ubicacion: null
+    };
+
+    console.log('📤 Body que se enviará:', JSON.stringify(body, null, 2));
 
     return this.http.post<JornadaLaboralResponse>(
-      `${this.apiUrl}/iniciar`,
-      null,
-      { params }
+      `${this.apiUrl}/fichar-entrada`,  // ✅ CAMBIO: de /iniciar a /fichar-entrada
+      body
     ).pipe(
-      map(response => ({
-        success: true,
-        data: response,
-        message: 'Entrada registrada correctamente'
-      })),
-      catchError(this.handleError.bind(this))
+      map(response => {
+        console.log('✅ Respuesta exitosa del backend:', response);
+        return {
+          success: true,
+          data: response,
+          message: 'Entrada registrada correctamente'
+        };
+      }),
+      catchError((error) => {
+        console.error('❌ Error completo:', error);
+        console.error('❌ Status:', error.status);
+        console.error('❌ Error body:', error.error);
+        return this.handleError(error);
+      })
     );
   }
 
-  // ✅ CORREGIDO: Usar el endpoint correcto /finalizar
+  // ✅ CORREGIDO: Cambiar endpoint de finalización
   finalizarJornada(
     jornadaId: number,
     tiempoDescanso: number = 60,
@@ -85,15 +95,16 @@ export class JornadaLaboralService {
   ): Observable<ApiResponse<JornadaLaboralResponse>> {
     console.log('🛑 Finalizando jornada ID:', jornadaId);
 
-    const params = new HttpParams()
-      .set('tiempo_descanso', tiempoDescanso.toString())
-      .set('notas_fin', notas || '')
-      .set('forzado', forzado.toString());
+    const body = {
+      tiempo_descanso: tiempoDescanso,
+      notas_fin: notas || null,
+      ubicacion: ubicacion || null,
+      forzado: forzado
+    };
 
-    return this.http.post<JornadaLaboralResponse>(
-      `${this.apiUrl}/${jornadaId}/finalizar`,
-      null,
-      { params }
+    return this.http.put<JornadaLaboralResponse>(  // ✅ CAMBIO: de POST a PUT
+      `${this.apiUrl}/finalizar/${jornadaId}`,  // ✅ CAMBIO: estructura del endpoint
+      body
     ).pipe(
       map(response => ({
         success: true,
@@ -142,10 +153,10 @@ export class JornadaLaboralService {
     );
   }
 
-  // ✅ Obtener jornada activa
+  // ✅ CORREGIDO: Cambiar endpoint de jornada activa
   obtenerJornadaActiva(usuarioId: number): Observable<ApiResponse<JornadaLaboralResponse | null>> {
     return this.http.get<JornadaLaboralResponse>(
-      `${this.apiUrl}/activa/usuario/${usuarioId}`
+      `${this.apiUrl}/activa/usuario/${usuarioId}`  // ✅ CAMBIO: agregar /usuario/
     ).pipe(
       map(response => ({
         success: true,
@@ -154,7 +165,11 @@ export class JornadaLaboralService {
       })),
       catchError(error => {
         if (error.status === 404) {
-          return [{ success: true, data: null, message: 'No hay jornada activa' }];
+          return [{
+            success: true,
+            data: null,
+            message: 'No hay jornada activa'
+          }];
         }
         return this.handleError(error);
       })
@@ -180,11 +195,17 @@ export class JornadaLaboralService {
     );
   }
 
-  // ✅ Obtener estadísticas del mes
-  obtenerEstadisticasMes(usuarioId: number, mes: number, anio: number): Observable<any> {
-    return this.http.get(
-      `${this.apiUrl}/estadisticas/usuario/${usuarioId}`
-    ).pipe(
+  // ✅ CORREGIDO: Endpoint de estadísticas sin mes/año obligatorios
+  obtenerEstadisticasMes(usuarioId: number, mes?: number, anio?: number): Observable<any> {
+    // Si no se proporcionan mes/año, el backend usará el mes actual
+    let url = `${this.apiUrl}/estadisticas/usuario/${usuarioId}`;
+    
+    // Agregar parámetros opcionales si se proporcionan
+    let params = new HttpParams();
+    if (mes) params = params.set('mes', mes.toString());
+    if (anio) params = params.set('anio', anio.toString());
+
+    return this.http.get(url, { params }).pipe(
       map(stats => ({
         success: true,
         data: stats
@@ -205,6 +226,8 @@ export class JornadaLaboralService {
       errorMessage = error.error?.message || 'Solicitud incorrecta';
     } else if (error.status === 422) {
       errorMessage = 'Error de validación. Verifique los datos';
+    } else if (error.status === 401) {
+      errorMessage = 'No autorizado. Inicie sesión nuevamente';
     }
     
     return throwError(() => new Error(errorMessage));

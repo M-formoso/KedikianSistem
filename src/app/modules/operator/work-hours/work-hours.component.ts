@@ -375,6 +375,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const formValues = this.clockInForm.value;
     
     console.log('🚀 Fichando entrada para usuario:', usuarioId);
+    console.log('📝 Notas:', formValues.notas);
   
     this.jornadaLaboralService.ficharEntrada(usuarioId, formValues.notas)
       .pipe(takeUntil(this.destroy$))
@@ -383,20 +384,28 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           this.loading = false;
           
           if (response.success && response.data) {
-            console.log('✅ Entrada fichada correctamente');
+            console.log('✅ Entrada fichada correctamente:', response.data);
             this.processActiveJornada(response.data);
             this.success = true;
             this.resetForms();
             
             setTimeout(() => { this.success = false; }, 3000);
           } else {
+            console.error('❌ Respuesta sin datos:', response);
             this.error = response.message || 'Error al registrar entrada';
           }
         },
         error: (error) => {
           this.loading = false;
-          this.error = error.message || 'Error al procesar la solicitud';
           console.error('❌ Error fichando entrada:', error);
+          
+          // ✅ NUEVO: Limpiar estado en caso de error persistente
+          if (error.message?.includes('409') || error.message?.includes('jornada activa')) {
+            console.log('🧹 Detectado conflicto - verificando estado real');
+            this.checkForActiveJornada();
+          }
+          
+          this.error = error.message || 'Error al procesar la solicitud';
         }
       });
   }
@@ -840,33 +849,29 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Cargar estadísticas del mes
-   */
-  private loadMonthlyStats(): void {
-    if (!this.currentUser?.id) return;
+ * ✅ Cargar estadísticas del mes
+ */
+private loadMonthlyStats(): void {
+  if (!this.currentUser?.id) return;
 
-    const usuarioId = this.getUsuarioIdAsNumber();
-    if (!usuarioId) return;
+  const usuarioId = this.getUsuarioIdAsNumber();
+  if (!usuarioId) return;
 
-    const now = new Date();
-    const mes = now.getMonth() + 1;
-    const anio = now.getFullYear();
-
-    this.jornadaLaboralService.obtenerEstadisticasMes(usuarioId, mes, anio)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          if (response.success && response.data) {
-            this.monthlyStats = response.data;
-            console.log('✅ Estadísticas del mes cargadas:', this.monthlyStats);
-          }
-        },
-        error: (error) => {
-          console.error('❌ Error cargando estadísticas del mes:', error);
+  // ✅ SIMPLIFICADO: Ya no necesitas enviar mes/año
+  this.jornadaLaboralService.obtenerEstadisticasMes(usuarioId)
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.monthlyStats = response.data;
+          console.log('✅ Estadísticas del mes cargadas:', this.monthlyStats);
         }
-      });
-  }
-
+      },
+      error: (error) => {
+        console.error('❌ Error cargando estadísticas del mes:', error);
+      }
+    });
+}
   /**
    * ✅ Transformar jornada para mostrar en el template
    */
