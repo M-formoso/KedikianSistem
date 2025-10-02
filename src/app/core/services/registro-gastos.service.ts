@@ -1,4 +1,4 @@
-// src/app/core/services/registro-gastos.service.ts - COMPLETAMENTE CORREGIDO
+// src/app/core/services/registro-gastos.service.ts - VERSIÓN FINAL SIN DUPLICACIÓN
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -6,9 +6,8 @@ import { Observable, throwError, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
-// ============= INTERFACES CORREGIDAS =============
+// ============= INTERFACES =============
 
-// Interface para el formulario del frontend
 export interface ExpenseRequest {
   date: string;
   expenseType: string;
@@ -20,7 +19,6 @@ export interface ExpenseRequest {
   status?: string;
 }
 
-// Interface para las respuestas del backend (según tu modelo Gasto)
 export interface ExpenseRecord {
   id?: number;
   usuario_id: number;
@@ -33,7 +31,6 @@ export interface ExpenseRecord {
   created?: string;
   updated?: string;
   
-  // Propiedades mapeadas para el template
   date?: string;
   expenseType?: string;
   amount?: number;
@@ -78,140 +75,65 @@ export interface ApiResponse<T> {
   providedIn: 'root'
 })
 export class ExpenseService {
-  validateReceiptNumber(receiptNumber: any) {
-    throw new Error('Method not implemented.');
-  }
-  // ✅ URL corregida según tu backend
   private apiUrl = `${environment.apiUrl}/gastos/json`;
   
   constructor(private http: HttpClient) {}
 
-  // src/app/core/services/registro-gastos.service.ts - LÍNEA 150-170
+  /**
+   * Crear nuevo gasto - SIN DUPLICACIÓN DE TOKEN
+   */
+  createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
+    console.log('📤 Datos recibidos del formulario:', expense);
+    
+    // Transformar y forzar tipos correctos
+    const backendData = {
+      usuario_id: Number(expense.operator),
+      maquina_id: 1,
+      tipo: expense.expenseType,
+      importe_total: Number(expense.amount),
+      fecha: new Date(expense.date).toISOString(),
+      descripcion: this.buildDescription(expense)
+    };
 
-createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-  console.log('📤 Datos recibidos del formulario:', expense);
-  
-  // ✅ CRÍTICO: Transformar correctamente al formato del backend
-  const backendData = {
-    usuario_id: parseInt(expense.operator), // ✅ Convertir a número
-    maquina_id: 1, // ✅ ID de máquina por defecto (ajusta según necesites)
-    tipo: expense.expenseType,
-    importe_total: Math.round(expense.amount), // ✅ Como entero
-    fecha: new Date(expense.date).toISOString(),
-    descripcion: this.buildDescription(expense)
-  };
-
-  console.log('📋 Datos transformados para backend:', backendData);
-  console.log('🔍 Tipos verificados:');
-  console.log('  - usuario_id:', typeof backendData.usuario_id, '=', backendData.usuario_id);
-  console.log('  - maquina_id:', typeof backendData.maquina_id, '=', backendData.maquina_id);
-  console.log('  - tipo:', typeof backendData.tipo, '=', backendData.tipo);
-  console.log('  - importe_total:', typeof backendData.importe_total, '=', backendData.importe_total);
-  console.log('  - fecha:', typeof backendData.fecha, '=', backendData.fecha);
-  console.log('  - descripcion:', typeof backendData.descripcion, '=', backendData.descripcion);
-
-  // Headers para JSON
-  let headers = new HttpHeaders({
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  });
-  
-  // Agregar token si existe
-  const usuarioActual = localStorage.getItem('usuarioActual');
-  if (usuarioActual) {
-    try {
-      const usuario = JSON.parse(usuarioActual);
-      const token = usuario.access_token || usuario.token;
-      if (token) {
-        headers = headers.set('Authorization', `Bearer ${token}`);
-        console.log('🔐 Token agregado');
-      }
-    } catch (e) {
-      console.log('⚠️ No se pudo obtener token');
+    // Validación de tipos
+    if (isNaN(backendData.usuario_id) || isNaN(backendData.importe_total)) {
+      console.error('❌ Datos numéricos inválidos');
+      return throwError(() => new Error('Datos numéricos inválidos'));
     }
-  }
-  
-  console.log('📡 Enviando petición a:', `${this.apiUrl}json`);
-  
-  // ✅ CRÍTICO: Usar el endpoint /json específicamente
-  return this.http.post(this.apiUrl, backendData, { headers }).pipe(
-    map((response: any) => {
-      console.log('✅ Respuesta exitosa:', response);
-      return {
-        success: true,
-        data: response,
-        message: 'Gasto registrado correctamente'
-      };
-    }),
-    catchError((error: any) => {
-      console.error('❌ Error completo:', error);
-      console.error('Status:', error.status);
-      console.error('Error body:', error.error);
-      
-      let errorMessage = 'Error desconocido';
-      
-      if (error.status === 422) {
-        if (error.error?.detail) {
-          if (Array.isArray(error.error.detail)) {
-            const validationErrors = error.error.detail.map((err: any) => 
-              `${err.loc?.join('.')}: ${err.msg}`
-            ).join(', ');
-            errorMessage = `Error de validación: ${validationErrors}`;
-          } else {
-            errorMessage = `Error de validación: ${JSON.stringify(error.error.detail)}`;
-          }
-        }
-      } else if (error.status === 400) {
-        errorMessage = 'Datos inválidos';
-      } else if (error.status === 401) {
-        errorMessage = 'No autorizado - verifique su sesión';
-      }
-      
-      return throwError(() => new Error(errorMessage));
-    })
-  );
-}
-/**
- * ✅ Construir descripción completa con todos los datos adicionales
- */
-private buildDescription(expense: ExpenseRequest): string {
-  let description = expense.description || 'Sin descripción';
-  
-  // Agregar información adicional
-  if (expense.paymentMethod) {
-    description += ` - Método: ${expense.paymentMethod}`;
-  }
-  
-  if (expense.receiptNumber) {
-    description += ` - Recibo: ${expense.receiptNumber}`;
-  }
-  
-  return description;
-}
-/**
- * ✅ Formatear fecha para el backend
- */
-private formatDateForBackend(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return date.toISOString(); // Formato ISO que entiende el backend
-  } catch {
-    return new Date().toISOString(); // Fallback a fecha actual
-  }
-}
 
+    console.log('📋 Datos transformados:', backendData);
+    console.log('🔍 Tipos:', {
+      usuario_id: typeof backendData.usuario_id,
+      importe_total: typeof backendData.importe_total
+    });
+
+    // EL INTERCEPTOR YA AGREGA EL TOKEN AUTOMÁTICAMENTE
+    // Solo especificamos Content-Type
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    });
+    
+    return this.http.post(this.apiUrl, backendData, { headers }).pipe(
+      map((response: any) => {
+        console.log('✅ Respuesta exitosa:', response);
+        return {
+          success: true,
+          data: response,
+          message: 'Gasto registrado correctamente'
+        };
+      }),
+      catchError(this.handleError)
+    );
+  }
 
   /**
-   * ✅ CORREGIDO: Obtener registros recientes
+   * Obtener registros recientes
    */
   getRecentExpenses(limit: number = 10): Observable<ApiResponse<ExpenseRecord[]>> {
-    return this.http.get<ExpenseRecord[]>(
-      this.apiUrl, 
-      this.getHttpOptions()
-    ).pipe(
+    return this.http.get<ExpenseRecord[]>(this.apiUrl).pipe(
       map(response => {
         console.log('📥 Registros del backend:', response);
-        // Mapear cada elemento de la respuesta
         const mappedData = Array.isArray(response) 
           ? response.slice(0, limit).map(item => this.mapBackendToFrontend(item))
           : [];
@@ -234,10 +156,7 @@ private formatDateForBackend(dateString: string): string {
    * Eliminar un registro
    */
   deleteExpense(id: number): Observable<ApiResponse<any>> {
-    return this.http.delete<any>(
-      `${this.apiUrl}/${id}`,
-      this.getHttpOptions()
-    ).pipe(
+    return this.http.delete<any>(`${this.apiUrl}/${id}`).pipe(
       map(() => ({
         success: true,
         data: null,
@@ -247,53 +166,38 @@ private formatDateForBackend(dateString: string): string {
     );
   }
 
-  // ============= MÉTODOS PARA CATÁLOGOS =============
+  // ============= CATÁLOGOS =============
 
-  /**
-   * Obtener tipos de gastos - MOCK DATA según tu backend
-   */
   getExpenseTypes(): Observable<ApiResponse<ExpenseType[]>> {
     const mockTypes: ExpenseType[] = [
-      { id: 'Combustible', name: 'Combustible', description: 'Gastos en combustible', isActive: true },
-      { id: 'Mantenimiento', name: 'Mantenimiento', description: 'Gastos de mantenimiento', isActive: true },
-      { id: 'Repuestos', name: 'Repuestos', description: 'Compra de repuestos', isActive: true },
-      { id: 'Alimentacion', name: 'Alimentación', description: 'Gastos en alimentación', isActive: true },
-      { id: 'Transporte', name: 'Transporte', description: 'Gastos de transporte', isActive: true },
-      { id: 'Otros', name: 'Otros', description: 'Otros gastos operativos', isActive: true }
+      { id: 'Combustible', name: 'Combustible', isActive: true },
+      { id: 'Mantenimiento', name: 'Mantenimiento', isActive: true },
+      { id: 'Repuestos', name: 'Repuestos', isActive: true },
+      { id: 'Alimentacion', name: 'Alimentación', isActive: true },
+      { id: 'Transporte', name: 'Transporte', isActive: true },
+      { id: 'Otros', name: 'Otros', isActive: true }
     ];
 
-    return of({
-      success: true,
-      data: mockTypes
-    });
+    return of({ success: true, data: mockTypes });
   }
 
-  /**
-   * Obtener métodos de pago - MOCK DATA
-   */
   getPaymentMethods(): Observable<ApiResponse<PaymentMethod[]>> {
     const mockMethods: PaymentMethod[] = [
-      { id: 'efectivo', name: 'Efectivo', description: 'Pago en efectivo', isActive: true },
-      { id: 'tarjeta', name: 'Tarjeta', description: 'Pago con tarjeta', isActive: true },
-      { id: 'transferencia', name: 'Transferencia', description: 'Transferencia bancaria', isActive: true },
-      { id: 'cheque', name: 'Cheque', description: 'Pago con cheque', isActive: true }
+      { id: 'efectivo', name: 'Efectivo', isActive: true },
+      { id: 'tarjeta', name: 'Tarjeta', isActive: true },
+      { id: 'transferencia', name: 'Transferencia', isActive: true },
+      { id: 'cheque', name: 'Cheque', isActive: true }
     ];
 
-    return of({
-      success: true,
-      data: mockMethods
-    });
+    return of({ success: true, data: mockMethods });
   }
 
-  /**
-   * ✅ CORREGIDO: Obtener lista de operadores desde tu endpoint /usuarios
-   */
   getOperators(): Observable<ApiResponse<Operator[]>> {
-    return this.http.get<any[]>(`${environment.apiUrl}/usuarios`, this.getHttpOptions()).pipe(
+    return this.http.get<any[]>(`${environment.apiUrl}/usuarios`).pipe(
       map(usuarios => {
         console.log('👥 Usuarios del backend:', usuarios);
         const operators = usuarios
-          .filter(u => u.estado === true) // Solo usuarios activos
+          .filter(u => u.estado === true)
           .map(usuario => ({
             id: usuario.id.toString(),
             name: usuario.nombre,
@@ -301,10 +205,7 @@ private formatDateForBackend(dateString: string): string {
             isActive: usuario.estado
           }));
         
-        return {
-          success: true,
-          data: operators
-        };
+        return { success: true, data: operators };
       }),
       catchError(error => {
         console.error('❌ Error obteniendo operadores:', error);
@@ -321,32 +222,24 @@ private formatDateForBackend(dateString: string): string {
     );
   }
 
-  // ============= MÉTODOS DE UTILIDAD =============
+  // ============= MÉTODOS AUXILIARES =============
 
-  /**
-   * ✅ OBTENER TOKEN DE AUTORIZACIÓN
-   */
-  private getAuthToken(): string {
-    const usuarioActual = localStorage.getItem('usuarioActual');
-    if (usuarioActual) {
-      try {
-        const usuario = JSON.parse(usuarioActual);
-        const token = usuario.access_token || usuario.token;
-        return token ? `Bearer ${token}` : '';
-      } catch {
-        console.error('❌ Error obteniendo token');
-        return '';
-      }
+  private buildDescription(expense: ExpenseRequest): string {
+    let description = expense.description || 'Sin descripción';
+    
+    if (expense.paymentMethod) {
+      description += ` - Método: ${expense.paymentMethod}`;
     }
-    return '';
+    
+    if (expense.receiptNumber) {
+      description += ` - Recibo: ${expense.receiptNumber}`;
+    }
+    
+    return description;
   }
 
-  /**
-   * ✅ MAPEAR RESPUESTA DEL BACKEND AL FORMATO DEL FRONTEND
-   */
   private mapBackendToFrontend(backendData: any): ExpenseRecord {
     return {
-      // Propiedades originales del backend
       id: backendData.id,
       usuario_id: backendData.usuario_id,
       maquina_id: backendData.maquina_id,
@@ -358,70 +251,29 @@ private formatDateForBackend(dateString: string): string {
       created: backendData.created,
       updated: backendData.updated,
       
-      // Propiedades mapeadas para el template
       date: backendData.fecha ? backendData.fecha.split('T')[0] : new Date().toISOString().split('T')[0],
       expenseType: backendData.tipo,
       amount: backendData.importe_total,
       operator: backendData.usuario_id?.toString() || '',
       description: backendData.descripcion,
-      status: 'approved', // Estado por defecto
+      status: 'approved',
       paymentMethod: this.extractPaymentMethodFromDescription(backendData.descripcion),
       receiptNumber: this.extractReceiptNumberFromDescription(backendData.descripcion)
     };
   }
 
-  /**
-   * ✅ EXTRAER MÉTODO DE PAGO DE LA DESCRIPCIÓN
-   */
   private extractPaymentMethodFromDescription(descripcion: string): string {
     if (!descripcion) return '';
     const match = descripcion.match(/Método:\s*([^-]+)/);
     return match ? match[1].trim() : '';
   }
 
-  /**
-   * ✅ EXTRAER NÚMERO DE RECIBO DE LA DESCRIPCIÓN
-   */
   private extractReceiptNumberFromDescription(descripcion: string): string {
     if (!descripcion) return '';
     const match = descripcion.match(/Recibo:\s*([^-]+)/);
     return match ? match[1].trim() : '';
   }
 
-  /**
-   * ✅ CORREGIDO: Obtener headers HTTP con token dinámico
-   */
-  /**
- * ✅ REEMPLAZAR ESTE MÉTODO COMPLETO EN TU SERVICIO
- */
-private getHttpOptions() {
-  const usuarioActual = localStorage.getItem('usuarioActual');
-  let token: string | null = null;
-
-  if (usuarioActual) {
-    try {
-      const usuario = JSON.parse(usuarioActual);
-      token = usuario.access_token || usuario.token || null;
-    } catch {
-      console.error('❌ Error parsing usuario actual');
-    }
-  }
-
-  const headers: any = {
-    'Content-Type': 'application/json', // ← ✅ AGREGADO PARA JSON
-    'Accept': 'application/json'
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return { headers: new HttpHeaders(headers) };
-}
-
-  /**
-   * Formatear monto para mostrar
-   */
   formatAmount(amount: number, currency: string = 'ARS'): string {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
@@ -431,9 +283,6 @@ private getHttpOptions() {
     }).format(amount);
   }
 
-  /**
-   * Formatear fecha para mostrar
-   */
   formatDate(date: string): string {
     return new Date(date).toLocaleDateString('es-AR', {
       year: 'numeric',
@@ -442,23 +291,18 @@ private getHttpOptions() {
     });
   }
 
-  /**
-   * Obtener nombre de tipo de gasto por ID
-   */
   getExpenseTypeName(typeId: string, expenseTypes: ExpenseType[]): string {
     const type = expenseTypes.find(t => t.id === typeId);
-    return type ? type.name : typeId; // Retornar el ID si no se encuentra el tipo
+    return type ? type.name : typeId;
   }
 
-  /**
-   * Obtener nombre de método de pago por ID
-   */
   getPaymentMethodName(methodId: string, paymentMethods: PaymentMethod[]): string {
     const method = paymentMethods.find(m => m.id === methodId);
     return method ? method.name : methodId || 'No especificado';
   }
 
-  // ============= MANEJO DE ERRORES MEJORADO =============
+  // ============= MANEJO DE ERRORES =============
+  
   private handleError = (error: any): Observable<never> => {
     console.error('❌ Error en ExpenseService:', error);
     
@@ -469,32 +313,40 @@ private getHttpOptions() {
     } else {
       switch (error.status) {
         case 400:
-          errorMessage = 'Datos inválidos. Verifique la información ingresada.';
+          errorMessage = 'Datos inválidos. Verifique la información.';
           break;
         case 401:
-          errorMessage = 'Su sesión ha expirado. Inicie sesión nuevamente.';
-          // Limpiar localStorage si hay error 401
+          errorMessage = 'Sesión expirada. Inicie sesión nuevamente.';
+          localStorage.removeItem('access_token');
           localStorage.removeItem('usuarioActual');
           window.location.href = '/login';
           break;
         case 403:
-          errorMessage = 'No tiene permisos para realizar esta acción.';
+          errorMessage = 'No tiene permisos para esta acción.';
           break;
         case 404:
           errorMessage = 'Recurso no encontrado.';
           break;
         case 422:
-          errorMessage = 'Error de validación. Verifique los datos ingresados.';
+          if (error.error?.detail) {
+            if (Array.isArray(error.error.detail)) {
+              const validationErrors = error.error.detail.map((err: any) => 
+                `${err.loc?.join('.')}: ${err.msg}`
+              ).join(', ');
+              errorMessage = `Error de validación: ${validationErrors}`;
+            } else {
+              errorMessage = `Error de validación: ${JSON.stringify(error.error.detail)}`;
+            }
+          }
           break;
         case 500:
-          errorMessage = 'Error interno del servidor. Intente nuevamente más tarde.';
+          errorMessage = 'Error del servidor. Intente más tarde.';
+          if (error.error?.message) {
+            errorMessage += ` (${error.error.message})`;
+          }
           break;
         default:
-          errorMessage = `Error ${error.status}: ${error.message || 'Error desconocido'}`;
-      }
-      
-      if (error.error && error.error.detail) {
-        errorMessage = error.error.detail;
+          errorMessage = `Error ${error.status}: ${error.message || 'Desconocido'}`;
       }
     }
     
