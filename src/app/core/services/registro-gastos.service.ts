@@ -82,50 +82,36 @@ export class ExpenseService {
   /**
    * Crear nuevo gasto - SIN DUPLICACIÓN DE TOKEN
    */
+  // registro-gastos.service.ts
   createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-    console.log('📤 Datos recibidos del formulario:', expense);
+    console.log('📤 Datos recibidos:', expense);
     
-    // Transformar y forzar tipos correctos
-    const backendData = {
-      usuario_id: Number(expense.operator),
-      maquina_id: 1,
-      tipo: expense.expenseType,
-      importe_total: Number(expense.amount),
-      fecha: new Date(expense.date).toISOString(),
-      descripcion: this.buildDescription(expense)
-    };
-
-    // Validación de tipos
-    if (isNaN(backendData.usuario_id) || isNaN(backendData.importe_total)) {
-      console.error('❌ Datos numéricos inválidos');
-      return throwError(() => new Error('Datos numéricos inválidos'));
-    }
-
-    console.log('📋 Datos transformados:', backendData);
-    console.log('🔍 Tipos:', {
-      usuario_id: typeof backendData.usuario_id,
-      importe_total: typeof backendData.importe_total
-    });
-
-    // EL INTERCEPTOR YA AGREGA EL TOKEN AUTOMÁTICAMENTE
-    // Solo especificamos Content-Type
-    const headers = new HttpHeaders({
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    });
+    const formData = new FormData();
     
-    return this.http.post(this.apiUrl, backendData, { headers }).pipe(
-      map((response: any) => {
-        console.log('✅ Respuesta exitosa:', response);
-        return {
-          success: true,
-          data: response,
-          message: 'Gasto registrado correctamente'
-        };
-      }),
+    formData.append('usuario_id', expense.operator.toString());
+    formData.append('maquina_id', '1');
+    formData.append('tipo', expense.expenseType);
+    formData.append('importe_total', expense.amount.toFixed(2)); // ← CORRECCIÓN AQUÍ
+    formData.append('fecha', this.formatDateForBackend(expense.date));
+    formData.append('descripcion', this.buildDescription(expense));
+    
+    return this.http.post(`${environment.apiUrl}/gastos`, formData).pipe(
+      map((response: any) => ({
+        success: true,
+        data: response,
+        message: 'Gasto registrado correctamente'
+      })),
       catchError(this.handleError)
     );
   }
+/**
+ * Formatear fecha para el backend (sin 'Z' al final)
+ */
+private formatDateForBackend(dateStr: string): string {
+  const date = new Date(dateStr);
+  // Formato: "YYYY-MM-DDTHH:MM:SS"
+  return date.toISOString().replace('Z', '');
+}
 
   /**
    * Obtener registros recientes
