@@ -83,27 +83,32 @@ export class ExpenseService {
    * Crear nuevo gasto - SIN DUPLICACIÓN DE TOKEN
    */
   // registro-gastos.service.ts
-  createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-    console.log('📤 Datos recibidos:', expense);
-    
-    const formData = new FormData();
-    
-    formData.append('usuario_id', expense.operator.toString());
-    formData.append('maquina_id', '1');
-    formData.append('tipo', expense.expenseType);
-    formData.append('importe_total', expense.amount.toFixed(2)); // ← CORRECCIÓN AQUÍ
-    formData.append('fecha', this.formatDateForBackend(expense.date));
-    formData.append('descripcion', this.buildDescription(expense));
-    
-    return this.http.post(`${environment.apiUrl}/gastos`, formData).pipe(
-      map((response: any) => ({
-        success: true,
-        data: response,
-        message: 'Gasto registrado correctamente'
-      })),
-      catchError(this.handleError)
-    );
-  }
+  // src/app/core/services/registro-gastos.service.ts - LÍNEA 66
+
+createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
+  console.log('📤 Datos recibidos:', expense);
+  
+  // ✅ Usar el endpoint /json
+  const body = {
+    usuario_id: parseInt(expense.operator),
+    maquina_id: null,
+    tipo: expense.expenseType,
+    importe_total: parseFloat(expense.amount.toString()),
+    fecha: new Date().toISOString(),
+    descripcion: this.buildDescription(expense)
+  };
+  
+  console.log('📤 Body a enviar:', body);
+  
+  return this.http.post(`${environment.apiUrl}/gastos/json`, body).pipe(
+    map((response: any) => ({
+      success: true,
+      data: response,
+      message: 'Gasto registrado correctamente'
+    })),
+    catchError(this.handleError)
+  );
+}
 /**
  * Formatear fecha para el backend (sin 'Z' al final)
  */
