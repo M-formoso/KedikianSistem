@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { 
   ExpenseService,
   ExpenseRequest,
@@ -207,15 +208,14 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     this.success = false;
     this.error = '';
     
-    console.log('🚀 onSubmit llamado');
+    console.group('🚀 REGISTRO DE GASTO');
     console.log('📋 Estado del formulario:', {
       valid: this.expenseForm.valid,
       invalid: this.expenseForm.invalid,
       values: this.expenseForm.value,
       errors: this.expenseForm.errors
     });
-
-    // ✅ Validar formulario
+  
     if (this.expenseForm.invalid) {
       this.markFormGroupTouched();
       console.log('❌ Formulario inválido, errores por campo:');
@@ -225,73 +225,69 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
           console.log(`   ${key}:`, control.errors);
         }
       });
+      console.groupEnd();
       return;
     }
-
-    // ✅ Verificar operador actual
+  
     if (!this.currentOperator) {
       this.error = 'No se pudo cargar la información del operador';
+      console.error('❌ No hay operador actual');
+      console.groupEnd();
       return;
     }
-
-    this.loading = true;
+  
+    console.log('👤 Operador actual:', this.currentOperator);
     
+    this.loading = true;
     const formValues = this.expenseForm.value;
     
-    // ✅ CORREGIDO: Crear objeto de gasto según las interfaces corregidas
     const expenseData: ExpenseRequest = {
-      date: new Date().toISOString().split('T')[0], // Fecha actual
+      date: new Date().toISOString().split('T')[0],
       expenseType: formValues.expenseType,
       amount: parseFloat(formValues.amount),
-      operator: this.currentOperator.id, // ✅ CRÍTICO: Usar el ID del operador actual
+      operator: this.currentOperator.id,
       paymentMethod: formValues.paymentMethod || '',
       receiptNumber: formValues.receiptNumber || '',
       description: formValues.description || ''
     };
-
-    console.log('📤 Enviando gasto:', expenseData);
-
+  
+    console.log('📤 Datos a enviar:', expenseData);
+    console.log('🔗 API URL:', environment.apiUrl);
+    console.groupEnd();
+  
     this.expenseService.createExpense(expenseData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response: any) => {
           this.loading = false;
-          console.log('📥 Respuesta recibida:', response);
+          console.group('✅ RESPUESTA EXITOSA');
+          console.log('📥 Respuesta completa:', response);
+          console.groupEnd();
           
           if (response && response.success) {
             this.success = true;
-            this.loadRecentExpenses(); // Recargar la lista
+            this.loadRecentExpenses();  // ✅ Recargar lista
             this.resetForm();
             
-            console.log('✅ Gasto registrado exitosamente');
-            
-            // Ocultar mensaje de éxito después de 5 segundos
             setTimeout(() => {
               this.success = false;
             }, 5000);
           } else {
-            this.error = (response && response.message) || 'Error al crear el registro de gasto';
+            this.error = response?.message || 'Error al crear el registro';
           }
         },
         error: (error: any) => {
           this.loading = false;
-          console.error('❌ Error completo:', error);
-          this.error = error.message || error || 'Error al procesar la solicitud';
+          console.group('❌ ERROR EN PETICIÓN');
+          console.error('Error completo:', error);
+          console.error('Status:', error.status);
+          console.error('Error body:', error.error);
+          console.error('Message:', error.message);
+          console.groupEnd();
+          
+          this.error = error.message || 'Error al procesar la solicitud';
         }
       });
-
-       // ✅ TEST: Imprimir datos exactos que se enviarán
-  console.group('🧪 VALIDACIÓN DE DATOS');
-  console.log('Usuario ID:', this.currentOperator?.id);
-  console.log('Tipo usuario ID:', typeof this.currentOperator?.id);
-  console.log('Tipo de gasto:', formValues.expenseType);
-  console.log('Monto:', formValues.amount);
-  console.log('Tipo monto:', typeof formValues.amount);
-  console.groupEnd();
-  
-  // Continuar con el envío...
-
-
   }
 
   /**

@@ -125,11 +125,9 @@
         <tbody>
           <tr *ngFor="let record of recentExpenses; trackBy: trackByExpenseId">
             <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
-            <!-- ✅ CRÍTICO: Uso del operador seguro de navegación -->
-            <td data-label="Tipo:">{{ record.expenseType ? getExpenseTypeName(record.expenseType) : 'Tipo no especificado' }}</td>
-            <td data-label="Monto:">{{ record.amount | currency:'ARS':'symbol':'1.0-0' }}</td>
-            <!-- ✅ CRÍTICO: Uso del operador seguro de navegación -->
-            <td data-label="Método de Pago:">{{ record.paymentMethod ? getPaymentMethodName(record.paymentMethod) : 'No especificado' }}</td>
+            <td data-label="Tipo:">{{ record.expenseType || record.tipo || 'No especificado' }}</td>
+            <td data-label="Monto:">{{ record.amount || record.importe_total | currency:'ARS':'symbol':'1.0-0' }}</td>
+            <td data-label="Método de Pago:">{{ record.paymentMethod || 'No especificado' }}</td>
             <td data-label="Estado:">
               <span class="status-badge" [ngClass]="'status-' + getExpenseStatus(record)">
                 {{ getExpenseStatus(record) }}
@@ -140,11 +138,19 @@
               <button class="action-btn delete-btn" title="Eliminar" [disabled]="isLoading">❌</button>
             </td>
           </tr>
-          <tr *ngIf="recentExpenses.length === 0">
+          <tr *ngIf="recentExpenses.length === 0 && !loading">
             <td colspan="6" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">📋</span>
                 <p>No hay registros recientes</p>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="loading">
+            <td colspan="6" class="empty-table">
+              <div class="empty-state">
+                <span class="empty-icon">⏳</span>
+                <p>Cargando registros...</p>
               </div>
             </td>
           </tr>

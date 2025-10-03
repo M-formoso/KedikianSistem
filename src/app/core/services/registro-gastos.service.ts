@@ -85,30 +85,57 @@ export class ExpenseService {
   // registro-gastos.service.ts
   // src/app/core/services/registro-gastos.service.ts - LÍNEA 66
 
-createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
-  console.log('📤 Datos recibidos:', expense);
-  
-  // ✅ Usar el endpoint /json
-  const body = {
-    usuario_id: parseInt(expense.operator),
-    maquina_id: null,
-    tipo: expense.expenseType,
-    importe_total: parseFloat(expense.amount.toString()),
-    fecha: new Date().toISOString(),
-    descripcion: this.buildDescription(expense)
-  };
-  
-  console.log('📤 Body a enviar:', body);
-  
-  return this.http.post(`${environment.apiUrl}/gastos/json`, body).pipe(
-    map((response: any) => ({
-      success: true,
-      data: response,
-      message: 'Gasto registrado correctamente'
-    })),
-    catchError(this.handleError)
-  );
-}
+  createExpense(expense: ExpenseRequest): Observable<ApiResponse<ExpenseRecord>> {
+    console.log('📤 Datos recibidos:', expense);
+    
+    // ✅ Crear FormData correctamente
+    const formData = new FormData();
+    formData.append('usuario_id', expense.operator);
+    
+    // ✅ CRÍTICO: NO enviar maquina_id como string "null"
+    // Si el backend espera null, simplemente no incluir el campo
+    // O enviar un número válido
+    // formData.append('maquina_id', '');  // NO HACER ESTO
+    
+    formData.append('tipo', expense.expenseType);
+    formData.append('importe_total', expense.amount.toString());
+    
+    // ✅ Fecha en formato ISO simple
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const fechaISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    
+    formData.append('fecha', fechaISO);
+    formData.append('descripcion', this.buildDescription(expense));
+    
+    console.log('📤 Enviando FormData a /gastos');
+    console.log('📋 Campos del FormData:');
+    formData.forEach((value, key) => {
+      console.log(`  ${key}: ${value}`);
+    });
+    
+    return this.http.post<any>(`${environment.apiUrl}/gastos`, formData).pipe(
+      map((backendResponse: any) => {
+        console.log('✅ Respuesta del backend:', backendResponse);
+        return {
+          success: true,
+          data: this.mapBackendToFrontend(backendResponse),
+          message: 'Gasto registrado correctamente'
+        };
+      }),
+      catchError((error) => {
+        console.error('❌ Error completo:', error);
+        console.error('❌ Status:', error.status);
+        console.error('❌ Error body:', error.error);
+        return this.handleError(error);
+      })
+    );
+  }
 /**
  * Formatear fecha para el backend (sin 'Z' al final)
  */
@@ -122,12 +149,41 @@ private formatDateForBackend(dateStr: string): string {
    * Obtener registros recientes
    */
   getRecentExpenses(limit: number = 10): Observable<ApiResponse<ExpenseRecord[]>> {
-    return this.http.get<ExpenseRecord[]>(this.apiUrl).pipe(
+    console.log('🔍 Obteniendo registros recientes...');
+    console.log('🌐 URL:', `${environment.apiUrl}/gastos`);
+    
+    // ✅ El backend devuelve un array directamente en el endpoint /gastos
+    return this.http.get<any[]>(`${environment.apiUrl}/gastos`).pipe(
       map(response => {
         console.log('📥 Registros del backend:', response);
-        const mappedData = Array.isArray(response) 
-          ? response.slice(0, limit).map(item => this.mapBackendToFrontend(item))
-          : [];
+        
+        // ✅ El backend puede devolver:
+        // 1. Un array directamente: [{ id, usuario_id, ... }]
+        // 2. O nada si hay error
+        
+        if (!response || !Array.isArray(response)) {
+          console.warn('⚠️ Respuesta inesperada del backend:', response);
+          return {
+            success: true,
+            data: []
+          };
+        }
+        
+        // ✅ Mapear cada registro
+        const mappedData = response
+          .slice(0, limit)  // Limitar cantidad
+          .map(item => {
+            try {
+              return this.mapBackendToFrontend(item);
+            } catch (error) {
+              console.error('❌ Error mapeando registro:', item, error);
+              return null;
+            }
+          })
+          .filter(item => item !== null) as ExpenseRecord[];
+        
+        console.log('✅ Registros mapeados:', mappedData.length);
+        
         return {
           success: true,
           data: mappedData
@@ -135,6 +191,7 @@ private formatDateForBackend(dateStr: string): string {
       }),
       catchError(error => {
         console.error('❌ Error obteniendo gastos recientes:', error);
+        // ✅ IMPORTANTE: Devolver array vacío en lugar de error
         return of({
           success: true,
           data: []
@@ -230,7 +287,11 @@ private formatDateForBackend(dateStr: string): string {
   }
 
   private mapBackendToFrontend(backendData: any): ExpenseRecord {
+    console.log('🔄 Mapeando datos del backend:', backendData);
+    
+    // ✅ El backend devuelve: { id, usuario_id, maquina_id, tipo, importe_total, fecha, descripcion, imagen }
     return {
+      // Campos del backend
       id: backendData.id,
       usuario_id: backendData.usuario_id,
       maquina_id: backendData.maquina_id,
@@ -242,12 +303,15 @@ private formatDateForBackend(dateStr: string): string {
       created: backendData.created,
       updated: backendData.updated,
       
+      // Campos para el frontend (alias)
       date: backendData.fecha ? backendData.fecha.split('T')[0] : new Date().toISOString().split('T')[0],
       expenseType: backendData.tipo,
       amount: backendData.importe_total,
       operator: backendData.usuario_id?.toString() || '',
       description: backendData.descripcion,
-      status: 'approved',
+      status: 'approved',  // ✅ Status por defecto
+      
+      // ✅ Extraer método de pago y número de recibo de la descripción
       paymentMethod: this.extractPaymentMethodFromDescription(backendData.descripcion),
       receiptNumber: this.extractReceiptNumberFromDescription(backendData.descripcion)
     };
