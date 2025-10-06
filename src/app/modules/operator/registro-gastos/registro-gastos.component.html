@@ -13,54 +13,26 @@
           </div>
         </div>
         
-        
         <!-- Tipo de Gasto -->
         <div class="form-group">
           <label for="expenseType">Tipo de Gasto *</label>
           <select id="expenseType" formControlName="expenseType" class="form-control">
             <option value="">Seleccione tipo de gasto</option>
-            <option *ngFor="let type of activeExpenseTypes" [value]="type.id">
-              {{ type.name }}
-            </option>
+            <option value="combustible">Combustible</option>
+            <option value="otro">Otro</option>
           </select>
-          <!-- ✅ CORREGIDO: Mostrar errores correctamente -->
           <div *ngIf="hasFieldError('expenseType')" class="error-message">
             {{ getFieldError('expenseType') }}
           </div>
         </div>
         
-        <!-- Monto y Método de Pago en la misma fila -->
-        <div class="form-row">
-          <div class="form-group">
-            <label for="amount">Monto ($) *</label>
-            <input type="number" id="amount" formControlName="amount" class="form-control" 
-                   placeholder="Ingrese monto" step="0.01" min="0.01">
-            <!-- ✅ CORREGIDO: Mostrar errores correctamente -->
-            <div *ngIf="hasFieldError('amount')" class="error-message">
-              {{ getFieldError('amount') }}
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="paymentMethod">Método de Pago</label>
-            <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
-              <option value="">Seleccione método de pago</option>
-              <option *ngFor="let method of activePaymentMethods" [value]="method.id">
-                {{ method.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-        
-        <!-- Número de Factura/Boleta -->
+        <!-- Monto -->
         <div class="form-group">
-          <label for="receiptNumber">Número de Factura/Boleta</label>
-          <input type="text" id="receiptNumber" formControlName="receiptNumber" 
-                 class="form-control" placeholder="Número de documento"
-                 (blur)="onReceiptNumberChange()">
-          <!-- ✅ CORREGIDO: Mostrar errores correctamente -->
-          <div *ngIf="hasFieldError('receiptNumber')" class="error-message">
-            {{ getFieldError('receiptNumber') }}
+          <label for="amount">Monto ($) *</label>
+          <input type="number" id="amount" formControlName="amount" class="form-control" 
+                 placeholder="Ingrese monto" step="0.01" min="0.01">
+          <div *ngIf="hasFieldError('amount')" class="error-message">
+            {{ getFieldError('amount') }}
           </div>
         </div>
         
@@ -82,7 +54,7 @@
         </button>
       </div>
       
-      <!-- ✅ CORREGIDO: Mensajes de estado -->
+      <!-- Mensajes de estado -->
       <div *ngIf="success" class="alert alert-success">
         ✅ Gasto registrado exitosamente
       </div>
@@ -117,7 +89,6 @@
             <th>Fecha</th>
             <th>Tipo</th>
             <th>Monto</th>
-            <th>Método de Pago</th>
             <th>Estado</th>
             <th>Acciones</th>
           </tr>
@@ -125,9 +96,8 @@
         <tbody>
           <tr *ngFor="let record of recentExpenses; trackBy: trackByExpenseId">
             <td data-label="Fecha:">{{ record.date | date:'dd/MM/yyyy' }}</td>
-            <td data-label="Tipo:">{{ record.expenseType || record.tipo || 'No especificado' }}</td>
+            <td data-label="Tipo:">{{ getExpenseTypeLabel(record.expenseType || record.tipo) }}</td>
             <td data-label="Monto:">{{ record.amount || record.importe_total | currency:'ARS':'symbol':'1.0-0' }}</td>
-            <td data-label="Método de Pago:">{{ record.paymentMethod || 'No especificado' }}</td>
             <td data-label="Estado:">
               <span class="status-badge" [ngClass]="'status-' + getExpenseStatus(record)">
                 {{ getExpenseStatus(record) }}
@@ -139,7 +109,7 @@
             </td>
           </tr>
           <tr *ngIf="recentExpenses.length === 0 && !loading">
-            <td colspan="6" class="empty-table">
+            <td colspan="5" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">📋</span>
                 <p>No hay registros recientes</p>
@@ -147,7 +117,7 @@
             </td>
           </tr>
           <tr *ngIf="loading">
-            <td colspan="6" class="empty-table">
+            <td colspan="5" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">⏳</span>
                 <p>Cargando registros...</p>

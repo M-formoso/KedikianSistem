@@ -1,10 +1,10 @@
-// src/app/modules/operator/registro-gastos/registro-gastos.component.ts - COMPLETAMENTE CORREGIDO
+// src/app/modules/operator/registro-gastos/registro-gastos.component.ts - SIMPLIFICADO
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { 
   ExpenseService,
@@ -34,7 +34,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   loading = false;
   loadingMasterData = false;
   
-  // Datos maestros desde el backend
+  // Datos maestros (mantenemos para compatibilidad)
   expenseTypes: ExpenseType[] = [];
   paymentMethods: PaymentMethod[] = [];
   operators: Operator[] = [];
@@ -72,35 +72,31 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  // ✅ Getter para acceder a los controles del formulario
   get f() { 
     return this.expenseForm.controls; 
   }
 
   /**
-   * ✅ Inicializar formulario con validaciones correctas
+   * Inicializar formulario simplificado (sin método de pago ni número de recibo)
    */
   private initializeForm(): void {
     this.expenseForm = this.formBuilder.group({
       date: [{ value: new Date().toISOString().split('T')[0], disabled: true }],
       expenseType: ['', Validators.required],
       amount: ['', [Validators.required, Validators.min(0.01)]],
-      paymentMethod: [''],
-      receiptNumber: [''],
       operator: [{ value: '', disabled: true }],
       description: ['']
     });
   }
   
   /**
-   * ✅ CORREGIDO: Cargar operador actual desde el servicio de autenticación
+   * Cargar operador actual desde el servicio de autenticación
    */
   private loadCurrentOperator(): void {
     const currentUser = this.authService.getCurrentUser();
     console.log('🔍 Usuario obtenido del AuthService:', currentUser);
     
     if (currentUser && currentUser.id) {
-      // ✅ Verificar que el usuario tenga un ID válido
       const userId = typeof currentUser.id === 'string' 
         ? parseInt(currentUser.id, 10) 
         : Number(currentUser.id);
@@ -111,7 +107,6 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         return;
       }
 
-      // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
         id: userId.toString(),
         name: currentUser.nombre || 'Usuario Test',
@@ -119,7 +114,6 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         isActive: true
       };
       
-      // Establecer el operador en el formulario
       this.expenseForm.patchValue({
         operator: this.currentOperator.id
       });
@@ -129,7 +123,6 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       console.error('❌ No se encontró usuario autenticado');
       this.error = 'No se pudo cargar la información del usuario. Inicie sesión nuevamente.';
       
-      // Redirigir al login si no hay usuario
       setTimeout(() => {
         this.authService.cerrarSesion();
       }, 2000);
@@ -141,43 +134,28 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Cargar todos los datos maestros necesarios para el formulario
+   * Cargar datos maestros (simplificado - solo operadores)
    */
   loadMasterData(): void {
     this.loadingMasterData = true;
     this.error = '';
     
-    // Cargar todos los datos maestros en paralelo
-    forkJoin({
-      expenseTypes: this.expenseService.getExpenseTypes(),
-      paymentMethods: this.expenseService.getPaymentMethods(),
-      operators: this.expenseService.getOperators()
-    })
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (responses: any) => {
-        // Verificar que todas las respuestas sean exitosas
-        if (responses.expenseTypes && responses.expenseTypes.success) {
-          this.expenseTypes = responses.expenseTypes.data || [];
+    this.expenseService.getOperators()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response: any) => {
+          if (response && response.success) {
+            this.operators = response.data || [];
+          }
+          this.loadingMasterData = false;
+          console.log('✅ Datos maestros cargados correctamente');
+        },
+        error: (error: any) => {
+          this.error = `Error al cargar datos: ${error.message || error}`;
+          this.loadingMasterData = false;
+          console.error('❌ Error cargando datos maestros:', error);
         }
-        
-        if (responses.paymentMethods && responses.paymentMethods.success) {
-          this.paymentMethods = responses.paymentMethods.data || [];
-        }
-        
-        if (responses.operators && responses.operators.success) {
-          this.operators = responses.operators.data || [];
-        }
-        
-        this.loadingMasterData = false;
-        console.log('✅ Datos maestros cargados correctamente');
-      },
-      error: (error: any) => {
-        this.error = `Error al cargar datos: ${error.message || error}`;
-        this.loadingMasterData = false;
-        console.error('❌ Error cargando datos maestros:', error);
-      }
-    });
+      });
   }
   
   /**
@@ -195,13 +173,12 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
         },
         error: (error: any) => {
           console.error('❌ Error cargando registros recientes:', error);
-          // No mostrar error al usuario para registros recientes
         }
       });
   }
   
   /**
-   * ✅ COMPLETAMENTE CORREGIDO: Enviar formulario
+   * Enviar formulario (sin método de pago ni número de recibo)
    */
   onSubmit(): void {
     this.submitted = true;
@@ -241,13 +218,14 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     this.loading = true;
     const formValues = this.expenseForm.value;
     
+    // Datos simplificados - sin método de pago ni número de recibo
     const expenseData: ExpenseRequest = {
       date: new Date().toISOString().split('T')[0],
       expenseType: formValues.expenseType,
       amount: parseFloat(formValues.amount),
       operator: this.currentOperator.id,
-      paymentMethod: formValues.paymentMethod || '',
-      receiptNumber: formValues.receiptNumber || '',
+      paymentMethod: '', // Vacío - no se usa
+      receiptNumber: '', // Vacío - no se usa
       description: formValues.description || ''
     };
   
@@ -266,7 +244,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
           
           if (response && response.success) {
             this.success = true;
-            this.loadRecentExpenses();  // ✅ Recargar lista
+            this.loadRecentExpenses();
             this.resetForm();
             
             setTimeout(() => {
@@ -291,7 +269,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Resetear formulario
+   * Resetear formulario simplificado
    */
   resetForm(): void {
     this.submitted = false;
@@ -299,19 +277,16 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       date: new Date().toISOString().split('T')[0],
       expenseType: '',
       amount: '',
-      paymentMethod: '',
-      receiptNumber: '',
       operator: this.currentOperator?.id || '',
       description: ''
     });
     
-    // Deshabilitar nuevamente los campos que deben estar deshabilitados
     this.expenseForm.get('date')?.disable();
     this.expenseForm.get('operator')?.disable();
   }
   
   /**
-   * Marcar todos los campos del formulario como tocados para mostrar errores
+   * Marcar todos los campos como tocados
    */
   private markFormGroupTouched(): void {
     Object.keys(this.expenseForm.controls).forEach(key => {
@@ -323,7 +298,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * ✅ Verificar si un campo del formulario tiene errores
+   * Verificar si un campo tiene errores
    */
   hasFieldError(fieldName: string): boolean {
     const field = this.expenseForm.get(fieldName);
@@ -331,7 +306,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * ✅ Obtener mensaje de error para un campo específico
+   * Obtener mensaje de error para un campo
    */
   getFieldError(fieldName: string): string {
     const field = this.expenseForm.get(fieldName);
@@ -343,27 +318,19 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
       if (field.errors['min']) {
         return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
       }
-      if (field.errors['maxlength']) {
-        return `${this.getFieldLabel(fieldName)} no puede exceder ${field.errors['maxlength'].requiredLength} caracteres`;
-      }
-      if (field.errors['duplicate']) {
-        return `Este número de recibo ya existe en el sistema`;
-      }
     }
     
     return '';
   }
   
   /**
-   * Obtener etiqueta del campo para mensajes de error
+   * Obtener etiqueta del campo
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
       'date': 'La fecha',
       'expenseType': 'El tipo de gasto',
       'amount': 'El monto',
-      'paymentMethod': 'El método de pago',
-      'receiptNumber': 'El número de recibo',
       'operator': 'El operador',
       'description': 'La descripción'
     };
@@ -372,17 +339,10 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Obtener estado de carga general
+   * Estado de carga general
    */
   get isLoading(): boolean {
     return this.loading || this.loadingMasterData;
-  }
-  
-  /**
-   * Refrescar datos maestros
-   */
-  refreshMasterData(): void {
-    this.loadMasterData();
   }
   
   /**
@@ -395,36 +355,25 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
   
   /**
-   * Obtener nombre del tipo de gasto por ID
+   * Obtener etiqueta legible del tipo de gasto
    */
-  getExpenseTypeName(expenseTypeId: string): string {
-    return this.expenseService.getExpenseTypeName(expenseTypeId, this.expenseTypes);
-  }
-  
-  /**
-   * Obtener nombre del método de pago por ID
-   */
-  getPaymentMethodName(paymentMethodId: string): string {
-    return this.expenseService.getPaymentMethodName(paymentMethodId, this.paymentMethods);
-  }
-  
-  /**
-   * Obtener nombre del operador por ID
-   */
-  getOperatorName(operatorId: string): string {
-    const operator = this.operators.find(o => o.id === operatorId);
-    return operator ? operator.name : 'Operador desconocido';
+  getExpenseTypeLabel(type: string): string {
+    const types: { [key: string]: string } = {
+      'combustible': 'Combustible',
+      'otro': 'Otro'
+    };
+    return types[type] || type || 'No especificado';
   }
 
   /**
-   * TrackBy function para optimizar renderización
+   * TrackBy para optimizar renderización
    */
   trackByExpenseId(index: number, expense: ExpenseRecord): string {
     return expense.id?.toString() || index.toString();
   }
   
   /**
-   * Formatear monto para mostrar
+   * Formatear monto
    */
   formatAmount(amount: number): string {
     return this.expenseService.formatAmount(amount);
@@ -438,28 +387,14 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Filtrar operadores por estado activo
+   * Filtrar operadores activos
    */
   get activeOperators(): Operator[] {
     return this.operators.filter(operator => operator.isActive !== false);
   }
-  
-  /**
-   * Filtrar tipos de gasto por estado activo
-   */
-  get activeExpenseTypes(): ExpenseType[] {
-    return this.expenseTypes.filter(expenseType => expenseType.isActive !== false);
-  }
-  
-  /**
-   * Filtrar métodos de pago por estado activo
-   */
-  get activePaymentMethods(): PaymentMethod[] {
-    return this.paymentMethods.filter(paymentMethod => paymentMethod.isActive !== false);
-  }
 
   /**
-   * Establecer la fecha formateada para mostrar en la vista
+   * Establecer fecha formateada
    */
   private setFormattedCurrentDate(): void {
     const today = new Date();
@@ -471,12 +406,4 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
     };
     this.formattedCurrentDate = today.toLocaleDateString('es-ES', options);
   }
-
-  /**
-   * Manejar cambio de número de recibo
-   */
-  onReceiptNumberChange(): void {
-    // Implementar validación si es necesario
-  }
-  
 }

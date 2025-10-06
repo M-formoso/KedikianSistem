@@ -35,7 +35,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   // Datos maestros desde el backend
   projects: Project[] = [];
   materialTypes: MaterialType[] = [];
-  vehicles: Vehicle[] = [];
+  vehicles: Vehicle[] = []; // Mantenemos para compatibilidad pero no se usa
   operators: Operator[] = [];
   
   // Registros recientes
@@ -72,28 +72,26 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
   
+  /**
+   * Inicializar formulario SIN campo de vehículo
+   */
   private initializeForm(): void {
     this.aridosDeliveryForm = this.formBuilder.group({
-      // La fecha se establece automáticamente como hoy y es readonly
       date: [{ value: new Date().toISOString().split('T')[0], disabled: true }],
       project: ['', Validators.required],
       materialType: ['', Validators.required],
       quantity: ['', [Validators.required, Validators.min(0.1)]],
-      // La unidad se establece por defecto como m³ y es readonly
       unit: [{ value: 'm³', disabled: true }],
-      vehicleId: ['', Validators.required],
-      // El operador se carga automáticamente desde la sesión
+      // ❌ CAMPO vehicleId ELIMINADO
       operator: [{ value: '', disabled: true }],
       notes: ['']
     });
   }
   
-  // Configuración para la tabla responsiva en móviles
   setupMobileTable(): void {
     // Implementar lógica para tabla responsiva si es necesario
   }
   
-  // Getter para acceder más fácilmente a los campos del formulario
   get f() { 
     return this.aridosDeliveryForm.controls; 
   }
@@ -104,25 +102,22 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   loadCurrentOperator(): void {
     const currentUser = this.authService.getCurrentUser();
     if (currentUser) {
-      // Crear objeto Operator basado en el usuario actual
       this.currentOperator = {
         id: Number(currentUser.id) || 999,
         nombre: currentUser.nombre,
         name: currentUser.nombre,
         email: currentUser.email,
         roles: Array.isArray(currentUser.roles) ? currentUser.roles.join(',') : currentUser.roles || 'operario',
-        estado: true, // Por defecto activo
+        estado: true,
         status: 'active'
       };
       
-      // Establecer el operador en el formulario
       this.aridosDeliveryForm.patchValue({
         operator: this.currentOperator.id
       });
       
       console.log('✅ Operador actual cargado:', this.currentOperator);
     } else {
-      // Fallback a operador mock
       this.currentOperator = {
         id: 999,
         nombre: 'Operario Test',
@@ -142,33 +137,27 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Cargar todos los datos maestros necesarios para el formulario
+   * Cargar datos maestros (sin vehículos)
    */
   loadMasterData(): void {
     this.loadingMasterData = true;
     this.error = '';
     
-    // Cargar todos los datos maestros en paralelo
+    // Solo cargamos proyectos, materiales y operadores
     forkJoin({
       projects: this.entregaAridosService.getProjects(),
       materialTypes: this.entregaAridosService.getMaterialTypes(),
-      vehicles: this.entregaAridosService.getVehicles(),
       operators: this.entregaAridosService.getOperators()
     })
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (responses) => {
-        // Verificar que todas las respuestas sean exitosas
         if (responses.projects.success) {
           this.projects = responses.projects.data || [];
         }
         
         if (responses.materialTypes.success) {
           this.materialTypes = responses.materialTypes.data || [];
-        }
-        
-        if (responses.vehicles.success) {
-          this.vehicles = responses.vehicles.data || [];
         }
         
         if (responses.operators.success) {
@@ -201,13 +190,12 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando registros recientes:', error);
-          // No mostrar error al usuario para registros recientes
         }
       });
   }
   
   /**
-   * Enviar formulario
+   * Enviar formulario SIN vehículo
    */
   onSubmit(): void {
     this.submitted = true;
@@ -228,13 +216,13 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
     
     const formValues = this.aridosDeliveryForm.value;
     
-    // Crear objeto de entrega según las interfaces del backend
+    // Crear objeto de entrega SIN vehicleId
     const deliveryData: EntregaAridoCreate = {
       proyecto_id: parseInt(formValues.project),
       usuario_id: this.currentOperator.id,
       tipo_arido: formValues.materialType,
       cantidad: parseFloat(formValues.quantity),
-      fecha_entrega: new Date().toISOString() // Fecha actual en formato ISO
+      fecha_entrega: new Date().toISOString()
     };
 
     console.log('📤 Enviando entrega de áridos:', deliveryData);
@@ -246,12 +234,11 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
           this.loading = false;
           if (response.success) {
             this.success = true;
-            this.loadRecentRecords(); // Recargar la lista
+            this.loadRecentRecords();
             this.resetForm();
             
             console.log('✅ Entrega registrada exitosamente');
             
-            // Ocultar mensaje de éxito después de 5 segundos
             setTimeout(() => {
               this.success = false;
             }, 5000);
@@ -268,37 +255,32 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Resetear formulario
+   * Resetear formulario SIN vehículo
    */
   resetForm(): void {
     this.submitted = false;
     this.aridosDeliveryForm.reset({
-      // La fecha siempre se mantiene como hoy
       date: new Date().toISOString().split('T')[0],
       project: '',
       materialType: '',
       quantity: '',
-      // La unidad siempre es m³
       unit: 'm³',
-      vehicleId: '',
-      // Mantener el operador actual
+      // ❌ vehicleId eliminado
       operator: this.currentOperator?.id || '',
       notes: ''
     });
     
-    // Deshabilitar nuevamente los campos que deben estar deshabilitados
     this.aridosDeliveryForm.get('date')?.disable();
     this.aridosDeliveryForm.get('unit')?.disable();
     this.aridosDeliveryForm.get('operator')?.disable();
   }
   
   /**
-   * Marcar todos los campos del formulario como tocados para mostrar errores
+   * Marcar todos los campos como tocados
    */
   private markFormGroupTouched(): void {
     Object.keys(this.aridosDeliveryForm.controls).forEach(key => {
       const control = this.aridosDeliveryForm.get(key);
-      // Solo marcar como tocados los campos que están habilitados
       if (control && !control.disabled) {
         control.markAsTouched();
       }
@@ -317,30 +299,6 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    */
   refreshRecentRecords(): void {
     this.loadRecentRecords();
-  }
-  
-  /**
-   * Validar disponibilidad de vehículo
-   */
-  validateVehicleAvailability(): void {
-    const vehicleId = this.aridosDeliveryForm.get('vehicleId')?.value;
-    // Usar siempre la fecha actual
-    const date = new Date().toISOString().split('T')[0];
-    
-    if (vehicleId && date) {
-      this.entregaAridosService.validateVehicleAvailability(vehicleId, date)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (response) => {
-            if (!response.success || !response.data) {
-              this.aridosDeliveryForm.get('vehicleId')?.setErrors({ 'unavailable': true });
-            }
-          },
-          error: (error) => {
-            console.error('Error validando disponibilidad de vehículo:', error);
-          }
-        });
-    }
   }
   
   // ============ MÉTODOS DE UTILIDAD PARA LA VISTA ============
@@ -362,36 +320,26 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Obtener nombre del vehículo por ID
+   * Obtener nombre del vehículo por ID (mantenido para registros históricos)
    */
   getVehicleName(vehicleId: string): string {
     const vehicle = this.vehicles.find(v => v.id === vehicleId);
-    return vehicle ? vehicle.name : 'Vehículo desconocido';
+    return vehicle ? vehicle.name : 'N/A';
   }
   
   /**
    * Obtener nombre del operador por ID
    */
   getOperatorName(operatorId: string | number): string {
-    // Si es el operador actual, usar su información
     if (this.currentOperator && operatorId.toString() === this.currentOperator.id.toString()) {
       return this.currentOperator.nombre;
     }
-    // Si no, buscar en la lista (para registros históricos)
     const operator = this.operators.find(o => o.id.toString() === operatorId.toString());
     return operator ? operator.nombre : 'Operador desconocido';
   }
   
   /**
-   * Obtener capacidad del vehículo por ID
-   */
-  getVehicleCapacity(vehicleId: string): string {
-    const vehicle = this.vehicles.find(v => v.id === vehicleId);
-    return vehicle?.capacity || '';
-  }
-  
-  /**
-   * Verificar si un campo del formulario tiene errores
+   * Verificar si un campo tiene errores
    */
   hasFieldError(fieldName: string): boolean {
     const field = this.aridosDeliveryForm.get(fieldName);
@@ -399,7 +347,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Obtener mensaje de error para un campo específico
+   * Obtener mensaje de error para un campo
    */
   getFieldError(fieldName: string): string {
     const field = this.aridosDeliveryForm.get(fieldName);
@@ -411,72 +359,54 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       if (field.errors['min']) {
         return `${this.getFieldLabel(fieldName)} debe ser mayor a ${field.errors['min'].min}`;
       }
-      if (field.errors['unavailable']) {
-        return `${this.getFieldLabel(fieldName)} no está disponible para la fecha seleccionada`;
-      }
     }
     
     return '';
   }
   
   /**
-   * Obtener etiqueta del campo para mensajes de error
+   * Obtener etiqueta del campo
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
       'project': 'El proyecto',
       'materialType': 'El tipo de material',
-      'quantity': 'La cantidad',
-      'vehicleId': 'El vehículo'
+      'quantity': 'La cantidad'
     };
     
     return labels[fieldName] || fieldName;
   }
   
   /**
-   * Obtener estado de carga general
+   * Estado de carga general
    */
   get isLoading(): boolean {
     return this.loading || this.loadingMasterData;
   }
   
   /**
-   * Manejar cambio de vehículo
-   */
-  onVehicleChange(): void {
-    this.validateVehicleAvailability();
-  }
-  
-  /**
-   * Filtrar vehículos por estado activo
-   */
-  get activeVehicles(): Vehicle[] {
-    return this.vehicles.filter(vehicle => vehicle.status !== 'inactive');
-  }
-  
-  /**
-   * Filtrar proyectos por estado activo
+   * Filtrar proyectos activos
    */
   get activeProjects(): Project[] {
     return this.projects.filter(project => project.estado === true);
   }
   
   /**
-   * Obtener nombre del operador actual
+   * Nombre del operador actual
    */
   get currentOperatorName(): string {
     return this.currentOperator?.nombre || 'No definido';
   }
 
   /**
-   * TrackBy function for better performance in ngFor
+   * TrackBy para optimización
    */
   trackByRecordId(index: number, record: EntregaAridoOut): string {
     return record.id?.toString() || index.toString();
   }
 
   /**
-   * Establecer la fecha formateada para mostrar en la vista
+   * Establecer fecha formateada
    */
   private setFormattedCurrentDate(): void {
     const today = new Date();
@@ -490,7 +420,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Editar registro (placeholder)
+   * Editar registro
    */
   editRecord(record: EntregaAridoOut): void {
     console.log('Editando registro:', record);
@@ -509,7 +439,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
           next: (response) => {
             if (response.success) {
               this.success = true;
-              this.loadRecentRecords(); // Recargar la lista
+              this.loadRecentRecords();
               setTimeout(() => {
                 this.success = false;
               }, 3000);
@@ -528,7 +458,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Obtener total de cantidad entregada hoy
+   * Total de cantidad entregada hoy
    */
   getTotalQuantityToday(): number {
     const today = new Date().toISOString().split('T')[0];
@@ -538,14 +468,14 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Obtener cantidad de proyectos activos
+   * Cantidad de proyectos activos
    */
   getActiveProjectsCount(): number {
     return this.activeProjects.length;
   }
 
   /**
-   * Obtener cantidad de materiales únicos entregados
+   * Cantidad de materiales únicos
    */
   getUniqueMaterialsCount(): number {
     const uniqueMaterials = new Set(this.recentRecords.map(record => record.materialType));
@@ -553,7 +483,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Obtener entregas del día actual
+   * Entregas del día actual
    */
   getTodayDeliveries(): EntregaAridoOut[] {
     const today = new Date().toISOString().split('T')[0];

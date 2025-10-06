@@ -68,23 +68,7 @@
           </div>
         </div>
         
-        <div class="form-group">
-          <label for="vehicleId">Vehículo <span class="required">*</span></label>
-          <select 
-            id="vehicleId" 
-            formControlName="vehicleId" 
-            class="form-control"
-            (change)="onVehicleChange()">
-            <option value="">Seleccione un vehículo</option>
-            <option *ngFor="let vehicle of activeVehicles" [value]="vehicle.id">
-              {{ vehicle.name }} ({{ vehicle.id }})
-              <span *ngIf="vehicle.capacity"> - {{ vehicle.capacity }}</span>
-            </option>
-          </select>
-          <div *ngIf="hasFieldError('vehicleId')" class="error-message">
-            {{ getFieldError('vehicleId') }}
-          </div>
-        </div>
+
       
         <div class="form-group compact-notes">
           <label for="notes">Observaciones</label>

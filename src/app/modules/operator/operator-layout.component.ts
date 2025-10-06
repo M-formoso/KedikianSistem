@@ -1,12 +1,18 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component'; // ✅ Correcto
-import { HeaderComponent } from '../../shared/components/header/header.component';   // ✅ Correcto
+import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
+import { HeaderComponent } from '../../shared/components/header/header.component';
+
 @Component({
   selector: 'app-operator-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, SidebarComponent, HeaderComponent], // Ensure HeaderComponent is imported correctly
+  imports: [
+    CommonModule,
+    RouterModule,
+    SidebarComponent,
+    HeaderComponent,
+  ],
   template: `
     <div class="app-container">
       <app-sidebar></app-sidebar>
@@ -21,37 +27,54 @@ import { HeaderComponent } from '../../shared/components/header/header.component
   styles: [`
     .app-container {
       display: flex;
-      height: 100vh;
+      min-height: 100vh;
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden;
     }
     
     .content-area {
       flex: 1;
       position: relative;
       transition: margin-left 0.3s ease;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
     }
     
     .main-content {
-      padding: 2rem 1rem;
-      margin-top: 60px; /* Altura del header */
-      height: calc(100vh - 60px);
+      padding: 1rem;
+      margin-top: 60px;
+      min-height: calc(100vh - 60px);
       overflow-y: auto;
+      overflow-x: hidden;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     
-    /* Estilos responsive */
     @media (min-width: 769px) {
       .content-area {
-        margin-left: 250px; /* Ancho del sidebar */
+        margin-left: 250px;
       }
     }
     
     @media (max-width: 768px) {
       .content-area {
         margin-left: 0;
+        width: 100vw;
       }
       
       .main-content {
-        padding: 1rem;
-        margin-top: 60px; /* Espacio para el botón hamburguesa y header */
+        padding: 0.5rem;
+        margin-top: 60px;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main-content {
+        padding: 0.25rem;
       }
     }
   `]
