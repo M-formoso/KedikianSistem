@@ -1,4 +1,4 @@
-// machine-hours.service.ts - VERSIÓN CORREGIDA
+// machine-hours.service.ts - VERSIÓN ACTUALIZADA PARA BACKEND
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -12,18 +12,15 @@ export interface MachineHours {
   machineType: string;
   machineId: string;
   
-  // Horas de trabajo (existente)
+  // Horas de trabajo
   startHour: number;
   endHour: number;
   totalHours: number;
   
-  // 🆕 Horas de máquina (nuevo)
+  // Horas de máquina
   hourMeterStart?: number;
   hourMeterEnd?: number;
   operatingHours?: number;
-  efficiency?: number;
-  idleTime?: number;
-  fuelLevel?: number;
   
   project: string;
   operator: string;
@@ -36,7 +33,6 @@ export interface Project {
   estado: boolean;
   ubicacion?: string;
   descripcion?: string;
-  // Alias para compatibilidad
   name?: string;
 }
 
@@ -47,14 +43,7 @@ export interface Machine {
   horas_uso: number;
   proyecto_id?: number;
   tipo?: string;
-  // Alias para compatibilidad
   name?: string;
-}
-
-export interface MachineType {
-  id: string;
-  name: string;
-  description?: string;
 }
 
 export interface Operator {
@@ -63,16 +52,7 @@ export interface Operator {
   email: string;
   roles: string;
   estado: boolean;
-  // Alias para compatibilidad
   name?: string;
-}
-
-// ✅ CORREGIDO: Interface que coincide exactamente con el backend
-export interface ReporteLaboralCreate {
-  maquina_id: number;
-  usuario_id: number;
-  fecha_asignacion: string; // DateTime ISO string
-  horas_turno: number; // ✅ ENTERO - número de horas trabajadas
 }
 
 export interface ApiResponse<T> {
@@ -88,7 +68,6 @@ export interface ApiResponse<T> {
 export class MachineHoursService {
   private apiUrl = environment.apiUrl;
 
-  // ✅ CORREGIDO: Headers mejorados con token dinámico
   private getHttpOptions() {
     const usuarioActual = localStorage.getItem('usuarioActual');
     let token: string | null = null;
@@ -116,17 +95,13 @@ export class MachineHoursService {
 
   constructor(private http: HttpClient) {}
 
-  // ========== MÉTODOS PRINCIPALES CORREGIDOS ==========
+  // ========== MÉTODOS PRINCIPALES ==========
 
-  /**
-   * ✅ CORREGIDO: Obtener proyectos desde /proyectos
-   */
   getProjects(): Observable<ApiResponse<Project[]>> {
     return this.http.get<Project[]>(`${this.apiUrl}/proyectos`, this.getHttpOptions()).pipe(
       map(projects => {
-        console.log('✅ Proyectos recibidos del backend:', projects);
+        console.log('✅ Proyectos recibidos:', projects);
         
-        // Agregar alias para compatibilidad
         const projectsWithAlias = projects.map(project => ({
           ...project,
           name: project.nombre
@@ -141,27 +116,17 @@ export class MachineHoursService {
         console.error('❌ Error obteniendo proyectos:', error);
         return of({
           success: true,
-          data: [{
-            id: 1,
-            nombre: 'Proyecto Test',
-            name: 'Proyecto Test',
-            estado: true,
-            descripcion: 'Proyecto de prueba'
-          }]
+          data: []
         });
       })
     );
   }
 
-  /**
-   * ✅ CORREGIDO: Obtener máquinas desde /maquinas  
-   */
   getMachines(): Observable<ApiResponse<Machine[]>> {
     return this.http.get<Machine[]>(`${this.apiUrl}/maquinas`, this.getHttpOptions()).pipe(
       map(machines => {
-        console.log('✅ Máquinas recibidas del backend:', machines);
+        console.log('✅ Máquinas recibidas:', machines);
         
-        // Agregar alias para compatibilidad
         const machinesWithAlias = machines.map(machine => ({
           ...machine,
           name: machine.nombre
@@ -176,37 +141,58 @@ export class MachineHoursService {
         console.error('❌ Error obteniendo máquinas:', error);
         return of({
           success: true,
-          data: [{
-            id: 1,
-            nombre: 'Excavadora Test',
-            name: 'Excavadora Test',
-            estado: true,
-            horas_uso: 0
-          }]
+          data: []
         });
       })
     );
   }
 
   /**
-   * ✅ CORREGIDO: Crear registro de horas de máquina
+   * ✅ ACTUALIZADO: Enviar datos correctamente al backend
+   * El backend espera: maquina_id, usuario_id, proyecto_id, horas_turno, horometro_inicial
    */
   createMachineHours(machineHours: any): Observable<ApiResponse<any>> {
-    console.log('📤 Datos recibidos para crear horas máquina:', machineHours);
+    console.log('📤 createMachineHours - Datos recibidos:', machineHours);
     
-    // ✅ CRÍTICO: Transformar datos correctamente al formato del backend
-    const reporteData: ReporteLaboralCreate = {
+    // ✅ PARSEAR NOTES PARA EXTRAER HOROMETRO_INICIAL
+    let horometro_inicial = null;
+    let notas_parseadas = null;
+    
+    if (machineHours.notes) {
+      try {
+        notas_parseadas = JSON.parse(machineHours.notes);
+        horometro_inicial = notas_parseadas.horometro_inicial;
+        console.log('✅ Horómetro inicial extraído:', horometro_inicial);
+      } catch (error) {
+        console.warn('⚠️ No se pudo parsear notes:', error);
+      }
+    }
+    
+    // ✅ PREPARAR DATOS PARA EL BACKEND
+    const reporteData = {
+      // Campos obligatorios
       maquina_id: parseInt(machineHours.machineId),
       usuario_id: parseInt(machineHours.operator),
-      fecha_asignacion: new Date().toISOString(),
-      horas_turno: Math.round(machineHours.totalHours || 0) // ✅ ENTERO redondeado
+      fecha_asignacion: machineHours.date ? 
+        `${machineHours.date}T${this.formatTime(machineHours.startHour)}` : 
+        new Date().toISOString(),
+      horas_turno: Math.round(machineHours.totalHours || 0),
+      
+      // ✅ CAMPOS CRÍTICOS QUE FALTABAN
+      proyecto_id: machineHours.project ? parseInt(machineHours.project) : null,
+      horometro_inicial: horometro_inicial,
+      
+      // Campo de notas (mantener el JSON completo)
+      notas: machineHours.notes || null
     };
 
     console.log('📤 Datos transformados para backend:', reporteData);
-    console.log('🔍 Tipos de datos:');
-    console.log('  - maquina_id:', typeof reporteData.maquina_id, reporteData.maquina_id);
-    console.log('  - usuario_id:', typeof reporteData.usuario_id, reporteData.usuario_id);
-    console.log('  - horas_turno:', typeof reporteData.horas_turno, reporteData.horas_turno);
+    console.log('🔍 Verificación de campos críticos:');
+    console.log('  - proyecto_id:', reporteData.proyecto_id, '(tipo:', typeof reporteData.proyecto_id, ')');
+    console.log('  - horometro_inicial:', reporteData.horometro_inicial, '(tipo:', typeof reporteData.horometro_inicial, ')');
+    console.log('  - maquina_id:', reporteData.maquina_id);
+    console.log('  - usuario_id:', reporteData.usuario_id);
+    console.log('  - horas_turno:', reporteData.horas_turno);
 
     return this.http.post<any>(`${this.apiUrl}/reportes-laborales`, reporteData, this.getHttpOptions()).pipe(
       map(response => {
@@ -214,11 +200,11 @@ export class MachineHoursService {
         return {
           success: true,
           data: response,
-          message: 'Registro de horas de máquina guardado correctamente'
+          message: 'Registro de horas guardado correctamente'
         };
       }),
       catchError(error => {
-        console.error('❌ Error completo creando registro de horas máquina:', error);
+        console.error('❌ Error completo:', error);
         console.error('❌ Status:', error.status);
         console.error('❌ Error body:', error.error);
         
@@ -228,26 +214,68 @@ export class MachineHoursService {
   }
 
   /**
-   * ✅ CORREGIDO: Obtener registros recientes de reportes laborales
+   * ✅ ACTUALIZADO: Obtener registros recientes con todos los campos
    */
   getRecentMachineHours(limit: number = 10): Observable<ApiResponse<MachineHours[]>> {
     return this.http.get<any[]>(`${this.apiUrl}/reportes-laborales`, this.getHttpOptions()).pipe(
       map(reportes => {
-        console.log('✅ Reportes obtenidos del backend:', reportes);
+        console.log('✅ Reportes recibidos del backend:', reportes);
         
-        // Transformar reportes del backend al formato del frontend
         const transformedData = reportes
-          .filter(reporte => reporte.maquina_id) // Solo reportes con máquina
+          .filter(reporte => reporte.maquina_id)
           .slice(0, limit)
-          .map(reporte => this.mapReporteToMachineHours(reporte));
+          .map(reporte => {
+            // ✅ PARSEAR NOTAS SI EXISTEN
+            let parsedNotes = null;
+            if (reporte.notas) {
+              try {
+                parsedNotes = typeof reporte.notas === 'string' ? 
+                  JSON.parse(reporte.notas) : reporte.notas;
+              } catch (error) {
+                console.warn('⚠️ No se pudo parsear notas del reporte', reporte.id);
+              }
+            }
+            
+            const fechaInicio = reporte.fecha_asignacion || new Date().toISOString();
+            const startHour = this.getDecimalHours(new Date(fechaInicio));
+            const endHour = startHour + (reporte.horas_turno || 0);
+            
+            const transformed: any = {
+              id: reporte.id,
+              date: fechaInicio.split('T')[0],
+              machineType: 'excavadora',
+              machineId: reporte.maquina_id?.toString() || '',
+              startHour: startHour,
+              endHour: endHour,
+              totalHours: reporte.horas_turno || 0,
+              
+              // ✅ INCLUIR PROYECTO_ID DIRECTAMENTE
+              project: reporte.proyecto_id?.toString() || '',
+              
+              operator: reporte.usuario_id?.toString() || '',
+              notes: reporte.notas || '',
+              
+              // ✅ INCLUIR HOROMETRO_INICIAL DIRECTAMENTE
+              hourMeterStart: reporte.horometro_inicial || (parsedNotes?.horometro_inicial)
+            };
+            
+            console.log('📊 Registro transformado:', {
+              id: transformed.id,
+              project: transformed.project,
+              hourMeterStart: transformed.hourMeterStart
+            });
+            
+            return transformed;
+          });
 
+        console.log('✅ Total registros transformados:', transformedData.length);
         return {
           success: true,
           data: transformedData
         };
       }),
       catchError(error => {
-        console.error('❌ Error obteniendo registros recientes:', error);
+        console.error('❌ Error obteniendo registros:', error);
         return of({
           success: true,
           data: []
@@ -256,13 +284,9 @@ export class MachineHoursService {
     );
   }
 
-  /**
-   * Obtener operadores desde /usuarios
-   */
   getOperators(): Observable<ApiResponse<Operator[]>> {
     return this.http.get<Operator[]>(`${this.apiUrl}/usuarios`, this.getHttpOptions()).pipe(
       map(usuarios => {
-        // Agregar alias para compatibilidad
         const operatorsWithAlias = usuarios
           .filter(u => u.roles === 'operario' && u.estado === true)
           .map(operator => ({
@@ -279,14 +303,7 @@ export class MachineHoursService {
         console.error('❌ Error obteniendo operadores:', error);
         return of({
           success: true,
-          data: [{
-            id: 999,
-            nombre: 'Operario Test',
-            name: 'Operario Test',
-            email: 'operario@test.com',
-            roles: 'operario',
-            estado: true
-          }]
+          data: []
         });
       })
     );
@@ -295,23 +312,14 @@ export class MachineHoursService {
   // ========== MÉTODOS DE UTILIDAD ==========
 
   /**
-   * ✅ CORREGIDO: Mapear reporte del backend a MachineHours del frontend
+   * Convertir horas decimales a formato HH:MM:SS
    */
-  private mapReporteToMachineHours(reporte: any): MachineHours {
-    const fechaInicio = reporte.fecha_asignacion || reporte.fecha_inicio;
+  private formatTime(decimalHours: number): string {
+    const hours = Math.floor(decimalHours);
+    const minutes = Math.floor((decimalHours - hours) * 60);
+    const seconds = Math.floor(((decimalHours - hours) * 60 - minutes) * 60);
     
-    return {
-      id: reporte.id,
-      date: fechaInicio ? fechaInicio.split('T')[0] : new Date().toISOString().split('T')[0],
-      machineType: 'excavadora', // Valor por defecto
-      machineId: reporte.maquina_id?.toString() || '',
-      startHour: fechaInicio ? this.getDecimalHours(new Date(fechaInicio)) : 0,
-      endHour: fechaInicio ? this.getDecimalHours(new Date(fechaInicio)) + (reporte.horas_turno || 0) : 0,
-      totalHours: reporte.horas_turno || 0,
-      project: reporte.proyecto_id?.toString() || '',
-      operator: reporte.usuario_id?.toString() || '',
-      notes: reporte.notas || ''
-    };
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
   /**
@@ -336,7 +344,7 @@ export class MachineHoursService {
     return `${hours.toFixed(1)}h`;
   }
 
-  // ========== MANEJO DE ERRORES MEJORADO ==========
+  // ========== MANEJO DE ERRORES ==========
 
   private handleError(error: any): Observable<never> {
     console.error('❌ Error en MachineHoursService:', error);
@@ -349,13 +357,11 @@ export class MachineHoursService {
       errorMessage = 'No se puede conectar al servidor. Verifica la URL del API.';
     } else if (error.status === 401) {
       errorMessage = 'No autorizado. Inicie sesión nuevamente.';
-      // Limpiar localStorage si hay error 401
       localStorage.removeItem('usuarioActual');
       window.location.href = '/login';
     } else if (error.status === 422) {
       errorMessage = 'Error de validación. Verifique los datos ingresados.';
       
-      // Manejo específico de errores de validación de Pydantic
       if (error.error && error.error.detail) {
         if (Array.isArray(error.error.detail)) {
           const validationErrors = error.error.detail.map((e: any) => {

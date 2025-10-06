@@ -226,11 +226,11 @@
               {{ record.date | date:'dd/MM/yyyy' }}
             </td>
             <td [attr.data-label]="'Proyecto'">
-              <span class="project-badge">{{ getProjectName(record.project) }}</span>
+              <span class="project-badge">{{ record.projectName || 'Sin proyecto' }}</span>
             </td>
             <td [attr.data-label]="'Máquina'">
               <div class="machine-info">
-                <div class="machine-name">{{ getMachineName(record.machineId) }}</div>
+                <div class="machine-name">{{ record.machineName || 'Sin máquina' }}</div>
                 <div class="machine-type">{{ getMachineTypeName(record.machineType) }}</div>
               </div>
             </td>
@@ -241,7 +241,9 @@
               </div>
             </td>
             <td [attr.data-label]="'Horómetro Inicial'">
-              <span *ngIf="record.hourMeterStart; else noStartMeter">{{ record.hourMeterStart | number:'1.1-1' }}</span>
+              <span *ngIf="getHourMeterStart(record) !== null; else noStartMeter">
+                {{ getHourMeterStart(record) | number:'1.1-1' }}
+              </span>
               <ng-template #noStartMeter>
                 <span class="text-muted">No registrado</span>
               </ng-template>
