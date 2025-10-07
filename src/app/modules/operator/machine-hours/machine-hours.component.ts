@@ -1,4 +1,4 @@
-// machine-hours.component.ts - VERSIÓN CORREGIDA CON MAPEO DE DATOS
+// machine-hours.component.ts - VERSIÓN COMPLETA CORREGIDA
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -13,7 +13,6 @@ import {
 } from '../../../core/services/machine-hours.service';
 import { AuthService, Usuario } from '../../../core/services/auth.service';
 
-// Interface para el estado persistente de la máquina
 interface MachineWorkStatus {
   isActive: boolean;
   startTime: string;
@@ -35,7 +34,6 @@ interface CurrentOperator {
   roles: string;
 }
 
-// ✅ Interface extendida para registros con datos procesados
 interface MachineHoursExtended extends MachineHours {
   projectName?: string;
   machineName?: string;
@@ -55,17 +53,14 @@ interface MachineHoursExtended extends MachineHours {
   styleUrls: ['./machine-hours.component.css']
 })
 export class MachineHoursComponent implements OnInit, OnDestroy {
-  // Formulario
   machineHoursForm!: FormGroup;
   
-  // Estados del componente
   submitted = false;
   success = false;
   error = '';
   loading = false;
   loadingMasterData = false;
   
-  // Estados del contador
   isTimerActive = false;
   startTime: Date | null = null;
   currentTime: Date = new Date();
@@ -73,25 +68,22 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   elapsedMinutes = 0;
   elapsedSeconds = 0;
   
-  // Flag para evitar restauración después de finalizar
   private isFinishing = false;
   
-  // Estado de trabajo de máquina activo
   activeMachineWork: MachineWorkStatus | null = null;
   
-  // Datos maestros desde el backend
   projects: Project[] = [];
   machines: Machine[] = [];
   
   currentOperator: CurrentOperator | null = null;
   
-  // ✅ Registros recientes con datos extendidos
   recentRecords: MachineHoursExtended[] = [];
   
-  // Para cancelar suscripciones
+  // ✅ NUEVA PROPIEDAD: Descripción del proyecto seleccionado
+  selectedProjectDescription: string = '';
+  
   private destroy$ = new Subject<void>();
   
-  // Clave para localStorage
   private readonly MACHINE_WORK_KEY = 'activeMachineWork';
   
   constructor(
@@ -176,6 +168,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
           notes: parsed.notes,
           hourMeterStart: parsed.hourMeterStart
         });
+        
+        // ✅ Restaurar descripción del proyecto
+        if (parsed.project) {
+          this.loadProjectDescription(parseInt(parsed.project));
+        }
         
         this.machineHoursForm.get('project')?.disable();
         this.machineHoursForm.get('machineId')?.disable();
@@ -360,6 +357,9 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.elapsedSeconds = 0;
     this.isFinishing = false;
     
+    // ✅ Limpiar descripción del proyecto
+    this.selectedProjectDescription = '';
+    
     this.machineHoursForm.get('project')?.enable();
     this.machineHoursForm.get('machineId')?.enable();
     this.machineHoursForm.get('hourMeterStart')?.enable();
@@ -387,6 +387,9 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     console.log('🔄 Reset manual');
     this.isFinishing = true;
     
+    // ✅ Limpiar descripción del proyecto
+    this.selectedProjectDescription = '';
+    
     this.machineHoursForm.patchValue({
       hourMeterStart: ''
     });
@@ -404,8 +407,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
       minute: '2-digit' 
     });
   }
-
-  // ============ MÉTODOS DE CARGA DE DATOS ============
 
   loadMasterData(): void {
     this.loadingMasterData = true;
@@ -451,17 +452,12 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
           console.log('📥 Respuesta registros recientes:', response);
           
           if (response && response.success && response.data) {
-            // ✅ PROCESAMIENTO MEJORADO: Agregar nombres y parsear notas
             this.recentRecords = response.data.map((record: MachineHours) => {
               const extended: MachineHoursExtended = { ...record };
               
-              // Agregar nombre del proyecto
               extended.projectName = this.getProjectName(record.project);
-              
-              // Agregar nombre de la máquina
               extended.machineName = this.getMachineName(record.machineId);
               
-              // Parsear notas JSON si existen
               if (record.notes) {
                 try {
                   extended.parsedNotes = JSON.parse(record.notes);
@@ -499,12 +495,55 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.loadRecentRecords();
   }
   
-  onMachineChange(): void {
-    // Implementar lógica si es necesario
+  // ✅ NUEVO MÉTODO: Cargar descripción del proyecto
+  private loadProjectDescription(projectId: number): void {
+    console.log('🔍 Cargando descripción del proyecto:', projectId);
+    
+    if (!projectId || isNaN(projectId)) {
+      console.warn('⚠️ ID de proyecto inválido:', projectId);
+      this.selectedProjectDescription = '';
+      return;
+    }
+    
+    this.machineHoursService.getProjectDetails(projectId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          console.log('📥 Respuesta completa:', response);
+          
+          if (response && response.success && response.data) {
+            if (response.data.descripcion && response.data.descripcion.trim() !== '') {
+              this.selectedProjectDescription = response.data.descripcion;
+              console.log('✅ Descripción cargada:', this.selectedProjectDescription);
+            } else {
+              this.selectedProjectDescription = '';
+              console.log('ℹ️ Proyecto sin descripción');
+            }
+          } else {
+            this.selectedProjectDescription = '';
+            console.log('⚠️ Respuesta sin datos válidos');
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error cargando descripción:', error);
+          this.selectedProjectDescription = '';
+        }
+      });
+  }
+  
+  // ✅ MODIFICADO: onProjectChange ahora carga la descripción
+  onProjectChange(): void {
+    const projectId = this.machineHoursForm.get('project')?.value;
+    
+    console.log('📋 Proyecto seleccionado - ID:', projectId);
+    
+    if (projectId) {
+      this.loadProjectDescription(parseInt(projectId));
+    } else {
+      this.selectedProjectDescription = '';
+    }
   }
 
-  // ============ MÉTODOS DE UTILIDAD ============
-  
   get f() { 
     return this.machineHoursForm.controls; 
   }
@@ -525,14 +564,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     return machine ? machine.nombre : `Máquina ${machineId}`;
   }
   
-  // ✅ NUEVO: Método para obtener horómetro inicial de un registro
   getHourMeterStart(record: MachineHoursExtended): number | null {
-    // Primero intentar desde parsedNotes
     if (record.parsedNotes?.horometro_inicial !== undefined) {
       return record.parsedNotes.horometro_inicial;
     }
     
-    // Luego intentar desde el campo directo (si existe en el modelo)
     if ((record as any).hourMeterStart !== undefined) {
       return (record as any).hourMeterStart;
     }
@@ -568,7 +604,9 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   get activeMachines(): Machine[] {
-    return this.machines.filter(machine => machine.estado === true);
+    // ✅ Devolver TODAS las máquinas sin filtrar
+    console.log('🔍 activeMachines - Total máquinas disponibles:', this.machines.length);
+    return this.machines;  // ✅ SIN FILTRO
   }
   
   get activeProjects(): Project[] {

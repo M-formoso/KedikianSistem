@@ -122,19 +122,58 @@ export class MachineHoursService {
     );
   }
 
+  /**
+   * ✅ NUEVO: Obtener detalles de un proyecto específico con su descripción
+   */
+  getProjectDetails(projectId: number): Observable<ApiResponse<Project>> {
+    console.log('🔍 Solicitando detalles del proyecto:', projectId);
+    console.log('🌐 URL completa:', `${this.apiUrl}/proyectos/${projectId}`);
+    
+    return this.http.get<Project>(
+      `${this.apiUrl}/proyectos/${projectId}`, 
+      this.getHttpOptions()
+    ).pipe(
+      map(project => {
+        console.log('✅ Proyecto recibido del backend:', project);
+        return {
+          success: true,
+          data: project
+        };
+      }),
+      catchError(error => {
+        console.error('❌ Error obteniendo detalles del proyecto:', error);
+        console.error('❌ Status:', error.status);
+        console.error('❌ Error body:', error.error);
+        return of({
+          success: false,
+          data: {} as Project,
+          message: 'Error al cargar descripción del proyecto'
+        });
+      })
+    );
+  }
+
   getMachines(): Observable<ApiResponse<Machine[]>> {
     return this.http.get<Machine[]>(`${this.apiUrl}/maquinas`, this.getHttpOptions()).pipe(
       map(machines => {
-        console.log('✅ Máquinas recibidas:', machines);
+        console.log('✅ Máquinas recibidas del backend:', machines);
+        console.log('✅ Total de máquinas:', machines.length);
         
-        const machinesWithAlias = machines.map(machine => ({
-          ...machine,
-          name: machine.nombre
-        }));
+        // ✅ Agregar alias y loggear cada máquina
+        const machinesWithAlias = machines.map(machine => {
+          console.log(`  - Máquina ID: ${machine.id}, Nombre: ${machine.nombre}, Estado: ${machine.estado}`);
+          return {
+            ...machine,
+            name: machine.nombre
+          };
+        });
+        
+        // ✅ NO FILTRAR - devolver todas las máquinas
+        console.log('✅ Máquinas después de procesar:', machinesWithAlias.length);
         
         return {
           success: true,
-          data: machinesWithAlias.filter(m => m.estado === true)
+          data: machinesWithAlias  // ✅ SIN FILTRO
         };
       }),
       catchError(error => {
@@ -146,15 +185,12 @@ export class MachineHoursService {
       })
     );
   }
-
   /**
    * ✅ ACTUALIZADO: Enviar datos correctamente al backend
-   * El backend espera: maquina_id, usuario_id, proyecto_id, horas_turno, horometro_inicial
    */
   createMachineHours(machineHours: any): Observable<ApiResponse<any>> {
     console.log('📤 createMachineHours - Datos recibidos:', machineHours);
     
-    // ✅ PARSEAR NOTES PARA EXTRAER HOROMETRO_INICIAL
     let horometro_inicial = null;
     let notas_parseadas = null;
     
@@ -168,31 +204,19 @@ export class MachineHoursService {
       }
     }
     
-    // ✅ PREPARAR DATOS PARA EL BACKEND
     const reporteData = {
-      // Campos obligatorios
       maquina_id: parseInt(machineHours.machineId),
       usuario_id: parseInt(machineHours.operator),
       fecha_asignacion: machineHours.date ? 
         `${machineHours.date}T${this.formatTime(machineHours.startHour)}` : 
         new Date().toISOString(),
       horas_turno: Math.round(machineHours.totalHours || 0),
-      
-      // ✅ CAMPOS CRÍTICOS QUE FALTABAN
       proyecto_id: machineHours.project ? parseInt(machineHours.project) : null,
       horometro_inicial: horometro_inicial,
-      
-      // Campo de notas (mantener el JSON completo)
       notas: machineHours.notes || null
     };
 
     console.log('📤 Datos transformados para backend:', reporteData);
-    console.log('🔍 Verificación de campos críticos:');
-    console.log('  - proyecto_id:', reporteData.proyecto_id, '(tipo:', typeof reporteData.proyecto_id, ')');
-    console.log('  - horometro_inicial:', reporteData.horometro_inicial, '(tipo:', typeof reporteData.horometro_inicial, ')');
-    console.log('  - maquina_id:', reporteData.maquina_id);
-    console.log('  - usuario_id:', reporteData.usuario_id);
-    console.log('  - horas_turno:', reporteData.horas_turno);
 
     return this.http.post<any>(`${this.apiUrl}/reportes-laborales`, reporteData, this.getHttpOptions()).pipe(
       map(response => {
@@ -225,7 +249,6 @@ export class MachineHoursService {
           .filter(reporte => reporte.maquina_id)
           .slice(0, limit)
           .map(reporte => {
-            // ✅ PARSEAR NOTAS SI EXISTEN
             let parsedNotes = null;
             if (reporte.notas) {
               try {
@@ -248,14 +271,9 @@ export class MachineHoursService {
               startHour: startHour,
               endHour: endHour,
               totalHours: reporte.horas_turno || 0,
-              
-              // ✅ INCLUIR PROYECTO_ID DIRECTAMENTE
               project: reporte.proyecto_id?.toString() || '',
-              
               operator: reporte.usuario_id?.toString() || '',
               notes: reporte.notas || '',
-              
-              // ✅ INCLUIR HOROMETRO_INICIAL DIRECTAMENTE
               hourMeterStart: reporte.horometro_inicial || (parsedNotes?.horometro_inicial)
             };
             
@@ -311,9 +329,6 @@ export class MachineHoursService {
 
   // ========== MÉTODOS DE UTILIDAD ==========
 
-  /**
-   * Convertir horas decimales a formato HH:MM:SS
-   */
   private formatTime(decimalHours: number): string {
     const hours = Math.floor(decimalHours);
     const minutes = Math.floor((decimalHours - hours) * 60);
@@ -322,24 +337,15 @@ export class MachineHoursService {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  /**
-   * Convertir Date a horas decimales (desde medianoche)
-   */
   private getDecimalHours(date: Date): number {
     return date.getHours() + (date.getMinutes() / 60) + (date.getSeconds() / 3600);
   }
 
-  /**
-   * Calcular total de horas trabajadas
-   */
   calculateTotalHours(startHour: number, endHour: number): number {
     if (endHour <= startHour) return 0;
     return Math.round((endHour - startHour) * 100) / 100;
   }
 
-  /**
-   * Formatear horas para mostrar
-   */
   formatHours(hours: number): string {
     return `${hours.toFixed(1)}h`;
   }
