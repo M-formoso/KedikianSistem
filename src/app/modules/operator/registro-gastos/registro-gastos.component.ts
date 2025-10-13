@@ -162,13 +162,23 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
    * Cargar registros recientes de gastos
    */
   loadRecentExpenses(): void {
-    this.expenseService.getRecentExpenses(10)
+    if (!this.currentOperator) {
+      console.warn('⚠️ No hay operador cargado');
+      return;
+    }
+
+    console.log('📡 Cargando gastos del usuario:', this.currentOperator.id);
+
+    // ✅ CRÍTICO: Pasar usuarioId al servicio
+    const usuarioIdNumber = parseInt(this.currentOperator.id);
+    
+    this.expenseService.getRecentExpenses(10, usuarioIdNumber)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response: any) => {
           if (response && response.success && response.data) {
             this.recentExpenses = response.data;
-            console.log('✅ Registros recientes cargados:', this.recentExpenses.length);
+            console.log('✅ Gastos recientes del usuario cargados:', this.recentExpenses.length);
           }
         },
         error: (error: any) => {
@@ -349,6 +359,7 @@ export class RegistroGastosComponent implements OnInit, OnDestroy {
    * Refrescar registros recientes
    */
   refreshRecentExpenses(): void {
+    console.log('🔄 Refrescando gastos del usuario:', this.currentOperator?.id);
     this.loadRecentExpenses();
   }
   

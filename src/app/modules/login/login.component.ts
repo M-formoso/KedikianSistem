@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+// src/app/modules/login/login.component.ts - CON MANEJO DE MENSAJES
+
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import {
   FormBuilder,
   FormGroup,
@@ -17,20 +19,36 @@ import { HttpClientModule, HttpErrorResponse } from '@angular/common/http';
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css']
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   loginForm: FormGroup;
   loading = false;
   submitted = false;
   error = '';
+  info = ''; // ✅ NUEVO: Para mensajes informativos
 
   constructor(
     private formBuilder: FormBuilder,
     private router: Router,
+    private route: ActivatedRoute, // ✅ NUEVO
     private authService: AuthService
   ) {
     this.loginForm = this.formBuilder.group({
       username: ['', Validators.required],
       password: ['', Validators.required],
+    });
+  }
+
+  ngOnInit(): void {
+    // ✅ NUEVO: Verificar si hay mensajes en los query params
+    this.route.queryParams.subscribe(params => {
+      if (params['reason'] && params['message']) {
+        this.info = params['message'];
+        
+        // Limpiar mensaje después de 10 segundos
+        setTimeout(() => {
+          this.info = '';
+        }, 10000);
+      }
     });
   }
 
@@ -47,6 +65,7 @@ export class LoginComponent {
 
     this.loading = true;
     this.error = '';
+    this.info = ''; // Limpiar mensaje informativo
 
     const usernameFromForm = this.f['username'].value;
     const passwordFromForm = this.f['password'].value;
@@ -57,8 +76,6 @@ export class LoginComponent {
       next: (response) => {
         console.log('✅ Respuesta de login recibida:', response);
         
-        // El servicio ya maneja el guardado del token y obtención del usuario
-        // Esperamos un momento para que se complete
         setTimeout(() => {
           const usuario = this.authService.obtenerUsuarioActual();
           
@@ -70,12 +87,11 @@ export class LoginComponent {
           }
 
           console.log('✅ Login exitoso');
-          console.log('👤 Usuario:', usuario.nombre);  // ⬅️ CORREGIDO: nombre en lugar de nombreUsuario
+          console.log('👤 Usuario:', usuario.nombre);
           console.log('📧 Email:', usuario.email);
           console.log('🎯 Roles desde backend:', usuario.roles);
 
-          // 🔹 Mapear roles del backend a los de Angular
-          const mappedRoles = usuario.roles.map((rol: string) => {  // ⬅️ CORREGIDO: agregado tipo
+          const mappedRoles = usuario.roles.map((rol: string) => {
             if (rol.toLowerCase() === 'user') return 'operario';
             if (rol.toLowerCase() === 'admin') return 'administrador';
             return rol.toLowerCase();
@@ -96,7 +112,7 @@ export class LoginComponent {
             console.error('❌ Rol no reconocido:', mappedRoles);
             this.error = 'Usuario sin rol válido.';
           }
-        }, 500); // Esperar 500ms para que se complete el guardado del usuario
+        }, 500);
       },
       error: (error: HttpErrorResponse) => {
         this.loading = false;

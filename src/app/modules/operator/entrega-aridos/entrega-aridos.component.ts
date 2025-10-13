@@ -179,13 +179,21 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    * Cargar registros recientes de entregas
    */
   loadRecentRecords(): void {
-    this.entregaAridosService.getRecentDeliveries(10)
+    if (!this.currentOperator) {
+      console.warn('⚠️ No hay operador cargado');
+      return;
+    }
+
+    console.log('📡 Cargando entregas del usuario:', this.currentOperator.id);
+
+    // ✅ CRÍTICO: Pasar usuarioId al servicio
+    this.entregaAridosService.getRecentDeliveries(10, this.currentOperator.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
             this.recentRecords = response.data;
-            console.log('✅ Registros recientes cargados:', this.recentRecords.length);
+            console.log('✅ Registros recientes del usuario cargados:', this.recentRecords.length);
           }
         },
         error: (error) => {
@@ -193,7 +201,6 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
         }
       });
   }
-  
   /**
    * Enviar formulario SIN vehículo
    */
@@ -298,6 +305,7 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    * Refrescar registros recientes
    */
   refreshRecentRecords(): void {
+    console.log('🔄 Refrescando registros del usuario:', this.currentOperator?.id);
     this.loadRecentRecords();
   }
   

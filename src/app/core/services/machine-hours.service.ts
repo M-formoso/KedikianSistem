@@ -1,4 +1,4 @@
-// machine-hours.service.ts - VERSIÓN ACTUALIZADA PARA BACKEND
+// src/app/core/services/machine-hours.service.ts - ACTUALIZADO CON FILTRO POR USUARIO
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -12,12 +12,10 @@ export interface MachineHours {
   machineType: string;
   machineId: string;
   
-  // Horas de trabajo
   startHour: number;
   endHour: number;
   totalHours: number;
   
-  // Horas de máquina
   hourMeterStart?: number;
   hourMeterEnd?: number;
   operatingHours?: number;
@@ -95,8 +93,6 @@ export class MachineHoursService {
 
   constructor(private http: HttpClient) {}
 
-  // ========== MÉTODOS PRINCIPALES ==========
-
   getProjects(): Observable<ApiResponse<Project[]>> {
     return this.http.get<Project[]>(`${this.apiUrl}/proyectos`, this.getHttpOptions()).pipe(
       map(projects => {
@@ -122,9 +118,6 @@ export class MachineHoursService {
     );
   }
 
-  /**
-   * ✅ NUEVO: Obtener detalles de un proyecto específico con su descripción
-   */
   getProjectDetails(projectId: number): Observable<ApiResponse<Project>> {
     console.log('🔍 Solicitando detalles del proyecto:', projectId);
     console.log('🌐 URL completa:', `${this.apiUrl}/proyectos/${projectId}`);
@@ -159,7 +152,6 @@ export class MachineHoursService {
         console.log('✅ Máquinas recibidas del backend:', machines);
         console.log('✅ Total de máquinas:', machines.length);
         
-        // ✅ Agregar alias y loggear cada máquina
         const machinesWithAlias = machines.map(machine => {
           console.log(`  - Máquina ID: ${machine.id}, Nombre: ${machine.nombre}, Estado: ${machine.estado}`);
           return {
@@ -168,12 +160,11 @@ export class MachineHoursService {
           };
         });
         
-        // ✅ NO FILTRAR - devolver todas las máquinas
         console.log('✅ Máquinas después de procesar:', machinesWithAlias.length);
         
         return {
           success: true,
-          data: machinesWithAlias  // ✅ SIN FILTRO
+          data: machinesWithAlias
         };
       }),
       catchError(error => {
@@ -185,9 +176,7 @@ export class MachineHoursService {
       })
     );
   }
-  /**
-   * ✅ ACTUALIZADO: Enviar datos correctamente al backend
-   */
+
   createMachineHours(machineHours: any): Observable<ApiResponse<any>> {
     console.log('📤 createMachineHours - Datos recibidos:', machineHours);
     
@@ -237,15 +226,22 @@ export class MachineHoursService {
     );
   }
 
-  /**
-   * ✅ ACTUALIZADO: Obtener registros recientes con todos los campos
-   */
-  getRecentMachineHours(limit: number = 10): Observable<ApiResponse<MachineHours[]>> {
+  // ✅ ACTUALIZADO: Filtrar SOLO registros del usuario autenticado
+  getRecentMachineHours(limit: number = 10, usuarioId?: number): Observable<ApiResponse<MachineHours[]>> {
+    console.log('🔍 Obteniendo registros recientes', usuarioId ? `del usuario ${usuarioId}` : '');
+    
     return this.http.get<any[]>(`${this.apiUrl}/reportes-laborales`, this.getHttpOptions()).pipe(
       map(reportes => {
         console.log('✅ Reportes recibidos del backend:', reportes);
         
-        const transformedData = reportes
+        // ✅ FILTRO CRÍTICO: Solo registros del usuario autenticado
+        let reportesFiltrados = reportes;
+        if (usuarioId) {
+          reportesFiltrados = reportes.filter(r => r.usuario_id === usuarioId);
+          console.log(`✅ Registros filtrados del usuario ${usuarioId}:`, reportesFiltrados.length);
+        }
+        
+        const transformedData = reportesFiltrados
           .filter(reporte => reporte.maquina_id)
           .slice(0, limit)
           .map(reporte => {
@@ -276,12 +272,6 @@ export class MachineHoursService {
               notes: reporte.notas || '',
               hourMeterStart: reporte.horometro_inicial || (parsedNotes?.horometro_inicial)
             };
-            
-            console.log('📊 Registro transformado:', {
-              id: transformed.id,
-              project: transformed.project,
-              hourMeterStart: transformed.hourMeterStart
-            });
             
             return transformed;
           });
@@ -327,8 +317,6 @@ export class MachineHoursService {
     );
   }
 
-  // ========== MÉTODOS DE UTILIDAD ==========
-
   private formatTime(decimalHours: number): string {
     const hours = Math.floor(decimalHours);
     const minutes = Math.floor((decimalHours - hours) * 60);
@@ -349,8 +337,6 @@ export class MachineHoursService {
   formatHours(hours: number): string {
     return `${hours.toFixed(1)}h`;
   }
-
-  // ========== MANEJO DE ERRORES ==========
 
   private handleError(error: any): Observable<never> {
     console.error('❌ Error en MachineHoursService:', error);

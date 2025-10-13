@@ -112,16 +112,36 @@ export class EntregaAridosService {
     );
   }
 
-  getRecentDeliveries(limit: number = 10): Observable<ApiResponse<EntregaAridoOut[]>> {
+  getRecentDeliveries(limit: number = 10, usuarioId?: number): Observable<ApiResponse<EntregaAridoOut[]>> {
     const params = new HttpParams()
       .set('limit', limit.toString());
+
+    console.log('🔍 Obteniendo entregas recientes', usuarioId ? `del usuario ${usuarioId}` : '');
 
     return this.http.get<any[]>(
       `${this.apiUrl}`, 
       { params, ...this.httpOptions }
     ).pipe(
       map(response => {
-        const mappedData = response.map(item => this.mapBackendToFrontend(item));
+        console.log('📥 Entregas totales recibidas:', response.length);
+
+        // ✅ FILTRO CRÍTICO: Solo entregas del usuario autenticado
+        let entregasFiltradas = response;
+        if (usuarioId) {
+          entregasFiltradas = response.filter(e => {
+            const matches = e.usuario_id === usuarioId;
+            if (!matches) {
+              console.log(`❌ Descartando entrega ID ${e.id}: usuario_id=${e.usuario_id}, esperado=${usuarioId}`);
+            }
+            return matches;
+          });
+          console.log(`✅ Entregas filtradas del usuario ${usuarioId}: ${entregasFiltradas.length} de ${response.length} totales`);
+        } else {
+          console.warn('⚠️ No se proporcionó usuarioId, mostrando todas las entregas');
+        }
+
+        const mappedData = entregasFiltradas.map(item => this.mapBackendToFrontend(item));
+        
         return {
           success: true,
           data: mappedData
@@ -136,7 +156,6 @@ export class EntregaAridosService {
       })
     );
   }
-
   deleteDelivery(id: number): Observable<ApiResponse<any>> {
     return this.http.delete<any>(
       `${this.apiUrl}/${id}`

@@ -148,18 +148,13 @@ private formatDateForBackend(dateStr: string): string {
   /**
    * Obtener registros recientes
    */
-  getRecentExpenses(limit: number = 10): Observable<ApiResponse<ExpenseRecord[]>> {
-    console.log('🔍 Obteniendo registros recientes...');
+  getRecentExpenses(limit: number = 10, usuarioId?: number): Observable<ApiResponse<ExpenseRecord[]>> {
+    console.log('🔍 Obteniendo gastos recientes', usuarioId ? `del usuario ${usuarioId}` : '');
     console.log('🌐 URL:', `${environment.apiUrl}/gastos`);
     
-    // ✅ El backend devuelve un array directamente en el endpoint /gastos
     return this.http.get<any[]>(`${environment.apiUrl}/gastos`).pipe(
       map(response => {
-        console.log('📥 Registros del backend:', response);
-        
-        // ✅ El backend puede devolver:
-        // 1. Un array directamente: [{ id, usuario_id, ... }]
-        // 2. O nada si hay error
+        console.log('📥 Gastos totales recibidos del backend:', response.length);
         
         if (!response || !Array.isArray(response)) {
           console.warn('⚠️ Respuesta inesperada del backend:', response);
@@ -169,8 +164,23 @@ private formatDateForBackend(dateStr: string): string {
           };
         }
         
+        // ✅ FILTRO CRÍTICO: Solo gastos del usuario autenticado
+        let gastosFiltrados = response;
+        if (usuarioId) {
+          gastosFiltrados = response.filter(g => {
+            const matches = g.usuario_id === usuarioId;
+            if (!matches) {
+              console.log(`❌ Descartando gasto ID ${g.id}: usuario_id=${g.usuario_id}, esperado=${usuarioId}`);
+            }
+            return matches;
+          });
+          console.log(`✅ Gastos filtrados del usuario ${usuarioId}: ${gastosFiltrados.length} de ${response.length} totales`);
+        } else {
+          console.warn('⚠️ No se proporcionó usuarioId, mostrando todos los gastos');
+        }
+        
         // ✅ Mapear cada registro
-        const mappedData = response
+        const mappedData = gastosFiltrados
           .slice(0, limit)  // Limitar cantidad
           .map(item => {
             try {
@@ -182,7 +192,7 @@ private formatDateForBackend(dateStr: string): string {
           })
           .filter(item => item !== null) as ExpenseRecord[];
         
-        console.log('✅ Registros mapeados:', mappedData.length);
+        console.log('✅ Gastos mapeados del usuario:', mappedData.length);
         
         return {
           success: true,
@@ -191,7 +201,6 @@ private formatDateForBackend(dateStr: string): string {
       }),
       catchError(error => {
         console.error('❌ Error obteniendo gastos recientes:', error);
-        // ✅ IMPORTANTE: Devolver array vacío en lugar de error
         return of({
           success: true,
           data: []
@@ -199,7 +208,6 @@ private formatDateForBackend(dateStr: string): string {
       })
     );
   }
-
   /**
    * Eliminar un registro
    */

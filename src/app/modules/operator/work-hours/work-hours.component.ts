@@ -10,6 +10,7 @@ import {
   JornadaLaboralResponse,
   EstadisticasJornada
 } from '../../../core/services/jornada-laboral.service';
+import { environment } from '../../../../environments/environment';
 // ✅ DESPUÉS - Importar Usuario desde una interfaz separada o definirla localmente
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -117,6 +118,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadCurrentUser();
+    
+    // ✅ Ejecutar diagnóstico solo en desarrollo
+    if (!environment.production) {
+      setTimeout(() => this.debugBackendStatus(), 1000);
+    }
+    
     this.checkForActiveJornada();
     this.loadRecentJornadas();
     this.loadMonthlyStats();
@@ -826,10 +833,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   private loadRecentJornadas(): void {
     if (!this.currentUser?.id) return;
-
+  
     const usuarioId = this.getUsuarioIdAsNumber();
     if (!usuarioId) return;
-
+  
+    console.log('📋 Cargando jornadas recientes...');
+  
     this.jornadaLaboralService.obtenerJornadasUsuario(usuarioId, 10, 0)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -839,39 +848,52 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
               this.transformJornadaForDisplay(jornada)
             );
             console.log('✅ Jornadas recientes cargadas:', this.recentWorkHours.length);
+          } else {
+            console.warn('⚠️ No hay jornadas recientes');
+            this.recentWorkHours = [];
           }
         },
         error: (error) => {
           console.error('❌ Error cargando jornadas recientes:', error);
+          // No mostrar error al usuario si es 500, solo limpiar la lista
           this.recentWorkHours = [];
         }
       });
   }
-
   /**
  * ✅ Cargar estadísticas del mes
  */
-private loadMonthlyStats(): void {
-  if (!this.currentUser?.id) return;
-
-  const usuarioId = this.getUsuarioIdAsNumber();
-  if (!usuarioId) return;
-
-  // ✅ SIMPLIFICADO: Ya no necesitas enviar mes/año
-  this.jornadaLaboralService.obtenerEstadisticasMes(usuarioId)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-        if (response.success && response.data) {
-          this.monthlyStats = response.data;
-          console.log('✅ Estadísticas del mes cargadas:', this.monthlyStats);
+  private loadMonthlyStats(): void {
+    if (!this.currentUser?.id) return;
+  
+    const usuarioId = this.getUsuarioIdAsNumber();
+    if (!usuarioId) return;
+  
+    // ✅ Obtener mes y año actual del calendario
+    const mes = this.currentCalendarDate.getMonth() + 1; // getMonth() devuelve 0-11
+    const anio = this.currentCalendarDate.getFullYear();
+  
+    console.log(`📊 Cargando estadísticas: mes=${mes}, año=${anio}`);
+  
+    this.jornadaLaboralService.obtenerEstadisticasMes(usuarioId, mes, anio)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.monthlyStats = response.data;
+            console.log('✅ Estadísticas del mes cargadas:', this.monthlyStats);
+          } else {
+            console.warn('⚠️ No hay estadísticas disponibles');
+            this.monthlyStats = null;
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error cargando estadísticas del mes:', error);
+          // No mostrar error al usuario, simplemente no cargar estadísticas
+          this.monthlyStats = null;
         }
-      },
-      error: (error) => {
-        console.error('❌ Error cargando estadísticas del mes:', error);
-      }
-    });
-}
+      });
+  }
   /**
    * ✅ Transformar jornada para mostrar en el template
    */
@@ -1409,4 +1431,82 @@ private loadMonthlyStats(): void {
     const hourlyRate = 5000; // Ejemplo: $5000 por hora
     return hoursWorked * hourlyRate;
   }
+
+  debugBackendStatus(): void {
+    if (!this.currentUser?.id) {
+      console.error('❌ No hay usuario actual');
+      return;
+    }
+  
+    const usuarioId = this.getUsuarioIdAsNumber();
+    if (!usuarioId) return;
+  
+    console.log('🔍 === DIAGNÓSTICO DE BACKEND ===');
+    console.log('Usuario ID:', usuarioId);
+    console.log('API URL:', `${environment.apiUrl}/jornadas-laborales`);
+    
+    // Probar conexión con jornada activa
+    this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
+      .subscribe({
+        next: (response) => {
+          console.log('✅ Jornada activa - OK', response);
+        },
+        error: (error) => {
+          console.error('❌ Jornada activa - ERROR', error);
+        }
+      });
+    
+    // Probar conexión con jornadas
+    this.jornadaLaboralService.obtenerJornadasUsuario(usuarioId, 5, 0)
+      .subscribe({
+        next: (response) => {
+          console.log('✅ Jornadas usuario - OK', response);
+        },
+        error: (error) => {
+          console.error('❌ Jornadas usuario - ERROR', error);
+        }
+      });
+    
+    // Probar conexión con estadísticas
+    const mes = new Date().getMonth() + 1;
+    const anio = new Date().getFullYear();
+    
+    this.jornadaLaboralService.obtenerEstadisticasMes(usuarioId, mes, anio)
+      .subscribe({
+        next: (response) => {
+          console.log('✅ Estadísticas - OK', response);
+        },
+        error: (error) => {
+          console.error('❌ Estadísticas - ERROR', error);
+        }
+      });
+  }
+
+
+  // 5. AGREGAR método para limpiar errores persistentes
+clearPersistentErrors(): void {
+  console.log('🧹 Limpiando errores persistentes...');
+  
+  // Limpiar localStorage
+  localStorage.removeItem(this.JORNADA_STORAGE_KEY);
+  
+  // Resetear estado
+  this.clearJornadaState();
+  
+  // Limpiar arrays
+  this.recentWorkHours = [];
+  this.monthlyStats = null;
+  
+  // Limpiar mensajes
+  this.error = '';
+  this.success = false;
+  this.loading = false;
+  
+  // Recargar datos desde cero
+  setTimeout(() => {
+    this.checkForActiveJornada();
+    this.loadRecentJornadas();
+    this.loadMonthlyStats();
+  }, 500);
+}
 }

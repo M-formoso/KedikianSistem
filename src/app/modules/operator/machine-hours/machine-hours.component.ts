@@ -81,6 +81,18 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   
   // ✅ NUEVA PROPIEDAD: Descripción del proyecto seleccionado
   selectedProjectDescription: string = '';
+  // ✅ NUEVAS PROPIEDADES PARA FILTRADO
+filters = {
+  fecha: '',
+  proyecto: '',
+  maquina: '',
+  horasDesde: '',
+  horasHasta: '',
+  horametroDesde: '',
+  horametroHasta: ''
+};
+
+filteredRecords: MachineHoursExtended[] = [];
   
   private destroy$ = new Subject<void>();
   
@@ -98,7 +110,6 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     this.loadCurrentOperator();
     this.loadMasterData();
     this.checkForActiveMachineWork();
-    this.loadRecentRecords();
     this.startClockUpdate();
   }
   
@@ -131,6 +142,9 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         roles: Array.isArray(user.roles) ? user.roles.join(',') : (typeof user.roles === 'string' ? user.roles : 'operario')
       };
       console.log('✅ Operador cargado:', this.currentOperator);
+      
+      // ✅ NUEVO: Cargar registros DESPUÉS de tener el operador
+      this.loadRecentRecords();
     } else {
       this.currentOperator = {
         id: 999,
@@ -140,6 +154,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
         roles: 'operario'
       };
       console.warn('⚠️ Usuario no encontrado, usando operador mock');
+      this.loadRecentRecords();  // ✅ También cargar con operador mock
     }
   }
 
@@ -325,14 +340,13 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
           if (response && response.success) {
             console.log('✅ Guardado exitoso en backend');
             this.success = true;
+            
+            // ✅ CRÍTICO: Recargar registros del usuario
             this.loadRecentRecords();
             
             setTimeout(() => {
               this.success = false;
             }, 3000);
-          } else {
-            console.error('❌ Error en respuesta backend:', response);
-            this.error = (response && response.message) || 'Error al guardar';
           }
           
           this.completeFinalization();
@@ -443,9 +457,15 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   loadRecentRecords(): void {
-    console.log('📡 Cargando registros recientes...');
+    if (!this.currentOperator) {
+      console.warn('⚠️ No hay operador cargado aún');
+      return;
+    }
+  
+    console.log('📡 Cargando registros recientes del usuario:', this.currentOperator.id);
     
-    this.machineHoursService.getRecentMachineHours(10)
+    // ✅ PASAR usuarioId como segundo parámetro
+    this.machineHoursService.getRecentMachineHours(10, this.currentOperator.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
@@ -473,11 +493,11 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
               return extended;
             });
             
-            console.log('✅ Registros procesados:', this.recentRecords.length);
+            console.log('✅ Registros procesados del usuario:', this.recentRecords.length);
             console.log('📊 Muestra de datos:', this.recentRecords[0]);
           } else {
             this.recentRecords = [];
-            console.log('ℹ️ No hay registros recientes');
+            console.log('ℹ️ No hay registros recientes para este usuario');
           }
         },
         error: (error) => {
@@ -492,6 +512,7 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   }
   
   refreshRecentRecords(): void {
+    console.log('🔄 Refrescando registros del usuario:', this.currentOperator?.id);
     this.loadRecentRecords();
   }
   
@@ -735,4 +756,5 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
     );
     return machines.size;
   }
+  
 }
