@@ -1,4 +1,4 @@
-// src/app/core/services/entrega-aridos.service.ts - TIPOS DE ÁRIDOS ACTUALIZADOS
+// src/app/core/services/entrega-aridos.service.ts - RUTA CORREGIDA
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
@@ -6,14 +6,14 @@ import { Observable, throwError, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
-// ============= INTERFACES (sin cambios) =============
+// ============= INTERFACES =============
 
 export interface EntregaAridoCreate {
   proyecto_id: number;
   usuario_id: number;
   tipo_arido: string;
   cantidad: number;
-  fecha_entrega: string; // ISO string
+  fecha_entrega: string;
 }
 
 export interface EntregaAridoOut {
@@ -82,7 +82,9 @@ export interface ApiResponse<T> {
   providedIn: 'root'
 })
 export class EntregaAridosService {
-  private apiUrl = `${environment.apiUrl}/entregas-arido`;
+  // ✅ CORREGIDO: Coincide con el backend FastAPI
+  // Backend usa: /aridos/registros
+  private apiUrl = `${environment.apiUrl}/aridos/registros`;
 
   private httpOptions = {
     headers: new HttpHeaders({
@@ -92,15 +94,18 @@ export class EntregaAridosService {
 
   constructor(private http: HttpClient) {}
 
-  // ============= MÉTODOS PRINCIPALES (sin cambios) =============
+  // ============= MÉTODOS PRINCIPALES =============
 
   createDelivery(delivery: EntregaAridoCreate): Observable<ApiResponse<EntregaAridoOut>> {
+    console.log('📤 Creando entrega:', delivery);
+    
     return this.http.post<any>(
       `${this.apiUrl}`, 
       delivery, 
       this.httpOptions
     ).pipe(
       map(response => {
+        console.log('✅ Respuesta del backend al crear:', response);
         const mappedResponse = this.mapBackendToFrontend(response);
         return {
           success: true,
@@ -113,34 +118,67 @@ export class EntregaAridosService {
   }
 
   getRecentDeliveries(limit: number = 10, usuarioId?: number): Observable<ApiResponse<EntregaAridoOut[]>> {
-    const params = new HttpParams()
-      .set('limit', limit.toString());
+    const params = new HttpParams().set('limit', limit.toString());
 
     console.log('🔍 Obteniendo entregas recientes', usuarioId ? `del usuario ${usuarioId}` : '');
 
-    return this.http.get<any[]>(
+    return this.http.get<any>(
       `${this.apiUrl}`, 
       { params, ...this.httpOptions }
     ).pipe(
       map(response => {
-        console.log('📥 Entregas totales recibidas:', response.length);
+        console.log('📥 Respuesta cruda del backend:', response);
+        
+        // ✅ Verificar si la respuesta es un array directamente
+        let entregas: any[] = [];
+        
+        if (Array.isArray(response)) {
+          entregas = response;
+        } else if (response && Array.isArray(response.data)) {
+          entregas = response.data;
+        } else if (response && Array.isArray(response.items)) {
+          // Para respuestas paginadas
+          entregas = response.items;
+        } else if (response && typeof response === 'object') {
+          console.warn('⚠️ Respuesta inesperada del servidor:', response);
+          return {
+            success: true,
+            data: []
+          };
+        }
+
+        console.log('📥 Entregas totales recibidas:', entregas.length);
 
         // ✅ FILTRO CRÍTICO: Solo entregas del usuario autenticado
-        let entregasFiltradas = response;
+        let entregasFiltradas = entregas;
         if (usuarioId) {
-          entregasFiltradas = response.filter(e => {
-            const matches = e.usuario_id === usuarioId;
+          entregasFiltradas = entregas.filter(e => {
+            const entregaUsuarioId = Number(e.usuario_id);
+            const usuarioIdNumber = Number(usuarioId);
+            
+            const matches = entregaUsuarioId === usuarioIdNumber;
+            
             if (!matches) {
               console.log(`❌ Descartando entrega ID ${e.id}: usuario_id=${e.usuario_id}, esperado=${usuarioId}`);
             }
             return matches;
           });
-          console.log(`✅ Entregas filtradas del usuario ${usuarioId}: ${entregasFiltradas.length} de ${response.length} totales`);
+          console.log(`✅ Entregas filtradas del usuario ${usuarioId}: ${entregasFiltradas.length} de ${entregas.length} totales`);
         } else {
           console.warn('⚠️ No se proporcionó usuarioId, mostrando todas las entregas');
         }
 
-        const mappedData = entregasFiltradas.map(item => this.mapBackendToFrontend(item));
+        // ✅ Mapear los datos
+        const mappedData = entregasFiltradas.map(item => {
+          try {
+            return this.mapBackendToFrontend(item);
+          } catch (error) {
+            console.error('❌ Error mapeando entrega:', item, error);
+            return null;
+          }
+        }).filter(item => item !== null) as EntregaAridoOut[];
+        
+        console.log('✅ Entregas mapeadas:', mappedData.length);
         
         return {
           success: true,
@@ -148,7 +186,12 @@ export class EntregaAridosService {
         };
       }),
       catchError(error => {
-        console.error('Error obteniendo entregas recientes:', error);
+        console.error('❌ Error obteniendo entregas recientes:', error);
+        console.error('❌ Status:', error.status);
+        console.error('❌ URL que falló:', error.url);
+        console.error('❌ Error body:', error.error);
+        
+        // ✅ En caso de error, devolver array vacío en lugar de fallar
         return of({
           success: true,
           data: []
@@ -156,6 +199,7 @@ export class EntregaAridosService {
       })
     );
   }
+
   deleteDelivery(id: number): Observable<ApiResponse<any>> {
     return this.http.delete<any>(
       `${this.apiUrl}/${id}`
@@ -169,11 +213,8 @@ export class EntregaAridosService {
     );
   }
 
-  // ============= TIPOS DE MATERIALES ACTUALIZADOS =============
+  // ============= TIPOS DE MATERIALES =============
 
-  /**
-   * ✅ ACTUALIZADO: Obtener tipos de materiales con los nombres correctos
-   */
   getMaterialTypes(): Observable<ApiResponse<MaterialType[]>> {
     const updatedTypes: MaterialType[] = [
       { 
@@ -232,15 +273,13 @@ export class EntregaAridosService {
       }
     ];
 
-    console.log('✅ Tipos de materiales actualizados cargados:', updatedTypes.length);
-
     return of({
       success: true,
       data: updatedTypes
     });
   }
 
-  // ============= MÉTODOS EXISTENTES (sin cambios) =============
+  // ============= OTROS MÉTODOS =============
 
   getProjects(): Observable<ApiResponse<Project[]>> {
     return this.http.get<Project[]>(`${environment.apiUrl}/proyectos`)
@@ -261,29 +300,14 @@ export class EntregaAridosService {
           console.error('Error obteniendo proyectos:', error);
           return of({
             success: true,
-            data: [{
-              id: 1,
-              nombre: 'Proyecto Test',
-              name: 'Proyecto Test',
-              estado: true,
-              status: 'active',
-              descripcion: 'Proyecto de prueba',
-              ubicacion: 'Ubicación de prueba'
-            }]
+            data: []
           });
         })
       );
   }
 
   getVehicles(): Observable<ApiResponse<Vehicle[]>> {
-    const mockVehicles: Vehicle[] = [
-      { id: 'CAM001', name: 'Camión Tolva CAM001', capacity: '10m³', status: 'active', type: 'camion' },
-      { id: 'CAM002', name: 'Camión Tolva CAM002', capacity: '15m³', status: 'active', type: 'camion' },
-      { id: 'VOL001', name: 'Volquete VOL001', capacity: '20m³', status: 'active', type: 'volquete' },
-      { id: 'VOL002', name: 'Volquete VOL002', capacity: '25m³', status: 'active', type: 'volquete' },
-      { id: 'MIX001', name: 'Mixer MIX001', capacity: '8m³', status: 'maintenance', type: 'mixer' }
-    ];
-
+    const mockVehicles: Vehicle[] = [];
     return of({
       success: true,
       data: mockVehicles
@@ -310,15 +334,7 @@ export class EntregaAridosService {
           console.error('Error obteniendo operadores:', error);
           return of({
             success: true,
-            data: [{
-              id: 999,
-              nombre: 'Operario Test',
-              name: 'Operario Test',
-              email: 'operario@test.com',
-              roles: 'operario',
-              estado: true,
-              status: 'active'
-            }]
+            data: []
           });
         })
       );
@@ -331,9 +347,13 @@ export class EntregaAridosService {
     });
   }
 
-  // ============= MÉTODOS DE UTILIDAD (sin cambios) =============
+  // ============= MÉTODOS DE UTILIDAD =============
 
   private mapBackendToFrontend(backendData: any): EntregaAridoOut {
+    if (!backendData) {
+      throw new Error('Datos de backend vacíos');
+    }
+
     return {
       id: backendData.id,
       proyecto_id: backendData.proyecto_id,
@@ -348,7 +368,7 @@ export class EntregaAridosService {
       project: backendData.proyecto_id,
       materialType: backendData.tipo_arido,
       quantity: backendData.cantidad,
-      vehicleId: 'CAM001',
+      vehicleId: 'N/A',
       operator: backendData.usuario_id?.toString() || '',
       notes: ''
     };
@@ -365,7 +385,10 @@ export class EntregaAridosService {
   }
 
   private handleError(error: any): Observable<never> {
-    console.error('Error en EntregaAridosService:', error);
+    console.error('❌ Error en EntregaAridosService:', error);
+    console.error('❌ URL:', error.url);
+    console.error('❌ Status:', error.status);
+    console.error('❌ Error body:', error.error);
     
     let errorMessage = 'Ocurrió un error inesperado';
     
@@ -383,7 +406,7 @@ export class EntregaAridosService {
           errorMessage = 'No tiene permisos para realizar esta acción.';
           break;
         case 404:
-          errorMessage = 'Recurso no encontrado.';
+          errorMessage = 'Recurso no encontrado. Verifique que la ruta del API sea correcta.';
           break;
         case 422:
           errorMessage = 'Error de validación. Verifique los datos ingresados.';

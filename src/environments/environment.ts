@@ -129,7 +129,7 @@ export const environment = {
       methods: '/gastos'
     },
     materials: {
-      deliveries: '/entregas-arido',
+      deliveries: '/entregas-aridos',
       projects: '/proyectos',
       vehicles: '/maquinas',
       materials: '/productos'
