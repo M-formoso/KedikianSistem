@@ -1,127 +1,309 @@
 <div class="aridos-delivery-container">
   <h2 class="page-title">Registro de Entrega de Áridos</h2>
   
+  <!-- Formulario de registro -->
+  <div class="form-card">
+    <div class="form-header">
+      <h2>Registrar Nueva Entrega</h2>
+    </div>
     
-    <form [formGroup]="aridosDeliveryForm" (ngSubmit)="onSubmit()">
-      <div class="form-compact">
-        <!-- Fecha con formato similar a Registro Horas Máquina -->
-        <div class="form-group date-display">
-          <label>Fecha de Trabajo</label>
-          <div class="date-readonly">
-            <span class="date-icon">📅</span>
-            {{ formattedCurrentDate }}
+    <div class="form-content">
+      <form [formGroup]="aridosDeliveryForm" (ngSubmit)="onSubmit()">
+        <div class="form-compact">
+          <!-- Fecha con formato similar a Registro Horas Máquina -->
+          <div class="form-group date-display">
+            <label>Fecha de Trabajo</label>
+            <div class="date-readonly">
+              <span class="date-icon">📅</span>
+              {{ formattedCurrentDate }}
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="project">Proyecto <span class="required">*</span></label>
+            <select id="project" formControlName="project" class="form-control">
+              <option value="">Seleccione un proyecto</option>
+              <option *ngFor="let project of activeProjects" [value]="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+            <div *ngIf="hasFieldError('project')" class="error-message">
+              {{ getFieldError('project') }}
+            </div>
+          </div>
+        
+          <div class="form-group">
+            <label for="materialType">Tipo de Material <span class="required">*</span></label>
+            <select id="materialType" formControlName="materialType" class="form-control">
+              <option value="">Seleccione tipo de material</option>
+              <option *ngFor="let material of materialTypes" [value]="material.id">
+                {{ material.name }}
+              </option>
+            </select>
+            <div *ngIf="hasFieldError('materialType')" class="error-message">
+              {{ getFieldError('materialType') }}
+            </div>
+          </div>
+          
+          <!-- Cantidad y unidad en una sola fila -->
+          <div class="form-row">
+            <div class="form-group half-width">
+              <label for="quantity">Cantidad <span class="required">*</span></label>
+              <input 
+                type="number" 
+                id="quantity" 
+                formControlName="quantity" 
+                class="form-control" 
+                step="0.1"
+                placeholder="Ingrese cantidad">
+              <div *ngIf="hasFieldError('quantity')" class="error-message">
+                {{ getFieldError('quantity') }}
+              </div>
+            </div>
+            
+            <!-- Unidad fija (solo lectura) -->
+            <div class="form-group half-width">
+              <label for="unit">Unidad</label>
+              <input 
+                type="text" 
+                id="unit" 
+                formControlName="unit" 
+                class="form-control readonly-field"
+                readonly>
+              <small class="form-text">Unidad fija: metros cúbicos</small>
+            </div>
+          </div>
+          
+          <div class="form-group compact-notes">
+            <label for="notes">Observaciones</label>
+            <textarea 
+              id="notes" 
+              formControlName="notes" 
+              class="form-control" 
+              rows="2"
+              placeholder="Descripción del trabajo, condiciones especiales, etc."></textarea>
           </div>
         </div>
         
-        <div class="form-group">
-          <label for="project">Proyecto <span class="required">*</span></label>
-          <select id="project" formControlName="project" class="form-control">
-            <option value="">Seleccione un proyecto</option>
+        <div class="form-actions">
+          <button 
+            type="submit" 
+            class="btn btn-primary"
+            [disabled]="isLoading">
+            <span *ngIf="loading" class="loading-spinner">⏳</span>
+            {{ loading ? 'Registrando...' : 'Registrar Entrega' }}
+          </button>
+          <button 
+            type="button" 
+            class="btn btn-secondary" 
+            (click)="resetForm()"
+            [disabled]="isLoading">
+            🧹 Limpiar
+          </button>
+        </div>
+        
+        <!-- Mensajes de estado -->
+        <div *ngIf="success" class="alert alert-success">
+          ✅ Entrega de áridos registrada exitosamente
+        </div>
+        
+        <div *ngIf="error" class="alert alert-danger">
+          ❌ {{ error }}
+        </div>
+        
+        <!-- Indicador de carga para datos maestros -->
+        <div *ngIf="loadingMasterData" class="alert alert-info">
+          🔄 Cargando datos del sistema...
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ✅ SECCIÓN DE FILTROS -->
+  <div class="filters-section" *ngIf="recentRecords.length > 0">
+    <div class="filters-header">
+      <h3 class="filters-title">
+        <span class="filter-icon">🔍</span>
+        Filtros de Búsqueda
+        <span class="filters-badge" *ngIf="hasActiveFilters">
+          ({{ getActiveFiltersCount() }})
+        </span>
+      </h3>
+      <button 
+        type="button"
+        class="btn btn-secondary btn-sm"
+        (click)="toggleFilters()">
+        {{ showFilters ? '▼ Ocultar' : '▶ Mostrar' }} Filtros
+      </button>
+    </div>
+
+    <div class="filters-content" *ngIf="showFilters">
+      <div class="filters-grid">
+        <!-- Fecha Desde -->
+        <div class="filter-group">
+          <label for="fechaDesde">
+            <span class="filter-label-icon">📅</span>
+            Fecha Desde
+          </label>
+          <input 
+            type="date" 
+            id="fechaDesde"
+            [(ngModel)]="filters.fechaDesde"
+            class="form-control form-control-sm">
+        </div>
+
+        <!-- Fecha Hasta -->
+        <div class="filter-group">
+          <label for="fechaHasta">
+            <span class="filter-label-icon">📅</span>
+            Fecha Hasta
+          </label>
+          <input 
+            type="date" 
+            id="fechaHasta"
+            [(ngModel)]="filters.fechaHasta"
+            class="form-control form-control-sm">
+        </div>
+
+        <!-- Proyecto -->
+        <div class="filter-group">
+          <label for="filterProyecto">
+            <span class="filter-label-icon">🏗️</span>
+            Proyecto
+          </label>
+          <select 
+            id="filterProyecto"
+            [(ngModel)]="filters.proyecto"
+            class="form-control form-control-sm">
+            <option value="">Todos los proyectos</option>
             <option *ngFor="let project of activeProjects" [value]="project.id">
               {{ project.name }}
             </option>
           </select>
-          <div *ngIf="hasFieldError('project')" class="error-message">
-            {{ getFieldError('project') }}
-          </div>
         </div>
-      
-        <div class="form-group">
-          <label for="materialType">Tipo de Material <span class="required">*</span></label>
-          <select id="materialType" formControlName="materialType" class="form-control">
-            <option value="">Seleccione tipo de material</option>
+
+        <!-- Tipo de Árido -->
+        <div class="filter-group">
+          <label for="filterTipoArido">
+            <span class="filter-label-icon">🪨</span>
+            Tipo de Material
+          </label>
+          <select 
+            id="filterTipoArido"
+            [(ngModel)]="filters.tipoArido"
+            class="form-control form-control-sm">
+            <option value="">Todos los materiales</option>
             <option *ngFor="let material of materialTypes" [value]="material.id">
               {{ material.name }}
             </option>
           </select>
-          <div *ngIf="hasFieldError('materialType')" class="error-message">
-            {{ getFieldError('materialType') }}
-          </div>
         </div>
-        
-        <!-- Cantidad y unidad en una sola fila -->
-        <div class="form-row">
-          <div class="form-group half-width">
-            <label for="quantity">Cantidad <span class="required">*</span></label>
-            <input 
-              type="number" 
-              id="quantity" 
-              formControlName="quantity" 
-              class="form-control" 
-              step="0.1"
-              placeholder="Ingrese cantidad">
-            <div *ngIf="hasFieldError('quantity')" class="error-message">
-              {{ getFieldError('quantity') }}
-            </div>
-          </div>
-          
-          <!-- Unidad fija (solo lectura) -->
-          <div class="form-group half-width">
-            <label for="unit">Unidad</label>
-            <input 
-              type="text" 
-              id="unit" 
-              formControlName="unit" 
-              class="form-control readonly-field"
-              readonly>
-            <small class="form-text">Unidad fija: metros cúbicos</small>
-          </div>
-        </div>
-        
 
-      
-        <div class="form-group compact-notes">
-          <label for="notes">Observaciones</label>
-          <textarea 
-            id="notes" 
-            formControlName="notes" 
-            class="form-control" 
-            rows="2"
-            placeholder="Descripción del trabajo, condiciones especiales, etc."></textarea>
+        <!-- Cantidad Mínima -->
+        <div class="filter-group">
+          <label for="cantidadMin">
+            <span class="filter-label-icon">📊</span>
+            Cantidad Mínima (m³)
+          </label>
+          <input 
+            type="number" 
+            id="cantidadMin"
+            [(ngModel)]="filters.cantidadMin"
+            class="form-control form-control-sm"
+            placeholder="0"
+            step="0.1"
+            min="0">
+        </div>
+
+        <!-- Cantidad Máxima -->
+        <div class="filter-group">
+          <label for="cantidadMax">
+            <span class="filter-label-icon">📊</span>
+            Cantidad Máxima (m³)
+          </label>
+          <input 
+            type="number" 
+            id="cantidadMax"
+            [(ngModel)]="filters.cantidadMax"
+            class="form-control form-control-sm"
+            placeholder="0"
+            step="0.1"
+            min="0">
         </div>
       </div>
-      
-      <div class="form-actions">
+
+      <!-- Botones de acción -->
+      <div class="filters-actions">
         <button 
-          type="submit" 
-          class="btn btn-primary"
-          [disabled]="isLoading">
-          <span *ngIf="loading" class="loading-spinner">⏳</span>
-          {{ loading ? 'Registrando...' : 'Registrar Entrega' }}
+          type="button"
+          class="btn btn-primary btn-sm"
+          (click)="applyFilters()">
+          <span class="btn-icon">🔍</span>
+          Aplicar Filtros
         </button>
         <button 
-          type="button" 
-          class="btn btn-secondary" 
-          (click)="resetForm()"
-          [disabled]="isLoading">
-          🧹 Limpiar
+          type="button"
+          class="btn btn-secondary btn-sm"
+          (click)="clearFilters()">
+          <span class="btn-icon">🧹</span>
+          Limpiar Filtros
         </button>
       </div>
-      
-      <!-- Mensajes de estado -->
-      <div *ngIf="success" class="alert alert-success">
-        ✅ Entrega de áridos registrada exitosamente
+
+      <!-- Resumen de filtros aplicados -->
+      <div class="filters-summary" *ngIf="hasActiveFilters">
+        <div class="summary-header">
+          <span class="summary-icon">📊</span>
+          <span class="summary-title">Resultados de Filtros</span>
+        </div>
+        
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">📋 Registros encontrados:</span>
+            <span class="summary-value">{{ filteredRecords.length }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">📦 Total cantidad:</span>
+            <span class="summary-value">{{ getTotalQuantityFiltered() | number:'1.1-1' }} m³</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">📈 Promedio por entrega:</span>
+            <span class="summary-value">{{ getAverageQuantityFiltered() | number:'1.1-1' }} m³</span>
+          </div>
+        </div>
       </div>
-      
-      <div *ngIf="error" class="alert alert-danger">
-        ❌ {{ error }}
-      </div>
-      
-      <!-- Indicador de carga para datos maestros -->
-      <div *ngIf="loadingMasterData" class="alert alert-info">
-        🔄 Cargando datos del sistema...
-      </div>
-    </form>
+    </div>
   </div>
   
+  <!-- Sección de registros recientes -->
   <div class="recent-records">
     <div class="section-header">
-      <h3 class="section-title">Registros Recientes</h3>
+      <h3 class="section-title">
+        📊 Registros Recientes
+        <span class="records-count" *ngIf="recordsToDisplay.length > 0">
+          ({{ recordsToDisplay.length }})
+        </span>
+      </h3>
       <button 
         class="btn btn-outline-secondary btn-sm" 
         (click)="refreshRecentRecords()"
         title="Actualizar registros">
         🔄 Actualizar
+      </button>
+    </div>
+    
+    <!-- Indicador de filtros activos -->
+    <div class="active-filters-indicator" *ngIf="hasActiveFilters">
+      <span class="indicator-icon">🔍</span>
+      <span class="indicator-text">
+        Mostrando {{ filteredRecords.length }} de {{ recentRecords.length }} registros
+      </span>
+      <button 
+        type="button"
+        class="btn-clear-filters"
+        (click)="clearFilters()"
+        title="Limpiar filtros">
+        ✕
       </button>
     </div>
     
@@ -138,36 +320,52 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let record of recentRecords; trackBy: trackByRecordId">
-            <td>{{ record.date | date:'dd/MM/yyyy' }}</td>
-            <td>{{ getProjectName(record.project) }}</td>
-            <td>{{ getMaterialName(record.materialType) }}</td>
-            <td>{{ record.quantity }} m³</td>
-            <td>{{ getVehicleName(record.vehicleId) }}</td>
-            <td class="actions-cell">
+          <tr *ngFor="let record of recordsToDisplay; trackBy: trackByRecordId">
+            <td data-label="Fecha">{{ record.date | date:'dd/MM/yyyy' }}</td>
+            <td data-label="Proyecto">{{ getProjectName(record.project) }}</td>
+            <td data-label="Material">{{ getMaterialName(record.materialType) }}</td>
+            <td data-label="Cantidad">{{ record.quantity | number:'1.1-1' }} m³</td>
+            <td data-label="Vehículo">{{ getVehicleName(record.vehicleId) }}</td>
+            <td data-label="Acciones" class="actions-cell">
               <button 
                 class="action-btn edit-btn" 
                 title="Editar"
+                (click)="editRecord(record)"
                 [disabled]="isLoading">
                 ✏️
               </button>
               <button 
                 class="action-btn delete-btn" 
                 title="Eliminar"
+                (click)="deleteRecord(record)"
                 [disabled]="isLoading">
                 ❌
               </button>
             </td>
           </tr>
-          <tr *ngIf="recentRecords.length === 0">
+          
+          <!-- Mensaje cuando no hay registros -->
+          <tr *ngIf="recordsToDisplay.length === 0">
             <td colspan="6" class="empty-table">
               <div class="empty-state">
                 <span class="empty-icon">📋</span>
-                <p>No hay registros recientes</p>
+                <p *ngIf="!hasActiveFilters">No hay registros recientes</p>
+                <p *ngIf="hasActiveFilters">
+                  No se encontraron registros con los filtros aplicados
+                </p>
+                <button 
+                  *ngIf="hasActiveFilters"
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  (click)="clearFilters()">
+                  🧹 Limpiar Filtros
+                </button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    
 </div>

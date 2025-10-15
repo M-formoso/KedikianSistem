@@ -1,6 +1,9 @@
+// src/app/modules/operator/entrega-aridos/entrega-aridos.component.ts - COMPLETO CON FILTROS
+
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms'; // ✅ AGREGADO
 import { HttpClientModule } from '@angular/common/http';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { 
@@ -17,7 +20,12 @@ import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'app-entrega-aridos',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
+  imports: [
+    CommonModule, 
+    ReactiveFormsModule,
+    FormsModule, // ✅ AGREGADO
+    HttpClientModule
+  ],
   templateUrl: './entrega-aridos.component.html',
   styleUrls: ['./entrega-aridos.component.css']
 })
@@ -40,6 +48,19 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   currentOperator: Operator | null = null;
   currentDate = new Date();
 
+  // ✅ NUEVO: Propiedades para filtros
+  filters = {
+    fechaDesde: '',
+    fechaHasta: '',
+    proyecto: '',
+    tipoArido: '',
+    cantidadMin: '',
+    cantidadMax: ''
+  };
+
+  filteredRecords: EntregaAridoOut[] = [];
+  showFilters = false;
+
   private destroy$ = new Subject<void>();
   
   constructor(
@@ -54,13 +75,12 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     console.log('🚀 Iniciando componente EntregaAridos');
     
-    // ✅ ORDEN CRÍTICO: Primero cargar operador, luego todo lo demás
     this.loadCurrentOperator();
     this.loadMasterData();
-    
-    // ✅ NO llamar loadRecentRecords aquí, se llama después de cargar operador
-    
     this.setupMobileTable();
+    
+    // ✅ NUEVO: Inicializar filtros
+    this.initializeFilters();
   }
   
   ngOnDestroy(): void {
@@ -113,7 +133,6 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
       
       console.log('✅ Operador actual cargado:', this.currentOperator);
       
-      // ✅ AHORA SÍ cargar registros, después de tener el operador
       this.loadRecentRecords();
       
     } else {
@@ -162,7 +181,6 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
    * ✅ CRÍTICO: Solo cargar si hay operador
    */
   loadRecentRecords(): void {
-    // ✅ Validación CRÍTICA
     if (!this.currentOperator) {
       console.warn('⚠️ No hay operador cargado todavía, esperando...');
       return;
@@ -170,7 +188,6 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
 
     console.log('📡 Cargando entregas del usuario:', this.currentOperator.id);
 
-    // ✅ SIEMPRE pasar el usuarioId
     this.entregaAridosService.getRecentDeliveries(10, this.currentOperator.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -229,8 +246,12 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
           if (response.success) {
             this.success = true;
             
-            // ✅ Recargar registros después de crear
             this.loadRecentRecords();
+            
+            // ✅ NUEVO: Limpiar filtros si están activos
+            if (this.filteredRecords.length > 0) {
+              this.clearFilters();
+            }
             
             this.resetForm();
             
@@ -392,6 +413,12 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
             if (response.success) {
               this.success = true;
               this.loadRecentRecords();
+              
+              // ✅ NUEVO: Limpiar filtros si están activos
+              if (this.filteredRecords.length > 0) {
+                this.clearFilters();
+              }
+              
               setTimeout(() => {
                 this.success = false;
               }, 3000);
@@ -434,5 +461,210 @@ export class EntregaAridosComponent implements OnInit, OnDestroy {
 
   hasTodayDeliveries(): boolean {
     return this.getTodayDeliveries().length > 0;
+  }
+
+  // ============ ✅ NUEVOS MÉTODOS PARA FILTROS ============
+
+  /**
+   * ✅ Inicializar filtros con fechas del mes actual
+   */
+  private initializeFilters(): void {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    this.filters = {
+      fechaDesde: firstDay.toISOString().split('T')[0],
+      fechaHasta: today.toISOString().split('T')[0],
+      proyecto: '',
+      tipoArido: '',
+      cantidadMin: '',
+      cantidadMax: ''
+    };
+  }
+
+ /**
+ * ✅ Aplicar filtros - VERSIÓN CORREGIDA
+ */
+applyFilters(): void {
+  console.log('🔍 Aplicando filtros:', this.filters);
+  console.log('📋 Registros totales antes de filtrar:', this.recentRecords.length);
+  
+  let filtered = [...this.recentRecords];
+  
+  // Filtro por fecha desde
+  if (this.filters.fechaDesde && this.filters.fechaDesde.trim() !== '') {
+    console.log('📅 Filtrando por fecha desde:', this.filters.fechaDesde);
+    filtered = filtered.filter(record => {
+      const recordDate = new Date(record.date);
+      const filterDate = new Date(this.filters.fechaDesde);
+      const match = recordDate >= filterDate;
+      if (!match) {
+        console.log('❌ Descartado por fecha desde:', record.date);
+      }
+      return match;
+    });
+    console.log('📊 Registros después de filtro fecha desde:', filtered.length);
+  }
+  
+  // Filtro por fecha hasta
+  if (this.filters.fechaHasta && this.filters.fechaHasta.trim() !== '') {
+    console.log('📅 Filtrando por fecha hasta:', this.filters.fechaHasta);
+    filtered = filtered.filter(record => {
+      const recordDate = new Date(record.date);
+      const filterDate = new Date(this.filters.fechaHasta);
+      // Agregar 23:59:59 a la fecha hasta para incluir todo el día
+      filterDate.setHours(23, 59, 59, 999);
+      const match = recordDate <= filterDate;
+      if (!match) {
+        console.log('❌ Descartado por fecha hasta:', record.date);
+      }
+      return match;
+    });
+    console.log('📊 Registros después de filtro fecha hasta:', filtered.length);
+  }
+  
+  // Filtro por proyecto
+  if (this.filters.proyecto && this.filters.proyecto.trim() !== '') {
+    console.log('🏗️ Filtrando por proyecto:', this.filters.proyecto);
+    filtered = filtered.filter(record => {
+      const match = record.project.toString() === this.filters.proyecto;
+      if (!match) {
+        console.log('❌ Descartado por proyecto:', record.project);
+      }
+      return match;
+    });
+    console.log('📊 Registros después de filtro proyecto:', filtered.length);
+  }
+  
+  // Filtro por tipo de árido
+  if (this.filters.tipoArido && this.filters.tipoArido.trim() !== '') {
+    console.log('🪨 Filtrando por tipo de árido:', this.filters.tipoArido);
+    filtered = filtered.filter(record => {
+      const match = record.materialType === this.filters.tipoArido;
+      if (!match) {
+        console.log('❌ Descartado por tipo árido:', record.materialType);
+      }
+      return match;
+    });
+    console.log('📊 Registros después de filtro tipo árido:', filtered.length);
+  }
+  
+  // Filtro por cantidad mínima
+  if (this.filters.cantidadMin && this.filters.cantidadMin.trim() !== '') {
+    const min = parseFloat(this.filters.cantidadMin);
+    if (!isNaN(min)) {
+      console.log('📊 Filtrando por cantidad mínima:', min);
+      filtered = filtered.filter(record => {
+        const match = record.quantity >= min;
+        if (!match) {
+          console.log('❌ Descartado por cantidad mínima:', record.quantity);
+        }
+        return match;
+      });
+      console.log('📊 Registros después de filtro cantidad mínima:', filtered.length);
+    }
+  }
+  
+  // Filtro por cantidad máxima
+  if (this.filters.cantidadMax && this.filters.cantidadMax.trim() !== '') {
+    const max = parseFloat(this.filters.cantidadMax);
+    if (!isNaN(max)) {
+      console.log('📊 Filtrando por cantidad máxima:', max);
+      filtered = filtered.filter(record => {
+        const match = record.quantity <= max;
+        if (!match) {
+          console.log('❌ Descartado por cantidad máxima:', record.quantity);
+        }
+        return match;
+      });
+      console.log('📊 Registros después de filtro cantidad máxima:', filtered.length);
+    }
+  }
+  
+  this.filteredRecords = filtered;
+  console.log('✅ Registros filtrados finales:', this.filteredRecords.length);
+  console.log('📋 Datos filtrados:', this.filteredRecords);
+  
+  // ✅ NUEVO: Mostrar mensaje si no hay resultados
+  if (this.filteredRecords.length === 0 && this.hasFiltersApplied()) {
+    console.warn('⚠️ No se encontraron registros con los filtros aplicados');
+  }
+}
+
+/**
+ * ✅ NUEVO: Verificar si hay filtros aplicados
+ */
+private hasFiltersApplied(): boolean {
+  return !!(
+    this.filters.fechaDesde ||
+    this.filters.fechaHasta ||
+    this.filters.proyecto ||
+    this.filters.tipoArido ||
+    this.filters.cantidadMin ||
+    this.filters.cantidadMax
+  );
+}
+
+  /**
+ * ✅ Limpiar filtros - MEJORADO
+ */
+clearFilters(): void {
+  console.log('🧹 Limpiando filtros...');
+  
+  this.initializeFilters();
+  this.filteredRecords = [];
+  
+  console.log('✅ Filtros limpiados');
+  console.log('📋 Mostrando registros originales:', this.recentRecords.length);
+}
+
+  /**
+   * ✅ Alternar visibilidad de filtros
+   */
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  /**
+   * ✅ Obtener registros a mostrar (filtrados o todos)
+   */
+  get recordsToDisplay(): EntregaAridoOut[] {
+    return this.filteredRecords.length > 0 ? this.filteredRecords : this.recentRecords;
+  }
+
+  /**
+   * ✅ Calcular total de cantidad filtrada
+   */
+  getTotalQuantityFiltered(): number {
+    return this.recordsToDisplay.reduce((total, record) => total + record.quantity, 0);
+  }
+
+  /**
+   * ✅ Calcular promedio de cantidad filtrada
+   */
+  getAverageQuantityFiltered(): number {
+    if (this.recordsToDisplay.length === 0) return 0;
+    return this.getTotalQuantityFiltered() / this.recordsToDisplay.length;
+  }
+
+  /**
+   * ✅ Verificar si hay filtros activos
+   */
+  get hasActiveFilters(): boolean {
+    return this.filteredRecords.length > 0;
+  }
+
+  /**
+   * ✅ Contar filtros aplicados
+   */
+  getActiveFiltersCount(): number {
+    let count = 0;
+    if (this.filters.fechaDesde) count++;
+    if (this.filters.fechaHasta) count++;
+    if (this.filters.proyecto) count++;
+    if (this.filters.tipoArido) count++;
+    if (this.filters.cantidadMin) count++;
+    if (this.filters.cantidadMax) count++;
+    return count;
   }
 }
