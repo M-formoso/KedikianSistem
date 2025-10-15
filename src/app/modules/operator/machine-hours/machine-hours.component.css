@@ -1089,3 +1089,89 @@ textarea.form-control {
     font-size: 0.85rem;
   }
 }
+
+/* ✅ ESTILOS ADICIONALES PARA FILTROS Y CONTADOR */
+
+.results-count {
+  margin-bottom: 1rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.count-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mejorar mensajes de estado vacío */
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.empty-subtitle {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Responsive para contador */
+@media (max-width: 768px) {
+  .count-badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .results-count {
+    margin-bottom: 0.75rem;
+  }
+  
+  .count-badge {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+  }
+  
+  .empty-icon {
+    font-size: 2rem;
+  }
+  
+  .empty-state p {
+    font-size: 0.9rem;
+  }
+  
+  .empty-subtitle {
+    font-size: 0.8rem;
+  }
+}

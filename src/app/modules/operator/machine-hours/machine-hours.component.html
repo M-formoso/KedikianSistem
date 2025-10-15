@@ -1,3 +1,5 @@
+<!-- machine-hours.component.html - VERSIÓN CORRECTA SIN DUPLICACIONES -->
+
 <div class="machine-hours-container">
   <!-- Header con información del operador y fecha -->
   <div class="header-info">
@@ -52,244 +54,267 @@
             {{ formattedCurrentDate }}
           </div>
         </div>
-      <!-- ✅ Proyecto CON evento change -->
-      <div class="form-group">
-        <label for="project">Proyecto *</label>
-        <select 
-          id="project" 
-          formControlName="project" 
-          class="form-control"
-          [class.error]="hasFieldError('project')"
-          [disabled]="isTimerActive"
-          (change)="onProjectChange()">
-          <option value="">Seleccione un proyecto</option>
-          <option *ngFor="let project of activeProjects" [value]="project.id">
-            {{ project.nombre }}
-          </option>
-        </select>
-        <div *ngIf="hasFieldError('project')" class="error-message">
-          {{ getFieldError('project') }}
-        </div>
-      </div>
-
-      <!-- ✅ NUEVO: Descripción del Proyecto (solo se muestra si hay descripción) -->
-      <div class="project-description-section" *ngIf="selectedProjectDescription">
-        <h4 class="section-subtitle">
-          📋 Descripción del Proyecto
-        </h4>
-        <div class="project-description-box">
-          <p class="project-description-text">{{ selectedProjectDescription }}</p>
-        </div>
-      </div>
       
-      <!-- ✅ Máquina (SIN evento change) -->
-      <div class="form-group">
-        <label for="machineId">Máquina *</label>
-        <select 
-          id="machineId" 
-          formControlName="machineId" 
-          class="form-control"
-          [class.error]="hasFieldError('machineId')"
-          [disabled]="isTimerActive">
-          <option value="">Seleccione una máquina</option>
-          <option *ngFor="let machine of activeMachines" [value]="machine.id">
-            {{ machine.nombre }}
-          </option>
-        </select>
-        <div *ngIf="hasFieldError('machineId')" class="error-message">
-          {{ getFieldError('machineId') }}
-        </div>
-      </div>
-
-      <!-- ✅ Sección de Horómetro -->
-      <div class="machine-hours-section">
-        <h4 class="section-subtitle">
-          🔧 Lectura del Horómetro
-          <small>Registre las horas que muestra el horómetro de la máquina al inicio</small>
-        </h4>
-        
+        <!-- Proyecto CON evento change -->
         <div class="form-group">
-          <label for="hourMeterStart">
-            Horómetro Inicial *
-            <span class="help-icon" title="Horas que muestra el horómetro al iniciar">ℹ️</span>
-          </label>
-          <input 
-            type="number" 
-            id="hourMeterStart" 
-            formControlName="hourMeterStart" 
-            class="form-control" 
-            step="0.1"
-            placeholder="ej: 1250.5"
-            [disabled]="isTimerActive">
-          <small class="form-text">Lectura del horómetro al arrancar la máquina</small>
-          <div *ngIf="hasFieldError('hourMeterStart')" class="error-message">
-            Horómetro inicial es requerido
+          <label for="project">Proyecto *</label>
+          <select 
+            id="project" 
+            formControlName="project" 
+            class="form-control"
+            [class.error]="hasFieldError('project')"
+            [disabled]="isTimerActive"
+            (change)="onProjectChange()">
+            <option value="">Seleccione un proyecto</option>
+            <option *ngFor="let project of activeProjects" [value]="project.id">
+              {{ project.nombre }}
+            </option>
+          </select>
+          <div *ngIf="hasFieldError('project')" class="error-message">
+            {{ getFieldError('project') }}
           </div>
         </div>
-      </div>
-    
-      <!-- ✅ Observaciones -->
-      <div class="form-group compact-notes">
-        <label for="notes">Observaciones</label>
-        <textarea 
-          id="notes" 
-          formControlName="notes" 
-          class="form-control" 
-          rows="3"
-          placeholder="Descripción del trabajo, condiciones especiales, etc."></textarea>
-      </div>
-    </div>
-    
-    <!-- Botones de control del timer -->
-    <div class="timer-controls">
-      <button 
-        type="button" 
-        class="btn btn-start"
-        [disabled]="isTimerActive || isLoading || !canStartTimer()"
-        (click)="startTimer()">
-        <span class="btn-icon">▶️</span>
-        Iniciar Trabajo
-      </button>
-      
-      <button 
-        type="button" 
-        class="btn btn-stop"
-        [disabled]="!isTimerActive || isLoading"
-        (click)="stopTimer()">
-        <span class="btn-icon">⏹️</span>
-        Finalizar y Guardar
-      </button>
-      
-      <button 
-        type="button" 
-        class="btn btn-reset"
-        [disabled]="isTimerActive || isLoading"
-        (click)="resetTimer()">
-        <span class="btn-icon">🔄</span>
-        Limpiar
-      </button>
-    </div>
-    
-    <!-- Indicador de carga -->
-    <div *ngIf="isLoading" class="loading-indicator">
-      <div class="spinner"></div>
-      <span>{{ isTimerActive ? 'Finalizando trabajo...' : 'Cargando...' }}</span>
-    </div>
-    
-    <!-- Mensajes de estado -->
-    <div *ngIf="success" class="alert alert-success">
-      <span class="alert-icon">✅</span>
-      Registro de horas guardado exitosamente
-    </div>
-    
-    <div *ngIf="error" class="alert alert-danger">
-      <span class="alert-icon">❌</span>
-      {{ error }}
-    </div>
-    
-    <!-- Ayuda contextual -->
-    <div class="help-panel" *ngIf="!hasWorkInProgress">
-      <h4>📋 Instrucciones Simplificadas</h4>
-      <ol>
-        <li>Seleccione el <strong>proyecto</strong> en el que trabajará</li>
-        <li>Elija la <strong>máquina</strong> que va a operar</li>
-        <li>Ingrese el <strong>horómetro inicial</strong> (lectura actual del horómetro)</li>
-        <li>Agregue <strong>observaciones</strong> si es necesario</li>
-        <li>Haga clic en <strong>"Iniciar Trabajo"</strong> para comenzar el contador</li>
-        <li>Al finalizar, haga clic en <strong>"Finalizar y Guardar"</strong></li>
-        <li>El tiempo trabajado se registrará automáticamente en <strong>minutos</strong></li>
-      </ol>
-    </div>
-  </form>
-  <!-- Registros recientes -->
-<div class="recent-records">
-  <div class="section-header">
-    <h3 class="section-title">📊 Registros Recientes</h3>
-    <button 
-      type="button" 
-      class="btn btn-refresh"
-      (click)="refreshRecentRecords()"
-      [disabled]="isLoading">
-      <span class="btn-icon">🔄</span>
-      Actualizar
-    </button>
-  </div>
-  
-  <div class="table-responsive">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Proyecto</th>
-          <th>Máquina</th>
-          <th>Horas Trabajo</th>
-          <th>Horómetro Inicial</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let record of recentRecords; trackBy: trackByRecordId">
-          <td [attr.data-label]="'Fecha'">
-            {{ record.date | date:'dd/MM/yyyy' }}
-          </td>
-          <td [attr.data-label]="'Proyecto'">
-            <span class="project-badge">{{ record.projectName || 'Sin proyecto' }}</span>
-          </td>
-          <td [attr.data-label]="'Máquina'">
-            <div class="machine-info">
-              <div class="machine-name">{{ record.machineName || 'Sin máquina' }}</div>
-              <div class="machine-type">{{ getMachineTypeName(record.machineType) }}</div>
-            </div>
-          </td>
-          <td [attr.data-label]="'Horas Trabajo'">
-            <div class="hours-breakdown">
-              <span class="hours-main">{{ record.totalHours | number:'1.1-1' }}h</span>
-              <small class="hours-detail">{{ record.startHour | number:'1.1-1' }}h - {{ record.endHour | number:'1.1-1' }}h</small>
-            </div>
-          </td>
-          <td [attr.data-label]="'Horómetro Inicial'">
-            <span *ngIf="getHourMeterStart(record) !== null; else noStartMeter">
-              {{ getHourMeterStart(record) | number:'1.1-1' }}
-            </span>
-            <ng-template #noStartMeter>
-              <span class="text-muted">No registrado</span>
-            </ng-template>
-          </td>
-          <td [attr.data-label]="'Estado'" class="status-cell">
-            <span class="status-badge status-completed">Completado</span>
-          </td>
-        </tr>
-        
-        <!-- Fila vacía -->
-        <tr *ngIf="recentRecords.length === 0">
-          <td colspan="6" class="empty-table">
-            <div class="empty-state">
-              <span class="empty-icon">📋</span>
-              <p>No hay registros recientes</p>
-              <p class="empty-subtitle">Los registros aparecerán aquí después de completar trabajos</p>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
 
-<!-- Panel de estadísticas rápidas -->
-<div class="quick-stats" *ngIf="recentRecords.length > 0">
-  <div class="stat-card">
-    <div class="stat-value">{{ recentRecords.length }}</div>
-    <div class="stat-label">Registros Hoy</div>
+        <!-- Descripción del Proyecto -->
+        <div class="project-description-section" *ngIf="selectedProjectDescription">
+          <h4 class="section-subtitle">
+            📋 Descripción del Proyecto
+          </h4>
+          <div class="project-description-box">
+            <p class="project-description-text">{{ selectedProjectDescription }}</p>
+          </div>
+        </div>
+        
+        <!-- Máquina -->
+        <div class="form-group">
+          <label for="machineId">Máquina *</label>
+          <select 
+            id="machineId" 
+            formControlName="machineId" 
+            class="form-control"
+            [class.error]="hasFieldError('machineId')"
+            [disabled]="isTimerActive">
+            <option value="">Seleccione una máquina</option>
+            <option *ngFor="let machine of activeMachines" [value]="machine.id">
+              {{ machine.nombre }}
+            </option>
+          </select>
+          <div *ngIf="hasFieldError('machineId')" class="error-message">
+            {{ getFieldError('machineId') }}
+          </div>
+        </div>
+
+        <!-- Sección de Horómetro -->
+        <div class="machine-hours-section">
+          <h4 class="section-subtitle">
+            🔧 Lectura del Horómetro
+            <small>Registre las horas que muestra el horómetro de la máquina al inicio</small>
+          </h4>
+          
+          <div class="form-group">
+            <label for="hourMeterStart">
+              Horómetro Inicial *
+              <span class="help-icon" title="Horas que muestra el horómetro al iniciar">ℹ️</span>
+            </label>
+            <input 
+              type="number" 
+              id="hourMeterStart" 
+              formControlName="hourMeterStart" 
+              class="form-control" 
+              step="0.1"
+              placeholder="ej: 1250.5"
+              [disabled]="isTimerActive">
+            <small class="form-text">Lectura del horómetro al arrancar la máquina</small>
+            <div *ngIf="hasFieldError('hourMeterStart')" class="error-message">
+              Horómetro inicial es requerido
+            </div>
+          </div>
+        </div>
+      
+        <!-- Observaciones -->
+        <div class="form-group compact-notes">
+          <label for="notes">Observaciones</label>
+          <textarea 
+            id="notes" 
+            formControlName="notes" 
+            class="form-control" 
+            rows="3"
+            placeholder="Descripción del trabajo, condiciones especiales, etc."></textarea>
+        </div>
+      </div>
+      
+      <!-- Botones de control del timer -->
+      <div class="timer-controls">
+        <button 
+          type="button" 
+          class="btn btn-start"
+          [disabled]="isTimerActive || isLoading || !canStartTimer()"
+          (click)="startTimer()">
+          <span class="btn-icon">▶️</span>
+          Iniciar Trabajo
+        </button>
+        
+        <button 
+          type="button" 
+          class="btn btn-stop"
+          [disabled]="!isTimerActive || isLoading"
+          (click)="stopTimer()">
+          <span class="btn-icon">⏹️</span>
+          Finalizar y Guardar
+        </button>
+        
+        <button 
+          type="button" 
+          class="btn btn-reset"
+          [disabled]="isTimerActive || isLoading"
+          (click)="resetTimer()">
+          <span class="btn-icon">🔄</span>
+          Limpiar
+        </button>
+      </div>
+      
+      <!-- Indicador de carga -->
+      <div *ngIf="isLoading" class="loading-indicator">
+        <div class="spinner"></div>
+        <span>{{ isTimerActive ? 'Finalizando trabajo...' : 'Cargando...' }}</span>
+      </div>
+      
+      <!-- Mensajes de estado -->
+      <div *ngIf="success" class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        Registro de horas guardado exitosamente
+      </div>
+      
+      <div *ngIf="error" class="alert alert-danger">
+        <span class="alert-icon">❌</span>
+        {{ error }}
+      </div>
+      
+      <!-- Ayuda contextual -->
+      <div class="help-panel" *ngIf="!hasWorkInProgress">
+        <h4>📋 Instrucciones Simplificadas</h4>
+        <ol>
+          <li>Seleccione el <strong>proyecto</strong> en el que trabajará</li>
+          <li>Elija la <strong>máquina</strong> que va a operar</li>
+          <li>Ingrese el <strong>horómetro inicial</strong> (lectura actual del horómetro)</li>
+          <li>Agregue <strong>observaciones</strong> si es necesario</li>
+          <li>Haga clic en <strong>"Iniciar Trabajo"</strong> para comenzar el contador</li>
+          <li>Al finalizar, haga clic en <strong>"Finalizar y Guardar"</strong></li>
+          <li>El tiempo trabajado se registrará automáticamente en <strong>minutos</strong></li>
+        </ol>
+      </div>
+    </form>
   </div>
-  <div class="stat-card">
-    <div class="stat-value">
-      {{ getTotalHoursToday() | number:'1.1-1' }}
+
+  <!-- ✅ COMPONENTE DE FILTROS - AGREGAR AQUÍ -->
+  <app-table-filters
+    [filterConfigs]="filterConfigs"
+    [isLoading]="isLoading"
+    (filtersChanged)="onFiltersChanged($event)">
+  </app-table-filters>
+
+  <!-- Registros recientes -->
+  <div class="recent-records">
+    <div class="section-header">
+      <h3 class="section-title">📊 Registros Recientes</h3>
+      <button 
+        type="button" 
+        class="btn btn-refresh"
+        (click)="refreshRecentRecords()"
+        [disabled]="isLoading">
+        <span class="btn-icon">🔄</span>
+        Actualizar
+      </button>
     </div>
-    <div class="stat-label">Horas Totales</div>
+
+    <!-- ✅ Contador de resultados -->
+    <div class="results-count" *ngIf="filteredRecords.length !== recentRecords.length">
+      <span class="count-badge">
+        Mostrando {{ filteredRecords.length }} de {{ recentRecords.length }} registros
+      </span>
+    </div>
+    
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Proyecto</th>
+            <th>Máquina</th>
+            <th>Horas Trabajo</th>
+            <th>Horómetro Inicial</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- ✅ USAR filteredRecords -->
+          <tr *ngFor="let record of filteredRecords; trackBy: trackByRecordId">
+            <td [attr.data-label]="'Fecha'">
+              {{ record.date | date:'dd/MM/yyyy' }}
+            </td>
+            <td [attr.data-label]="'Proyecto'">
+              <span class="project-badge">{{ record.projectName || 'Sin proyecto' }}</span>
+            </td>
+            <td [attr.data-label]="'Máquina'">
+              <div class="machine-info">
+                <div class="machine-name">{{ record.machineName || 'Sin máquina' }}</div>
+                <div class="machine-type">{{ getMachineTypeName(record.machineType) }}</div>
+              </div>
+            </td>
+            <td [attr.data-label]="'Horas Trabajo'">
+              <div class="hours-breakdown">
+                <span class="hours-main">{{ record.totalHours | number:'1.1-1' }}h</span>
+                <small class="hours-detail">{{ record.startHour | number:'1.1-1' }}h - {{ record.endHour | number:'1.1-1' }}h</small>
+              </div>
+            </td>
+            <td [attr.data-label]="'Horómetro Inicial'">
+              <span *ngIf="getHourMeterStart(record) !== null; else noStartMeter">
+                {{ getHourMeterStart(record) | number:'1.1-1' }}
+              </span>
+              <ng-template #noStartMeter>
+                <span class="text-muted">No registrado</span>
+              </ng-template>
+            </td>
+            <td [attr.data-label]="'Estado'" class="status-cell">
+              <span class="status-badge status-completed">Completado</span>
+            </td>
+          </tr>
+          
+          <!-- ✅ Mensaje mejorado cuando no hay resultados -->
+          <tr *ngIf="filteredRecords.length === 0">
+            <td colspan="6" class="empty-table">
+              <div class="empty-state">
+                <span class="empty-icon">
+                  <span *ngIf="recentRecords.length === 0">📋</span>
+                  <span *ngIf="recentRecords.length > 0">🔍</span>
+                </span>
+                <p *ngIf="recentRecords.length === 0">No hay registros recientes</p>
+                <p *ngIf="recentRecords.length > 0">No se encontraron registros con los filtros aplicados</p>
+                <p class="empty-subtitle" *ngIf="recentRecords.length === 0">Los registros aparecerán aquí después de completar trabajos</p>
+                <p class="empty-subtitle" *ngIf="recentRecords.length > 0">Intenta ajustar los filtros de búsqueda</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value">{{ getUniqueMachinesToday() }}</div>
-    <div class="stat-label">Máquinas Usadas</div>
+
+  <!-- Panel de estadísticas rápidas -->
+  <div class="quick-stats" *ngIf="recentRecords.length > 0">
+    <div class="stat-card">
+      <div class="stat-value">{{ recentRecords.length }}</div>
+      <div class="stat-label">Registros Hoy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">
+        {{ getTotalHoursToday() | number:'1.1-1' }}
+      </div>
+      <div class="stat-label">Horas Totales</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ getUniqueMachinesToday() }}</div>
+      <div class="stat-label">Máquinas Usadas</div>
+    </div>
   </div>
-</div>
 </div>

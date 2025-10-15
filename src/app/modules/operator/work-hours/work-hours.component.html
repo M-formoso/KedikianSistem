@@ -375,6 +375,71 @@
     </div>
   </div>
   
+
+  <!-- ✅ AGREGAR ANTES DE .recent-records -->
+<app-table-filters
+[filterConfigs]="filterConfigs"
+[isLoading]="loading"
+(filtersChanged)="onFiltersChanged($event)">
+</app-table-filters>
+
+<!-- Sección de registros recientes -->
+<div class="recent-records">
+<div class="section-header">
+  <h3 class="section-title">📋 Registros Recientes</h3>
+  <div class="section-actions">
+    <button class="btn btn-secondary btn-sm" 
+            (click)="refreshRecentWorkHours()"
+            [disabled]="loading">
+      🔄 Actualizar
+    </button>
+  </div>
+</div>
+
+<!-- ✅ AGREGAR Contador de resultados -->
+<div class="results-count" *ngIf="filteredWorkHours.length !== recentWorkHours.length">
+  <span class="count-badge">
+    Mostrando {{ filteredWorkHours.length }} de {{ recentWorkHours.length }} registros
+  </span>
+</div>
+
+<!-- Resumen de horas -->
+<div class="summary-card" *ngIf="recentWorkHours.length > 0">
+  <!-- ... contenido existente ... -->
+</div>
+
+<div class="table-responsive">
+  <table class="data-table">
+    <thead>
+      <!-- ... headers existentes ... -->
+    </thead>
+    <tbody>
+      <!-- ✅ CAMBIAR recentWorkHours por filteredWorkHours -->
+      <tr *ngFor="let workHours of filteredWorkHours; trackBy: trackByWorkHours">
+        <!-- ... contenido de las celdas existente ... -->
+      </tr>
+      
+      <!-- ✅ MODIFICAR mensaje vacío -->
+      <tr *ngIf="filteredWorkHours.length === 0">
+        <td colspan="8" class="empty-table">
+          <div class="empty-state">
+            <span class="empty-icon">
+              <span *ngIf="recentWorkHours.length === 0">📋</span>
+              <span *ngIf="recentWorkHours.length > 0">🔍</span>
+            </span>
+            <p *ngIf="recentWorkHours.length === 0">No hay registros recientes</p>
+            <p *ngIf="recentWorkHours.length > 0">No se encontraron registros con los filtros aplicados</p>
+            <p class="empty-subtitle" *ngIf="recentWorkHours.length === 0">Los registros aparecerán aquí después de fichar</p>
+            <p class="empty-subtitle" *ngIf="recentWorkHours.length > 0">Intenta ajustar los filtros de búsqueda</p>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</div>
+
+
   <!-- Sección de registros recientes -->
   <div class="recent-records">
     <div class="section-header">

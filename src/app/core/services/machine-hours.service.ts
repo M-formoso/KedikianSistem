@@ -121,13 +121,51 @@ export class MachineHoursService {
   getProjectDetails(projectId: number): Observable<ApiResponse<Project>> {
     console.log('🔍 Solicitando detalles del proyecto:', projectId);
     console.log('🌐 URL completa:', `${this.apiUrl}/proyectos/${projectId}`);
+    console.log('🔑 Headers:', this.getHttpOptions());
     
-    return this.http.get<Project>(
+    return this.http.get<any>(  // ✅ CAMBIO: Usar 'any' para debugging
       `${this.apiUrl}/proyectos/${projectId}`, 
       this.getHttpOptions()
     ).pipe(
-      map(project => {
-        console.log('✅ Proyecto recibido del backend:', project);
+      map(response => {
+        console.log('✅ Respuesta RAW del backend:', response);
+        console.log('✅ Tipo de respuesta:', typeof response);
+        console.log('✅ Es array?:', Array.isArray(response));
+        
+        // ✅ DEBUGGING EXHAUSTIVO
+        if (response) {
+          console.log('📋 Análisis detallado del objeto:');
+          console.log('  - Todas las claves:', Object.keys(response));
+          console.log('  - ID:', response.id);
+          console.log('  - Nombre:', response.nombre);
+          console.log('  - Descripción:', response.descripcion);
+          console.log('  - Tipo de descripción:', typeof response.descripcion);
+          console.log('  - Longitud descripción:', response.descripcion ? response.descripcion.length : 0);
+          console.log('  - Ubicación:', response.ubicacion);
+          console.log('  - Estado:', response.estado);
+          
+          // Verificar si descripción está vacía o es null
+          if (response.descripcion === null) {
+            console.log('⚠️ Descripción es NULL');
+          } else if (response.descripcion === '') {
+            console.log('⚠️ Descripción es string vacío');
+          } else if (response.descripcion && response.descripcion.trim() === '') {
+            console.log('⚠️ Descripción contiene solo espacios');
+          } else if (response.descripcion) {
+            console.log('✅ Descripción válida encontrada');
+          }
+        }
+        
+        // ✅ Asegurar que el proyecto tenga la estructura correcta
+        const project: Project = {
+          id: response.id,
+          nombre: response.nombre,
+          descripcion: response.descripcion || '',  // Valor por defecto si es null
+          estado: response.estado,
+          ubicacion: response.ubicacion,
+          name: response.nombre  // Alias para compatibilidad
+        };
+        
         return {
           success: true,
           data: project
@@ -137,11 +175,10 @@ export class MachineHoursService {
         console.error('❌ Error obteniendo detalles del proyecto:', error);
         console.error('❌ Status:', error.status);
         console.error('❌ Error body:', error.error);
-        return of({
-          success: false,
-          data: {} as Project,
-          message: 'Error al cargar descripción del proyecto'
-        });
+        console.error('❌ URL:', error.url);
+        console.error('❌ Mensaje:', error.message);
+        
+        return throwError(() => error);
       })
     );
   }

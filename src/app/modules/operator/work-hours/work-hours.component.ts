@@ -13,6 +13,8 @@ import {
 import { environment } from '../../../../environments/environment';
 // ✅ DESPUÉS - Importar Usuario desde una interfaz separada o definirla localmente
 import { AuthService } from '../../../core/services/auth.service';
+import { TableFiltersComponent, FilterConfig } from '../../../shared/components/table-filters/table-filters.component';
+
 
 // Y agrega la interfaz Usuario localmente en el componente:
 interface Usuario {
@@ -52,7 +54,7 @@ interface CalendarDay {
 @Component({
   selector: 'app-work-hours',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
+  imports: [CommonModule, ReactiveFormsModule, HttpClientModule,TableFiltersComponent],
   templateUrl: './work-hours.component.html',
   styleUrls: ['./work-hours.component.css'],
 })
@@ -87,6 +89,49 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   
   // Registros recientes
   recentWorkHours: any[] = [];
+
+  filteredWorkHours: any[] = [];
+  activeFilters: any = {};
+  filterConfigs: FilterConfig[] = [
+    {
+      key: 'fecha',
+      label: 'Fecha',
+      type: 'dateRange'
+    },
+    {
+      key: 'estado',
+      label: 'Estado',
+      type: 'select',
+      options: [
+        { value: 'Activa', label: 'Activa' },
+        { value: 'Pausada', label: 'Pausada' },
+        { value: 'Completada', label: 'Completada' },
+        { value: 'Cancelada', label: 'Cancelada' }
+      ]
+    },
+    {
+      key: 'horasMin',
+      label: 'Horas mínimas',
+      type: 'text',
+      placeholder: 'ej: 5'
+    },
+    {
+      key: 'horasMax',
+      label: 'Horas máximas',
+      type: 'text',
+      placeholder: 'ej: 10'
+    },
+    {
+      key: 'tieneExtras',
+      label: 'Horas Extras',
+      type: 'select',
+      options: [
+        { value: 'si', label: 'Con horas extras' },
+        { value: 'no', label: 'Sin horas extras' }
+      ]
+    }
+  ];
+
   
   // Estadísticas del mes
   monthlyStats: EstadisticasJornada | null = null;
@@ -847,19 +892,29 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             this.recentWorkHours = response.data.map(jornada => 
               this.transformJornadaForDisplay(jornada)
             );
+            
+            // ✅ AGREGAR ESTAS LÍNEAS
+            this.filteredWorkHours = [...this.recentWorkHours];
+            if (Object.keys(this.activeFilters).length > 0) {
+              this.applyFilters();
+            }
+            
             console.log('✅ Jornadas recientes cargadas:', this.recentWorkHours.length);
           } else {
             console.warn('⚠️ No hay jornadas recientes');
             this.recentWorkHours = [];
+            this.filteredWorkHours = []; // ✅ AGREGAR
           }
         },
         error: (error) => {
           console.error('❌ Error cargando jornadas recientes:', error);
-          // No mostrar error al usuario si es 500, solo limpiar la lista
           this.recentWorkHours = [];
+          this.filteredWorkHours = []; // ✅ AGREGAR
         }
       });
   }
+
+  
   /**
  * ✅ Cargar estadísticas del mes
  */
@@ -1509,4 +1564,88 @@ clearPersistentErrors(): void {
     this.loadMonthlyStats();
   }, 500);
 }
+
+/**
+   * ✅ Manejar cambios de filtros
+   */
+onFiltersChanged(filters: any): void {
+  console.log('📋 Filtros aplicados:', filters);
+  this.activeFilters = filters;
+  this.applyFilters();
 }
+
+/**
+ * ✅ Aplicar filtros a las jornadas
+ */
+private applyFilters(): void {
+  let filtered = [...this.recentWorkHours];
+
+  console.log(`🔍 Aplicando filtros a ${filtered.length} jornadas`);
+
+  // Filtro por rango de fechas - DESDE
+  if (this.activeFilters.fechaDesde) {
+    filtered = filtered.filter(jornada => 
+      jornada.fecha >= this.activeFilters.fechaDesde
+    );
+    console.log(`  - Filtro fechaDesde: ${filtered.length} jornadas`);
+  }
+
+  // Filtro por rango de fechas - HASTA
+  if (this.activeFilters.fechaHasta) {
+    filtered = filtered.filter(jornada => 
+      jornada.fecha <= this.activeFilters.fechaHasta
+    );
+    console.log(`  - Filtro fechaHasta: ${filtered.length} jornadas`);
+  }
+
+  // Filtro por estado
+  if (this.activeFilters.estado) {
+    filtered = filtered.filter(jornada => 
+      jornada.estado === this.activeFilters.estado
+    );
+    console.log(`  - Filtro estado: ${filtered.length} jornadas`);
+  }
+
+  // Filtro por horas mínimas
+  if (this.activeFilters.horasMin) {
+    const min = parseFloat(this.activeFilters.horasMin);
+    if (!isNaN(min)) {
+      filtered = filtered.filter(jornada => 
+        jornada.totalHoras >= min
+      );
+      console.log(`  - Filtro horasMin (${min}): ${filtered.length} jornadas`);
+    }
+  }
+
+  // Filtro por horas máximas
+  if (this.activeFilters.horasMax) {
+    const max = parseFloat(this.activeFilters.horasMax);
+    if (!isNaN(max)) {
+      filtered = filtered.filter(jornada => 
+        jornada.totalHoras <= max
+      );
+      console.log(`  - Filtro horasMax (${max}): ${filtered.length} jornadas`);
+    }
+  }
+
+  // Filtro por horas extras
+  if (this.activeFilters.tieneExtras) {
+    if (this.activeFilters.tieneExtras === 'si') {
+      filtered = filtered.filter(jornada => 
+        jornada.horasExtras && jornada.horasExtras > 0
+      );
+    } else if (this.activeFilters.tieneExtras === 'no') {
+      filtered = filtered.filter(jornada => 
+        !jornada.horasExtras || jornada.horasExtras === 0
+      );
+    }
+    console.log(`  - Filtro tieneExtras: ${filtered.length} jornadas`);
+  }
+
+  this.filteredWorkHours = filtered;
+  console.log(`✅ Jornadas filtradas: ${this.filteredWorkHours.length} de ${this.recentWorkHours.length}`);
+}
+
+// ... resto de métodos existentes ...
+}
+

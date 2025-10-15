@@ -1,6 +1,7 @@
-// machine-hours.component.ts - VERSIÓN COMPLETA CORREGIDA
+// machine-hours.component.ts - VERSIÓN CORREGIDA CON FILTROS Y DESCRIPCIÓN
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
@@ -12,6 +13,7 @@ import {
   Machine
 } from '../../../core/services/machine-hours.service';
 import { AuthService, Usuario } from '../../../core/services/auth.service';
+import { TableFiltersComponent, FilterConfig } from '../../../shared/components/table-filters/table-filters.component';
 
 interface MachineWorkStatus {
   isActive: boolean;
@@ -48,7 +50,7 @@ interface MachineHoursExtended extends MachineHours {
 @Component({
   selector: 'app-machine-hours',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
+  imports: [CommonModule, ReactiveFormsModule, HttpClientModule, TableFiltersComponent],
   templateUrl: './machine-hours.component.html',
   styleUrls: ['./machine-hours.component.css']
 })
@@ -79,22 +81,50 @@ export class MachineHoursComponent implements OnInit, OnDestroy {
   
   recentRecords: MachineHoursExtended[] = [];
   
-  // ✅ NUEVA PROPIEDAD: Descripción del proyecto seleccionado
+  // ✅ Descripción del proyecto
   selectedProjectDescription: string = '';
-  // ✅ NUEVAS PROPIEDADES PARA FILTRADO
-filters = {
-  fecha: '',
-  proyecto: '',
-  maquina: '',
-  horasDesde: '',
-  horasHasta: '',
-  horametroDesde: '',
-  horametroHasta: ''
-};
-
-filteredRecords: MachineHoursExtended[] = [];
+  
+  // ✅ Propiedades para filtros
+  filteredRecords: MachineHoursExtended[] = [];
+  activeFilters: any = {};
+  filterConfigs: FilterConfig[] = [
+    {
+      key: 'fecha',
+      label: 'Fecha',
+      type: 'dateRange'
+    },
+    {
+      key: 'proyecto',
+      label: 'Proyecto',
+      type: 'select',
+      options: []
+    },
+    {
+      key: 'maquina',
+      label: 'Máquina',
+      type: 'select',
+      options: []
+    },
+    {
+      key: 'horasMin',
+      label: 'Horas mínimas',
+      type: 'text',
+      placeholder: 'ej: 5'
+    },
+    {
+      key: 'horasMax',
+      label: 'Horas máximas',
+      type: 'text',
+      placeholder: 'ej: 10'
+    }
+  ];
   
   private destroy$ = new Subject<void>();
+
+  private setupMobileTable(): void {
+    console.log('📱 Configuración de tabla móvil (placeholder)');
+    // Implement mobile table setup logic here if needed
+  }
   
   private readonly MACHINE_WORK_KEY = 'activeMachineWork';
   
@@ -110,7 +140,16 @@ filteredRecords: MachineHoursExtended[] = [];
     this.loadCurrentOperator();
     this.loadMasterData();
     this.checkForActiveMachineWork();
+    this.setupMobileTable();
     this.startClockUpdate();
+    
+    // ✅ DEBUG TEMPORAL
+    setTimeout(() => {
+      console.log('🔍 DEBUG: Proyectos cargados:', this.projects);
+      console.log('🔍 DEBUG: Proyectos con descripción:', 
+        this.projects.filter(p => p.descripcion && p.descripcion.trim() !== '')
+      );
+    }, 3000);
   }
   
   ngOnDestroy(): void {
@@ -142,8 +181,6 @@ filteredRecords: MachineHoursExtended[] = [];
         roles: Array.isArray(user.roles) ? user.roles.join(',') : (typeof user.roles === 'string' ? user.roles : 'operario')
       };
       console.log('✅ Operador cargado:', this.currentOperator);
-      
-      // ✅ NUEVO: Cargar registros DESPUÉS de tener el operador
       this.loadRecentRecords();
     } else {
       this.currentOperator = {
@@ -154,7 +191,7 @@ filteredRecords: MachineHoursExtended[] = [];
         roles: 'operario'
       };
       console.warn('⚠️ Usuario no encontrado, usando operador mock');
-      this.loadRecentRecords();  // ✅ También cargar con operador mock
+      this.loadRecentRecords();
     }
   }
 
@@ -184,9 +221,8 @@ filteredRecords: MachineHoursExtended[] = [];
           hourMeterStart: parsed.hourMeterStart
         });
         
-        // ✅ Restaurar descripción del proyecto
         if (parsed.project) {
-          this.loadProjectDescription(parseInt(parsed.project));
+          this.selectedProjectDescription = this.getProjectName(parseInt(parsed.project));
         }
         
         this.machineHoursForm.get('project')?.disable();
@@ -340,8 +376,6 @@ filteredRecords: MachineHoursExtended[] = [];
           if (response && response.success) {
             console.log('✅ Guardado exitoso en backend');
             this.success = true;
-            
-            // ✅ CRÍTICO: Recargar registros del usuario
             this.loadRecentRecords();
             
             setTimeout(() => {
@@ -371,7 +405,6 @@ filteredRecords: MachineHoursExtended[] = [];
     this.elapsedSeconds = 0;
     this.isFinishing = false;
     
-    // ✅ Limpiar descripción del proyecto
     this.selectedProjectDescription = '';
     
     this.machineHoursForm.get('project')?.enable();
@@ -400,8 +433,6 @@ filteredRecords: MachineHoursExtended[] = [];
     
     console.log('🔄 Reset manual');
     this.isFinishing = true;
-    
-    // ✅ Limpiar descripción del proyecto
     this.selectedProjectDescription = '';
     
     this.machineHoursForm.patchValue({
@@ -464,7 +495,6 @@ filteredRecords: MachineHoursExtended[] = [];
   
     console.log('📡 Cargando registros recientes del usuario:', this.currentOperator.id);
     
-    // ✅ PASAR usuarioId como segundo parámetro
     this.machineHoursService.getRecentMachineHours(10, this.currentOperator.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -481,9 +511,7 @@ filteredRecords: MachineHoursExtended[] = [];
               if (record.notes) {
                 try {
                   extended.parsedNotes = JSON.parse(record.notes);
-                  console.log('📝 Notas parseadas para registro', record.id, ':', extended.parsedNotes);
                 } catch (error) {
-                  console.warn('⚠️ No se pudo parsear notes para registro', record.id);
                   extended.parsedNotes = {
                     notas_usuario: record.notes
                   };
@@ -493,16 +521,23 @@ filteredRecords: MachineHoursExtended[] = [];
               return extended;
             });
             
+            this.filteredRecords = [...this.recentRecords];
+            
+            if (Object.keys(this.activeFilters).length > 0) {
+              this.applyFilters();
+            }
+            
             console.log('✅ Registros procesados del usuario:', this.recentRecords.length);
-            console.log('📊 Muestra de datos:', this.recentRecords[0]);
           } else {
             this.recentRecords = [];
+            this.filteredRecords = [];
             console.log('ℹ️ No hay registros recientes para este usuario');
           }
         },
         error: (error) => {
           console.error('❌ Error cargando registros recientes:', error);
           this.recentRecords = [];
+          this.filteredRecords = [];
         }
       });
   }
@@ -516,54 +551,9 @@ filteredRecords: MachineHoursExtended[] = [];
     this.loadRecentRecords();
   }
   
-  // ✅ NUEVO MÉTODO: Cargar descripción del proyecto
-  private loadProjectDescription(projectId: number): void {
-    console.log('🔍 Cargando descripción del proyecto:', projectId);
-    
-    if (!projectId || isNaN(projectId)) {
-      console.warn('⚠️ ID de proyecto inválido:', projectId);
-      this.selectedProjectDescription = '';
-      return;
-    }
-    
-    this.machineHoursService.getProjectDetails(projectId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          console.log('📥 Respuesta completa:', response);
-          
-          if (response && response.success && response.data) {
-            if (response.data.descripcion && response.data.descripcion.trim() !== '') {
-              this.selectedProjectDescription = response.data.descripcion;
-              console.log('✅ Descripción cargada:', this.selectedProjectDescription);
-            } else {
-              this.selectedProjectDescription = '';
-              console.log('ℹ️ Proyecto sin descripción');
-            }
-          } else {
-            this.selectedProjectDescription = '';
-            console.log('⚠️ Respuesta sin datos válidos');
-          }
-        },
-        error: (error) => {
-          console.error('❌ Error cargando descripción:', error);
-          this.selectedProjectDescription = '';
-        }
-      });
-  }
+
   
-  // ✅ MODIFICADO: onProjectChange ahora carga la descripción
-  onProjectChange(): void {
-    const projectId = this.machineHoursForm.get('project')?.value;
-    
-    console.log('📋 Proyecto seleccionado - ID:', projectId);
-    
-    if (projectId) {
-      this.loadProjectDescription(parseInt(projectId));
-    } else {
-      this.selectedProjectDescription = '';
-    }
-  }
+  
 
   get f() { 
     return this.machineHoursForm.controls; 
@@ -625,9 +615,7 @@ filteredRecords: MachineHoursExtended[] = [];
   }
   
   get activeMachines(): Machine[] {
-    // ✅ Devolver TODAS las máquinas sin filtrar
-    console.log('🔍 activeMachines - Total máquinas disponibles:', this.machines.length);
-    return this.machines;  // ✅ SIN FILTRO
+    return this.machines;
   }
   
   get activeProjects(): Project[] {
@@ -726,12 +714,6 @@ filteredRecords: MachineHoursExtended[] = [];
       return false;
     }
     
-    console.log('✅ Validaciones passed:');
-    console.log('  - Proyecto:', projectExists.nombre);
-    console.log('  - Máquina:', machineExists.nombre);
-    console.log('  - Operador:', this.currentOperator.nombre);
-    console.log('  - Horómetro inicial:', hourMeterStart);
-    
     this.error = '';
     return true;
   }
@@ -756,5 +738,218 @@ filteredRecords: MachineHoursExtended[] = [];
     );
     return machines.size;
   }
+
+// ✅ MÉTODO CORREGIDO CON MEJOR MANEJO DE ERRORES
+private loadProjectDescription(projectId: number): void {
+  console.log('🔍 Cargando descripción del proyecto:', projectId);
   
+  if (!projectId || isNaN(projectId) || projectId <= 0) {
+    console.warn('⚠️ ID de proyecto inválido:', projectId);
+    this.selectedProjectDescription = '';
+    return;
+  }
+  
+  // ✅ Buscar primero en el array local de proyectos
+  const projectoLocal = this.projects.find(p => p.id === projectId);
+  
+  if (projectoLocal?.descripcion && projectoLocal.descripcion.trim() !== '') {
+    console.log('✅ Descripción encontrada en cache local:', projectoLocal.descripcion);
+    this.selectedProjectDescription = projectoLocal.descripcion;
+    return;
+  }
+  
+  // Si no está en cache o no tiene descripción, consultar al backend
+  console.log('📡 Consultando descripción al backend...');
+  
+  this.machineHoursService.getProjectDetails(projectId)
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        console.log('📥 Respuesta completa del backend:', response);
+        
+        if (response && response.success && response.data) {
+          const proyecto = response.data;
+          console.log('📋 Datos del proyecto:', proyecto);
+          
+          if (proyecto.descripcion && proyecto.descripcion.trim() !== '') {
+            this.selectedProjectDescription = proyecto.descripcion;
+            console.log('✅ Descripción cargada:', this.selectedProjectDescription);
+            
+            // ✅ Actualizar también el cache local
+            const index = this.projects.findIndex(p => p.id === projectId);
+            if (index !== -1) {
+              this.projects[index] = { ...this.projects[index], ...proyecto };
+            }
+          } else {
+            this.selectedProjectDescription = '';
+            console.log('ℹ️ El proyecto no tiene descripción o está vacía');
+          }
+        } else {
+          this.selectedProjectDescription = '';
+          console.log('⚠️ Respuesta sin datos válidos');
+        }
+      },
+      error: (error) => {
+        console.error('❌ Error cargando descripción:', error);
+        console.error('❌ Status:', error.status);
+        console.error('❌ Message:', error.message);
+        this.selectedProjectDescription = '';
+        
+        // ✅ No mostrar error al usuario, solo loggear
+      }
+    });
+}
+
+onProjectChange(): void {
+  const projectIdValue = this.machineHoursForm.get('project')?.value;
+  
+  console.log('📋 Proyecto seleccionado - Valor raw:', projectIdValue);
+  console.log('📋 Tipo de dato:', typeof projectIdValue);
+  
+  if (!projectIdValue || projectIdValue === '') {
+    console.log('⚠️ No hay proyecto seleccionado');
+    this.selectedProjectDescription = '';
+    return;
+  }
+  
+  // ✅ Convertir a número de forma segura
+  const projectId = parseInt(String(projectIdValue), 10);
+  
+  if (isNaN(projectId)) {
+    console.error('❌ ID de proyecto inválido:', projectIdValue);
+    this.selectedProjectDescription = '';
+    return;
+  }
+  
+  console.log('✅ ID de proyecto válido:', projectId);
+  this.loadProjectDescription(projectId);
+}
+
+  // ✅ ============ MÉTODOS PARA FILTROS ============
+  
+  /**
+   * Inicializar opciones de filtros
+   */
+  private initializeFilterOptions(): void {
+    console.log('🔧 Inicializando opciones de filtros');
+    
+    // Proyectos
+    this.machineHoursService.getProjects()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const proyectoFilter = this.filterConfigs.find(f => f.key === 'proyecto');
+            if (proyectoFilter) {
+              proyectoFilter.options = response.data.map(p => ({
+                value: p.id.toString(),
+                label: p.nombre
+              }));
+              console.log('✅ Opciones de proyectos cargadas:', proyectoFilter.options.length);
+            }
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error cargando proyectos para filtros:', error);
+        }
+      });
+
+    // Máquinas
+    this.machineHoursService.getMachines()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const maquinaFilter = this.filterConfigs.find(f => f.key === 'maquina');
+            if (maquinaFilter) {
+              maquinaFilter.options = response.data.map(m => ({
+                value: m.id.toString(),
+                label: m.nombre
+              }));
+              console.log('✅ Opciones de máquinas cargadas:', maquinaFilter.options.length);
+            }
+          }
+        },
+        error: (error) => {
+          console.error('❌ Error cargando máquinas para filtros:', error);
+        }
+      });
+  }
+
+  /**
+   * Manejar cambios de filtros
+   */
+  onFiltersChanged(filters: any): void {
+    console.log('📋 Filtros aplicados:', filters);
+    this.activeFilters = filters;
+    this.applyFilters();
+  }
+
+  /**
+   * Aplicar filtros a los registros
+   */
+  private applyFilters(): void {
+    let filtered = [...this.recentRecords];
+
+    console.log(`🔍 Aplicando filtros a ${filtered.length} registros`);
+
+    // Filtro por rango de fechas - DESDE
+    if (this.activeFilters.fechaDesde) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.date;
+        return recordDate >= this.activeFilters.fechaDesde;
+      });
+      console.log(`  - Filtro fechaDesde: ${filtered.length} registros`);
+    }
+
+    // Filtro por rango de fechas - HASTA
+    if (this.activeFilters.fechaHasta) {
+      filtered = filtered.filter(record => {
+        const recordDate = record.date;
+        return recordDate <= this.activeFilters.fechaHasta;
+      });
+      console.log(`  - Filtro fechaHasta: ${filtered.length} registros`);
+    }
+
+    // Filtro por proyecto
+    if (this.activeFilters.proyecto) {
+      filtered = filtered.filter(record => 
+        record.project && record.project.toString() === this.activeFilters.proyecto
+      );
+      console.log(`  - Filtro proyecto: ${filtered.length} registros`);
+    }
+
+    // Filtro por máquina
+    if (this.activeFilters.maquina) {
+      filtered = filtered.filter(record => 
+        record.machineId && record.machineId.toString() === this.activeFilters.maquina
+      );
+      console.log(`  - Filtro máquina: ${filtered.length} registros`);
+    }
+
+    // Filtro por horas mínimas
+    if (this.activeFilters.horasMin) {
+      const min = parseFloat(this.activeFilters.horasMin);
+      if (!isNaN(min)) {
+        filtered = filtered.filter(record => 
+          record.totalHours >= min
+        );
+        console.log(`  - Filtro horasMin (${min}): ${filtered.length} registros`);
+      }
+    }
+
+    // Filtro por horas máximas
+    if (this.activeFilters.horasMax) {
+      const max = parseFloat(this.activeFilters.horasMax);
+      if (!isNaN(max)) {
+        filtered = filtered.filter(record => 
+          record.totalHours <= max
+        );
+        console.log(`  - Filtro horasMax (${max}): ${filtered.length} registros`);
+      }
+    }
+
+    this.filteredRecords = filtered;
+    console.log(`✅ Registros filtrados: ${this.filteredRecords.length} de ${this.recentRecords.length}`);
+  }
 }
