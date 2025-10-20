@@ -1,4 +1,4 @@
-<!-- work-hours.component.html - CORREGIDO COMPLETAMENTE -->
+<!-- work-hours.component.html - VERSIÓN COMPLETA CON SINCRONIZACIÓN -->
 
 <div class="work-hours-container">
   <h2 class="page-title">Registro de Jornada Laboral</h2>
@@ -15,7 +15,6 @@
   
   <div *ngIf="error" class="alert alert-danger">
     ❌ {{ error }}
-    <!-- ✅ Botón de limpieza para errores persistentes -->
     <button type="button" 
             class="btn btn-sm btn-outline-danger" 
             (click)="forceCleanup()"
@@ -97,16 +96,35 @@
   <div class="form-card active-work-day" *ngIf="activeClockIn" 
        [ngClass]="getWorkStatusClass()">
     
-    <!-- ✅ Header con estado actual -->
+    <!-- ✅ NUEVO: Header con estado y botón de sincronización -->
     <div class="work-status-header">
-      <h3 class="form-title">
-        {{ getCurrentWorkStatus() }}
-        <span class="work-status-indicator" [ngClass]="getWorkStatusClass()">
-          <span *ngIf="!activeClockIn.isActive && activeClockIn.autoStoppedAt9Hours">⏸️</span>
-          <span *ngIf="activeClockIn.isActive && !isInOvertimeMode">⏱️</span>
-          <span *ngIf="activeClockIn.isActive && isInOvertimeMode">🕐</span>
-        </span>
-      </h3>
+      <div class="status-title-group">
+        <h3 class="form-title">
+          {{ getCurrentWorkStatus() }}
+          <span class="work-status-indicator" [ngClass]="getWorkStatusClass()">
+            <span *ngIf="!activeClockIn.isActive && activeClockIn.autoStoppedAt9Hours">⏸️</span>
+            <span *ngIf="activeClockIn.isActive && !isInOvertimeMode">⏱️</span>
+            <span *ngIf="activeClockIn.isActive && isInOvertimeMode">🕐</span>
+          </span>
+        </h3>
+        
+        <!-- ✅ Indicador de última sincronización -->
+        <small class="sync-info" *ngIf="lastSyncTime">
+          Última sincronización: {{ getLastSyncText() }}
+        </small>
+      </div>
+      
+      <!-- ✅ Botón de sincronización manual -->
+      <button 
+        type="button" 
+        class="btn btn-secondary btn-sm"
+        (click)="syncActiveJornadaState()"
+        [disabled]="isLoadingActiveJornada"
+        title="Sincronizar estado con el servidor">
+        <span *ngIf="!isLoadingActiveJornada">🔄</span>
+        <span *ngIf="isLoadingActiveJornada">⏳</span>
+        {{ isLoadingActiveJornada ? 'Sincronizando...' : 'Sincronizar' }}
+      </button>
     </div>
     
     <div class="active-session-info">
@@ -157,8 +175,8 @@
           </div>
         </div>
         <span class="progress-text">
-          <span *ngIf="!isInOvertimeMode">{{ getWorkDayProgress() }}% de la jornada regular</span>
-          <span *ngIf="isInOvertimeMode">{{ getWorkDayProgress() }}% de horas extras utilizadas</span>
+          <span *ngIf="!isInOvertimeMode">{{ getWorkDayProgress() | number:'1.0-0' }}% de la jornada regular</span>
+          <span *ngIf="isInOvertimeMode">{{ getWorkDayProgress() | number:'1.0-0' }}% de horas extras utilizadas</span>
         </span>
       </div>
 
@@ -241,7 +259,7 @@
           🕐 Solicitar Horas Extras
         </button>
 
-        <!-- ✅ Botón de finalización forzosa (solo en casos especiales) -->
+        <!-- ✅ Botón de finalización forzosa -->
         <button type="button" 
                 class="btn btn-warning btn-force-finish"
                 (click)="forceFinishWork()"
@@ -251,7 +269,7 @@
           🚨 Finalizar Forzosamente
         </button>
 
-        <!-- ✅ Botón de limpieza forzosa (solo para errores persistentes) -->
+        <!-- ✅ Botón de limpieza forzosa -->
         <button type="button" 
                 class="btn btn-outline-danger btn-sm"
                 (click)="forceCleanup()"
@@ -274,6 +292,7 @@
       <li><strong>Decisión automática:</strong> Si no decides sobre horas extras en 10 minutos, se finaliza automáticamente</li>
       <li><strong>Descansos:</strong> Registra el tiempo total de pausas</li>
       <li><strong>Control automático:</strong> El sistema pausará automáticamente al alcanzar las 9 horas</li>
+      <li><strong>Sincronización:</strong> El estado se sincroniza automáticamente cada 30 segundos</li>
     </ul>
   </div>
 
@@ -320,7 +339,7 @@
       </div>
     </div>
 
-    <!-- Resumen de pagos (fallback si no hay estadísticas) -->
+    <!-- Resumen de pagos (fallback) -->
     <div class="payment-summary" *ngIf="!monthlyStats">
       <div class="summary-item">
         <span class="summary-label">Último registro:</span>
@@ -374,71 +393,13 @@
       </div>
     </div>
   </div>
-  
 
-  <!-- ✅ AGREGAR ANTES DE .recent-records -->
-<app-table-filters
-[filterConfigs]="filterConfigs"
-[isLoading]="loading"
-(filtersChanged)="onFiltersChanged($event)">
-</app-table-filters>
-
-<!-- Sección de registros recientes -->
-<div class="recent-records">
-<div class="section-header">
-  <h3 class="section-title">📋 Registros Recientes</h3>
-  <div class="section-actions">
-    <button class="btn btn-secondary btn-sm" 
-            (click)="refreshRecentWorkHours()"
-            [disabled]="loading">
-      🔄 Actualizar
-    </button>
-  </div>
-</div>
-
-<!-- ✅ AGREGAR Contador de resultados -->
-<div class="results-count" *ngIf="filteredWorkHours.length !== recentWorkHours.length">
-  <span class="count-badge">
-    Mostrando {{ filteredWorkHours.length }} de {{ recentWorkHours.length }} registros
-  </span>
-</div>
-
-<!-- Resumen de horas -->
-<div class="summary-card" *ngIf="recentWorkHours.length > 0">
-  <!-- ... contenido existente ... -->
-</div>
-
-<div class="table-responsive">
-  <table class="data-table">
-    <thead>
-      <!-- ... headers existentes ... -->
-    </thead>
-    <tbody>
-      <!-- ✅ CAMBIAR recentWorkHours por filteredWorkHours -->
-      <tr *ngFor="let workHours of filteredWorkHours; trackBy: trackByWorkHours">
-        <!-- ... contenido de las celdas existente ... -->
-      </tr>
-      
-      <!-- ✅ MODIFICAR mensaje vacío -->
-      <tr *ngIf="filteredWorkHours.length === 0">
-        <td colspan="8" class="empty-table">
-          <div class="empty-state">
-            <span class="empty-icon">
-              <span *ngIf="recentWorkHours.length === 0">📋</span>
-              <span *ngIf="recentWorkHours.length > 0">🔍</span>
-            </span>
-            <p *ngIf="recentWorkHours.length === 0">No hay registros recientes</p>
-            <p *ngIf="recentWorkHours.length > 0">No se encontraron registros con los filtros aplicados</p>
-            <p class="empty-subtitle" *ngIf="recentWorkHours.length === 0">Los registros aparecerán aquí después de fichar</p>
-            <p class="empty-subtitle" *ngIf="recentWorkHours.length > 0">Intenta ajustar los filtros de búsqueda</p>
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-</div>
-
+  <!-- ✅ Filtros de tabla -->
+  <app-table-filters
+    [filterConfigs]="filterConfigs"
+    [isLoading]="loading"
+    (filtersChanged)="onFiltersChanged($event)">
+  </app-table-filters>
 
   <!-- Sección de registros recientes -->
   <div class="recent-records">
@@ -452,7 +413,14 @@
         </button>
       </div>
     </div>
-    
+
+    <!-- ✅ Contador de resultados -->
+    <div class="results-count" *ngIf="filteredWorkHours.length !== recentWorkHours.length">
+      <span class="count-badge">
+        Mostrando {{ filteredWorkHours.length }} de {{ recentWorkHours.length }} registros
+      </span>
+    </div>
+
     <!-- Resumen de horas -->
     <div class="summary-card" *ngIf="recentWorkHours.length > 0">
       <div class="summary-item">
@@ -484,7 +452,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let workHours of recentWorkHours; trackBy: trackByWorkHours">
+          <tr *ngFor="let workHours of filteredWorkHours; trackBy: trackByWorkHours">
             <td [attr.data-label]="'Fecha'">{{ workHours.fecha | date:'dd/MM/yyyy' }}</td>
             <td [attr.data-label]="'Entrada'">{{ workHours.horaInicio }}</td>
             <td [attr.data-label]="'Salida'">{{ workHours.horaFin || 'En curso' }}</td>
@@ -515,12 +483,17 @@
               </span>
             </td>
           </tr>
-          <tr *ngIf="recentWorkHours.length === 0">
+          <tr *ngIf="filteredWorkHours.length === 0">
             <td colspan="8" class="empty-table">
               <div class="empty-state">
-                <span class="empty-icon">📋</span>
-                <p>No hay registros recientes</p>
-                <p class="empty-subtitle">Los registros aparecerán aquí después de fichar</p>
+                <span class="empty-icon">
+                  <span *ngIf="recentWorkHours.length === 0">📋</span>
+                  <span *ngIf="recentWorkHours.length > 0">🔍</span>
+                </span>
+                <p *ngIf="recentWorkHours.length === 0">No hay registros recientes</p>
+                <p *ngIf="recentWorkHours.length > 0">No se encontraron registros con los filtros aplicados</p>
+                <p class="empty-subtitle" *ngIf="recentWorkHours.length === 0">Los registros aparecerán aquí después de fichar</p>
+                <p class="empty-subtitle" *ngIf="recentWorkHours.length > 0">Intenta ajustar los filtros de búsqueda</p>
               </div>
             </td>
           </tr>

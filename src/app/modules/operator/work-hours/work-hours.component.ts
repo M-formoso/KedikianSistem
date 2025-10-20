@@ -1,4 +1,4 @@
-// work-hours.component.ts - CORREGIDO COMPLETAMENTE
+// work-hours.component.ts - VERSIÓN COMPLETA CORREGIDA CON SINCRONIZACIÓN
 
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -11,12 +11,9 @@ import {
   EstadisticasJornada
 } from '../../../core/services/jornada-laboral.service';
 import { environment } from '../../../../environments/environment';
-// ✅ DESPUÉS - Importar Usuario desde una interfaz separada o definirla localmente
 import { AuthService } from '../../../core/services/auth.service';
 import { TableFiltersComponent, FilterConfig } from '../../../shared/components/table-filters/table-filters.component';
 
-
-// Y agrega la interfaz Usuario localmente en el componente:
 interface Usuario {
   id: number;
   nombre: string;
@@ -24,7 +21,7 @@ interface Usuario {
   estado: boolean;
   roles: string[];
 }
-// ✅ Interface para el estado local simplificado
+
 interface LocalJornadaState {
   isActive: boolean;
   startTime: string;
@@ -33,7 +30,6 @@ interface LocalJornadaState {
   jornadaId: number;
   notas?: string;
   
-  // Estados de horas extras
   isOvertimeMode: boolean;
   overtimeStartTimestamp?: Date;
   regularHoursCompleted: boolean;
@@ -54,7 +50,7 @@ interface CalendarDay {
 @Component({
   selector: 'app-work-hours',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, HttpClientModule,TableFiltersComponent],
+  imports: [CommonModule, ReactiveFormsModule, HttpClientModule, TableFiltersComponent],
   templateUrl: './work-hours.component.html',
   styleUrls: ['./work-hours.component.css'],
 })
@@ -74,10 +70,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   activeClockIn: LocalJornadaState | null = null;
   currentJornada: JornadaLaboralResponse | null = null;
   
-  // ✅ Control de horas extras MEJORADO
+  // ✅ Control de horas extras
   showOvertimeDialog = false;
   autoFinalizationTimer: any = null;
-  hasShownOvertimeDialog = false; // Para evitar múltiples diálogos
+  hasShownOvertimeDialog = false;
   
   // Cálculos de tiempo en tiempo real
   regularHours = 0;
@@ -89,9 +85,16 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   
   // Registros recientes
   recentWorkHours: any[] = [];
-
   filteredWorkHours: any[] = [];
   activeFilters: any = {};
+  
+  // ✅ NUEVO: Control de sincronización
+  private syncInterval: any = null;
+  private readonly SYNC_INTERVAL_MS = 30000; // 30 segundos
+  lastSyncTime: Date | null = null;
+  isLoadingActiveJornada = false;
+  
+  // Filtros de tabla
   filterConfigs: FilterConfig[] = [
     {
       key: 'fecha',
@@ -131,7 +134,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       ]
     }
   ];
-
   
   // Estadísticas del mes
   monthlyStats: EstadisticasJornada | null = null;
@@ -142,13 +144,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   // Para cancelar suscripciones
   private destroy$ = new Subject<void>();
   
-  // ✅ Constantes de configuración MEJORADAS
+  // ✅ Constantes de configuración
   private readonly MAX_REGULAR_HOURS = 9;
   private readonly WARNING_HOURS = 8;
   private readonly MAX_OVERTIME_HOURS = 4;
-  private readonly MAX_TOTAL_HOURS = 13; // 9 regulares + 4 extras
+  private readonly MAX_TOTAL_HOURS = 13;
   private readonly JORNADA_STORAGE_KEY = 'activeJornadaLaboral';
-  private readonly AUTO_FINISH_TIMEOUT = 10 * 60 * 1000; // 10 minutos para decidir sobre horas extras
+  private readonly AUTO_FINISH_TIMEOUT = 10 * 60 * 1000; // 10 minutos
   
   // ✅ Flag para controlar la sincronización
   private isSyncing = false;
@@ -164,12 +166,16 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCurrentUser();
     
-    // ✅ Ejecutar diagnóstico solo en desarrollo
     if (!environment.production) {
       setTimeout(() => this.debugBackendStatus(), 1000);
     }
     
-    this.checkForActiveJornada();
+    // ✅ CRÍTICO: Sincronizar estado inmediatamente
+    this.syncActiveJornadaState();
+    
+    // ✅ CRÍTICO: Configurar sincronización periódica
+    this.startPeriodicSync();
+    
     this.loadRecentJornadas();
     this.loadMonthlyStats();
     this.setupMobileTable();
@@ -177,9 +183,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Limpiar timer de finalización automática
+    // Limpiar timers
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
+    }
+    
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
     }
     
     this.destroy$.next();
@@ -197,9 +207,97 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ============ MÉTODOS DE SINCRONIZACIÓN ============
+
   /**
-   * ✅ Cargar usuario actual
+   * ✅ NUEVO: Sincronizar estado de jornada activa con el backend
    */
+  syncActiveJornadaState(): void {
+    if (!this.currentUser?.id || this.isLoadingActiveJornada) return;
+
+    const usuarioId = this.getUsuarioIdAsNumber();
+    if (!usuarioId) return;
+
+    this.isLoadingActiveJornada = true;
+    console.log('🔄 Sincronizando estado de jornada activa...');
+
+    this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.isLoadingActiveJornada = false;
+          this.lastSyncTime = new Date();
+          
+          console.log('📥 Respuesta de sincronización:', response);
+          
+          if (response.success && response.data) {
+            console.log('✅ Jornada activa encontrada - Restaurando estado');
+            this.processActiveJornada(response.data);
+            
+            // ✅ Verificar si necesita mostrar diálogo de horas extras
+            if (this.activeClockIn?.regularHoursCompleted && 
+                !this.activeClockIn?.isOvertimeMode && 
+                !this.hasShownOvertimeDialog) {
+              console.log('💬 Mostrando diálogo de horas extras (después de sincronización)');
+              this.scheduleOvertimeDecision();
+            }
+          } else {
+            console.log('ℹ️ No hay jornada activa - Limpiando estado');
+            if (this.activeClockIn) {
+              this.clearJornadaState();
+            }
+          }
+        },
+        error: (error) => {
+          this.isLoadingActiveJornada = false;
+          console.error('❌ Error sincronizando jornada:', error);
+          
+          if (this.activeClockIn) {
+            console.log('⚠️ Error de sincronización - Manteniendo estado local');
+          }
+        }
+      });
+  }
+
+  /**
+   * ✅ NUEVO: Iniciar sincronización periódica
+   */
+  private startPeriodicSync(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+    }
+
+    this.syncInterval = setInterval(() => {
+      if (this.activeClockIn && !this.isSyncing) {
+        console.log('⏰ Sincronización periódica automática');
+        this.syncActiveJornadaState();
+      }
+    }, this.SYNC_INTERVAL_MS);
+
+    console.log('✅ Sincronización periódica configurada (cada 30s)');
+  }
+
+  /**
+   * ✅ NUEVO: Obtener texto de última sincronización
+   */
+  getLastSyncText(): string {
+    if (!this.lastSyncTime) return 'Nunca';
+    
+    const now = new Date();
+    const diffMs = now.getTime() - this.lastSyncTime.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    
+    if (diffSeconds < 60) return `Hace ${diffSeconds}s`;
+    
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) return `Hace ${diffMinutes}m`;
+    
+    const diffHours = Math.floor(diffMinutes / 60);
+    return `Hace ${diffHours}h`;
+  }
+
+  // ============ MÉTODOS DE GESTIÓN DE USUARIO ============
+
   private loadCurrentUser(): void {
     this.currentUser = this.authService.getCurrentUser();
     if (!this.currentUser) {
@@ -210,88 +308,33 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * ✅ CRÍTICO: Verificar jornada activa - LÓGICA CORREGIDA CON LIMPIEZA
-   */
-  private checkForActiveJornada(): void {
-    if (!this.currentUser?.id || this.isSyncing) return;
-  
-    const usuarioId = this.getUsuarioIdAsNumber();
-    if (!usuarioId) return;
-  
-    this.isSyncing = true;
-    console.log('🔍 Verificando jornada activa para usuario:', usuarioId);
-  
-    this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          console.log('📥 Respuesta del backend:', response);
-          
-          if (response.success && response.data) {
-            console.log('✅ Jornada activa encontrada en backend');
-            this.processActiveJornada(response.data);
-          } else {
-            console.log('ℹ️ No hay jornada activa en el backend');
-            this.clearJornadaState();
-          }
-          
-          this.isSyncing = false;
-        },
-        error: (error) => {
-          console.error('❌ Error verificando jornada activa:', error);
-          this.isSyncing = false;
-          this.checkLocalStorageFallback();
-        }
-      });
-  }
+  // ============ MÉTODOS DE PROCESAMIENTO DE JORNADA ============
 
   /**
-   * ✅ NUEVO: Fallback para verificar localStorage solo en caso de error de conexión
-   */
-  private checkLocalStorageFallback(): void {
-    const savedJornada = localStorage.getItem(this.JORNADA_STORAGE_KEY);
-    if (savedJornada) {
-      try {
-        const parsed = JSON.parse(savedJornada);
-        console.log('⚠️ Restaurando desde localStorage (modo offline):', parsed);
-        this.restoreJornadaFromStorage(parsed);
-        
-        // Intentar sincronizar cuando se recupere la conexión
-        setTimeout(() => {
-          if (!this.isSyncing) {
-            this.checkForActiveJornada();
-          }
-        }, 5000);
-        
-      } catch (error) {
-        console.error('❌ Error parsing localStorage:', error);
-        localStorage.removeItem(this.JORNADA_STORAGE_KEY);
-      }
-    }
-  }
-
-  /**
-   * ✅ CRÍTICO: Procesar jornada activa - MEJORADO
+   * ✅ MEJORADO: Procesar jornada activa con mejor manejo de estado
    */
   private processActiveJornada(jornada: JornadaLaboralResponse): void {
     console.log('🔄 Procesando jornada activa:', jornada);
     
     this.currentJornada = jornada;
     
-    // ✅ CRÍTICO: Verificar el estado real de la jornada
     const isReallyActive = jornada.estado === 'activa' || 
                           (jornada.estado === 'pausada' && !jornada.hora_fin);
     
+    if (!isReallyActive) {
+      console.log('⚠️ Jornada no está activa, limpiando estado');
+      this.clearJornadaState();
+      return;
+    }
+    
     this.activeClockIn = {
-      isActive: isReallyActive,
+      isActive: jornada.estado === 'activa',
       startTime: this.formatearHora(jornada.hora_inicio),
       startTimestamp: new Date(jornada.hora_inicio),
       usuarioId: jornada.usuario_id,
       jornadaId: jornada.id,
       notas: jornada.notas_inicio,
       
-      // Estados de horas extras
       isOvertimeMode: jornada.overtime_confirmado || false,
       overtimeStartTimestamp: jornada.overtime_iniciado ? new Date(jornada.overtime_iniciado) : undefined,
       regularHoursCompleted: jornada.limite_regular_alcanzado || false,
@@ -301,42 +344,24 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.saveJornadaToStorage();
     this.updateCalculatedHours();
     
-    // ✅ NUEVO: Verificar si necesita mostrar diálogo inmediatamente
-    if (this.activeClockIn.regularHoursCompleted && !this.activeClockIn.isOvertimeMode && !this.hasShownOvertimeDialog) {
+    if (this.activeClockIn.regularHoursCompleted && 
+        !this.activeClockIn.isOvertimeMode && 
+        !this.hasShownOvertimeDialog) {
+      console.log('💬 Programando decisión de horas extras');
       this.scheduleOvertimeDecision();
     }
     
-    console.log('✅ Jornada activa procesada:', {
+    console.log('✅ Estado de jornada activa procesado y guardado:', {
       isActive: this.activeClockIn.isActive,
       estado: jornada.estado,
       regularHoursCompleted: this.activeClockIn.regularHoursCompleted,
-      isOvertimeMode: this.activeClockIn.isOvertimeMode
+      isOvertimeMode: this.activeClockIn.isOvertimeMode,
+      jornadaId: this.activeClockIn.jornadaId
     });
   }
 
   /**
-   * ✅ NUEVO: Programar decisión de horas extras
-   */
-  private scheduleOvertimeDecision(): void {
-    if (this.autoFinalizationTimer) {
-      clearTimeout(this.autoFinalizationTimer);
-    }
-
-    console.log('⏰ Programando decisión de horas extras en 10 minutos');
-    
-    this.autoFinalizationTimer = setTimeout(() => {
-      if (this.activeClockIn && this.activeClockIn.regularHoursCompleted && !this.activeClockIn.isOvertimeMode) {
-        console.log('🛑 Tiempo agotado - Finalizando jornada automáticamente');
-        this.autoFinishAtRegularHours();
-      }
-    }, this.AUTO_FINISH_TIMEOUT);
-    
-    // Mostrar diálogo inmediatamente
-    this.showOvertimeConfirmation();
-  }
-
-  /**
-   * ✅ Actualizar reloj en tiempo real MEJORADO
+   * ✅ Actualizar reloj en tiempo real
    */
   private startClockUpdate(): void {
     interval(1000)
@@ -359,7 +384,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const diffMs = now.getTime() - this.activeClockIn.startTimestamp.getTime();
     this.totalHours = diffMs / (1000 * 60 * 60);
 
-    // Calcular horas regulares y extras
     if (this.totalHours <= this.MAX_REGULAR_HOURS) {
       this.regularHours = this.totalHours;
       this.overtimeHours = 0;
@@ -370,12 +394,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Verificar límites de tiempo - LÓGICA CORREGIDA
+   * ✅ CRÍTICO: Verificar límites de tiempo
    */
   private checkTimeConstraints(): void {
     if (!this.activeClockIn || !this.activeClockIn.isActive) return;
 
-    // ✅ CASO 1: Alcanzó 9 horas y no está en modo overtime y no ha mostrado diálogo
+    // Alcanzó 9 horas
     if (this.regularHours >= this.MAX_REGULAR_HOURS && 
         !this.activeClockIn.regularHoursCompleted && 
         !this.activeClockIn.isOvertimeMode && 
@@ -385,7 +409,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       
       this.activeClockIn.regularHoursCompleted = true;
       this.activeClockIn.autoStoppedAt9Hours = true;
-      this.activeClockIn.isActive = false; // ✅ Pausar temporalmente
+      this.activeClockIn.isActive = false;
       
       this.saveJornadaToStorage();
       this.scheduleOvertimeDecision();
@@ -393,23 +417,25 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // ✅ CASO 2: Supera las horas extras máximas
+    // Supera las horas extras máximas
     if (this.activeClockIn.isOvertimeMode && this.overtimeHours >= this.MAX_OVERTIME_HOURS) {
-      console.log('🚨 Límite máximo de horas extras alcanzado - Finalizando automáticamente');
-      this.autoFinishJornada('Se alcanzó el límite máximo de 13 horas (9 regulares + 4 extras)');
+      console.log('🚨 Límite máximo de horas extras alcanzado');
+      this.autoFinishJornada('Se alcanzó el límite máximo de 13 horas');
       return;
     }
 
-    // ✅ CASO 3: Supera 13 horas totales por cualquier motivo
+    // Supera 13 horas totales
     if (this.totalHours >= this.MAX_TOTAL_HOURS) {
-      console.log('🚨 Límite absoluto de 13 horas alcanzado - Finalizando automáticamente');
+      console.log('🚨 Límite absoluto de 13 horas alcanzado');
       this.autoFinishJornada('Se alcanzó el límite absoluto de 13 horas de trabajo');
       return;
     }
   }
 
+  // ============ MÉTODOS DE FICHAJE ============
+
   /**
-   * ✅ CRÍTICO: Fichar entrada - CORREGIDO
+   * ✅ Fichar entrada
    */
   clockIn(): void {
     if (!this.currentUser?.id) {
@@ -427,7 +453,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const formValues = this.clockInForm.value;
     
     console.log('🚀 Fichando entrada para usuario:', usuarioId);
-    console.log('📝 Notas:', formValues.notas);
   
     this.jornadaLaboralService.ficharEntrada(usuarioId, formValues.notas)
       .pipe(takeUntil(this.destroy$))
@@ -436,14 +461,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           this.loading = false;
           
           if (response.success && response.data) {
-            console.log('✅ Entrada fichada correctamente:', response.data);
+            console.log('✅ Entrada fichada correctamente');
             this.processActiveJornada(response.data);
             this.success = true;
             this.resetForms();
             
             setTimeout(() => { this.success = false; }, 3000);
           } else {
-            console.error('❌ Respuesta sin datos:', response);
             this.error = response.message || 'Error al registrar entrada';
           }
         },
@@ -451,10 +475,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
           this.loading = false;
           console.error('❌ Error fichando entrada:', error);
           
-          // ✅ NUEVO: Limpiar estado en caso de error persistente
           if (error.message?.includes('409') || error.message?.includes('jornada activa')) {
             console.log('🧹 Detectado conflicto - verificando estado real');
-            this.checkForActiveJornada();
+            this.syncActiveJornadaState();
           }
           
           this.error = error.message || 'Error al procesar la solicitud';
@@ -463,7 +486,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ CRÍTICO: Fichar salida - MEJORADO
+   * ✅ Fichar salida
    */
   clockOut(): void {
     if (!this.activeClockIn) {
@@ -475,15 +498,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.showOvertimeDialog = false;
   
-    // Limpiar timer de finalización automática
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
     }
   
-    // ✅ Validar y completar formulario si está incompleto
     if (this.clockOutForm.invalid) {
-      console.log('⚠️ Formulario inválido, completando con valores por defecto');
       this.clockOutForm.patchValue({
         tiempoDescanso: 60,
         notas: 'Fichaje de salida'
@@ -498,8 +518,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       this.activeClockIn.jornadaId,
       formValues.tiempoDescanso || 60,
       formValues.notas || 'Fichaje de salida',
-      undefined, // ubicación
-      false // no forzado
+      undefined,
+      false
     )
     .pipe(takeUntil(this.destroy$))
     .subscribe({
@@ -522,13 +542,34 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.loading = false;
         this.error = error.message || 'Error al procesar la solicitud';
-        console.error('❌ Error finalizando jornada:', error);
       }
     });
   }
 
+  // ============ MÉTODOS DE HORAS EXTRAS ============
+
   /**
-   * ✅ NUEVO: Mostrar confirmación de horas extras
+   * ✅ Programar decisión de horas extras
+   */
+  private scheduleOvertimeDecision(): void {
+    if (this.autoFinalizationTimer) {
+      clearTimeout(this.autoFinalizationTimer);
+    }
+
+    console.log('⏰ Programando decisión de horas extras en 10 minutos');
+    
+    this.autoFinalizationTimer = setTimeout(() => {
+      if (this.activeClockIn && this.activeClockIn.regularHoursCompleted && !this.activeClockIn.isOvertimeMode) {
+        console.log('🛑 Tiempo agotado - Finalizando jornada automáticamente');
+        this.autoFinishAtRegularHours();
+      }
+    }, this.AUTO_FINISH_TIMEOUT);
+    
+    this.showOvertimeConfirmation();
+  }
+
+  /**
+   * ✅ Mostrar confirmación de horas extras
    */
   private showOvertimeConfirmation(): void {
     if (this.hasShownOvertimeDialog) return;
@@ -550,7 +591,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.showOvertimeDialog = false;
     this.loading = true;
 
-    // Limpiar timer
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
@@ -566,9 +606,8 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         this.loading = false;
         
         if (response.success && response.data) {
-          console.log('✅ Horas extras confirmadas - Reactivando timer');
+          console.log('✅ Horas extras confirmadas');
           
-          // ✅ Reactivar el timer en modo horas extras
           if (this.activeClockIn) {
             this.activeClockIn.isActive = true;
             this.activeClockIn.isOvertimeMode = true;
@@ -585,13 +624,12 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.loading = false;
         this.error = error.message || 'Error al confirmar horas extras';
-        console.error('❌ Error confirmando horas extras:', error);
       }
     });
   }
 
   /**
-   * ✅ Rechazar horas extras (finalizar en 9 horas)
+   * ✅ Rechazar horas extras
    */
   declineOvertime(): void {
     if (!this.activeClockIn) return;
@@ -599,13 +637,11 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.showOvertimeDialog = false;
     this.loading = true;
 
-    // Limpiar timer
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
     }
 
-    // Completar formulario antes de finalizar
     this.clockOutForm.patchValue({
       tiempoDescanso: this.clockOutForm.get('tiempoDescanso')?.value || 60,
       notas: (this.clockOutForm.get('notas')?.value || '') + ' - Finalizado al completar 9 horas regulares'
@@ -622,11 +658,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         this.loading = false;
         
         if (response.success) {
-          console.log('✅ Horas extras rechazadas y jornada finalizada en 9h');
+          console.log('✅ Horas extras rechazadas');
           
-          // ✅ CRÍTICO: Limpiar estado COMPLETAMENTE
           this.clearJornadaState();
-          
           this.success = true;
           this.loadRecentJornadas();
           this.loadMonthlyStats();
@@ -639,25 +673,24 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.loading = false;
         this.error = error.message || 'Error al rechazar horas extras';
-        console.error('❌ Error rechazando horas extras:', error);
       }
     });
   }
 
   /**
-   * ✅ NUEVO: Finalización automática en 9 horas regulares
+   * ✅ Finalización automática en 9 horas
    */
   private autoFinishAtRegularHours(): void {
     if (!this.activeClockIn) return;
 
-    console.log('🛑 Finalizando automáticamente en 9 horas regulares (tiempo agotado)');
+    console.log('🛑 Finalizando automáticamente en 9 horas regulares');
     
     this.loading = true;
     this.showOvertimeDialog = false;
 
     this.jornadaLaboralService.rechazarHorasExtras(
       this.activeClockIn.jornadaId,
-      60, // tiempo de descanso por defecto
+      60,
       'Jornada finalizada automáticamente al agotar tiempo de decisión sobre horas extras'
     )
     .pipe(takeUntil(this.destroy$))
@@ -666,8 +699,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         this.loading = false;
         
         if (response.success) {
-          console.log('✅ Jornada finalizada automáticamente en 9h');
-          
           this.clearJornadaState();
           this.success = true;
           this.loadRecentJornadas();
@@ -681,7 +712,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.loading = false;
         this.error = error.message || 'Error al finalizar jornada automáticamente';
-        console.error('❌ Error en finalización automática:', error);
       }
     });
   }
@@ -698,7 +728,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     this.error = '';
     this.showOvertimeDialog = false;
 
-    // Limpiar timer
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
@@ -706,10 +735,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
 
     this.jornadaLaboralService.finalizarJornada(
       this.activeClockIn.jornadaId,
-      60, // tiempo de descanso por defecto
+      60,
       motivo,
-      undefined, // ubicación
-      true // forzado
+      undefined,
+      true
     )
     .pipe(takeUntil(this.destroy$))
     .subscribe({
@@ -717,8 +746,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         this.loading = false;
         
         if (response.success) {
-          console.log('✅ Jornada finalizada automáticamente por límite');
-          
           this.clearJornadaState();
           this.success = true;
           this.loadRecentJornadas();
@@ -732,7 +759,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.loading = false;
         this.error = error.message || 'Error al finalizar jornada automáticamente';
-        console.error('❌ Error en finalización automática:', error);
       }
     });
   }
@@ -754,27 +780,21 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ NUEVO: Limpieza forzosa en caso de errores persistentes
+   * ✅ Limpieza forzosa
    */
   forceCleanup(): void {
     console.log('🧹 Ejecutando limpieza forzosa');
     
-    // Limpiar timer
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
     }
     
-    // Limpiar localStorage
     localStorage.removeItem(this.JORNADA_STORAGE_KEY);
-    
-    // Limpiar estado del componente
     this.clearJornadaState();
     
-    // Mostrar mensaje informativo
     this.error = 'Jornada finalizada (se detectaron inconsistencias y se limpiaron automáticamente)';
     
-    // Recargar datos
     this.loadRecentJornadas();
     this.loadMonthlyStats();
     
@@ -786,7 +806,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ NUEVO: Botón manual para mostrar diálogo de horas extras
+   * ✅ Botón manual para horas extras
    */
   requestOvertimeManually(): void {
     if (this.activeClockIn && this.activeClockIn.regularHoursCompleted && !this.hasShownOvertimeDialog) {
@@ -797,37 +817,31 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ============ MÉTODOS DE ALMACENAMIENTO ============
+
   /**
-   * ✅ CORREGIDO: Limpiar estado de jornada - MÁS COMPLETO
+   * ✅ Limpiar estado de jornada
    */
   private clearJornadaState(): void {
-    console.log('🧹 Limpiando estado de jornada completamente');
+    console.log('🧹 Limpiando estado de jornada');
     
-    // ✅ Limpiar timer PRIMERO
     if (this.autoFinalizationTimer) {
       clearTimeout(this.autoFinalizationTimer);
       this.autoFinalizationTimer = null;
     }
     
-    // ✅ Limpiar localStorage
     localStorage.removeItem(this.JORNADA_STORAGE_KEY);
     
-    // ✅ Limpiar TODOS los estados del componente
     this.activeClockIn = null;
     this.currentJornada = null;
     this.regularHours = 0;
     this.overtimeHours = 0;
     this.totalHours = 0;
     this.showOvertimeDialog = false;
-    this.hasShownOvertimeDialog = false; // ✅ CRÍTICO: Resetear flag
+    this.hasShownOvertimeDialog = false;
     
-    // ✅ Resetear formularios completamente
     this.resetForms();
-    
-    // ✅ Limpiar cualquier timer o intervalo
     this.isSyncing = false;
-    
-    console.log('✅ Estado de jornada limpiado completamente');
   }
 
   /**
@@ -837,8 +851,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     if (this.activeClockIn) {
       const dataToSave = {
         ...this.activeClockIn,
-        startTimestamp: this.activeClockIn.startTimestamp.toISOString(),
-        overtimeStartTimestamp: this.activeClockIn.overtimeStartTimestamp?.toISOString(),
+        startTimestamp: this.activeClockIn.startTimestamp.toISOString(),overtimeStartTimestamp: this.activeClockIn.overtimeStartTimestamp?.toISOString(),
         lastSyncTimestamp: new Date().toISOString(),
         hasShownOvertimeDialog: this.hasShownOvertimeDialog
       };
@@ -860,18 +873,17 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       jornadaId: saved.jornadaId,
       notas: saved.notas,
       
-      // Estados de horas extras
       isOvertimeMode: saved.isOvertimeMode || false,
       overtimeStartTimestamp: saved.overtimeStartTimestamp ? new Date(saved.overtimeStartTimestamp) : undefined,
       regularHoursCompleted: saved.regularHoursCompleted || false,
       autoStoppedAt9Hours: saved.autoStoppedAt9Hours || false
     };
 
-    // Restaurar flag de diálogo mostrado
     this.hasShownOvertimeDialog = saved.hasShownOvertimeDialog || false;
-
-    console.log('✅ Estado de jornada restaurado desde localStorage');
+    console.log('✅ Estado restaurado desde localStorage');
   }
+
+  // ============ MÉTODOS DE CARGA DE DATOS ============
 
   /**
    * ✅ Cargar jornadas recientes
@@ -893,7 +905,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
               this.transformJornadaForDisplay(jornada)
             );
             
-            // ✅ AGREGAR ESTAS LÍNEAS
             this.filteredWorkHours = [...this.recentWorkHours];
             if (Object.keys(this.activeFilters).length > 0) {
               this.applyFilters();
@@ -901,31 +912,28 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
             
             console.log('✅ Jornadas recientes cargadas:', this.recentWorkHours.length);
           } else {
-            console.warn('⚠️ No hay jornadas recientes');
             this.recentWorkHours = [];
-            this.filteredWorkHours = []; // ✅ AGREGAR
+            this.filteredWorkHours = [];
           }
         },
         error: (error) => {
           console.error('❌ Error cargando jornadas recientes:', error);
           this.recentWorkHours = [];
-          this.filteredWorkHours = []; // ✅ AGREGAR
+          this.filteredWorkHours = [];
         }
       });
   }
 
-  
   /**
- * ✅ Cargar estadísticas del mes
- */
+   * ✅ Cargar estadísticas del mes
+   */
   private loadMonthlyStats(): void {
     if (!this.currentUser?.id) return;
   
     const usuarioId = this.getUsuarioIdAsNumber();
     if (!usuarioId) return;
   
-    // ✅ Obtener mes y año actual del calendario
-    const mes = this.currentCalendarDate.getMonth() + 1; // getMonth() devuelve 0-11
+    const mes = this.currentCalendarDate.getMonth() + 1;
     const anio = this.currentCalendarDate.getFullYear();
   
     console.log(`📊 Cargando estadísticas: mes=${mes}, año=${anio}`);
@@ -936,21 +944,20 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         next: (response) => {
           if (response.success && response.data) {
             this.monthlyStats = response.data;
-            console.log('✅ Estadísticas del mes cargadas:', this.monthlyStats);
+            console.log('✅ Estadísticas del mes cargadas');
           } else {
-            console.warn('⚠️ No hay estadísticas disponibles');
             this.monthlyStats = null;
           }
         },
         error: (error) => {
-          console.error('❌ Error cargando estadísticas del mes:', error);
-          // No mostrar error al usuario, simplemente no cargar estadísticas
+          console.error('❌ Error cargando estadísticas:', error);
           this.monthlyStats = null;
         }
       });
   }
+
   /**
-   * ✅ Transformar jornada para mostrar en el template
+   * ✅ Transformar jornada para mostrar
    */
   private transformJornadaForDisplay(jornada: JornadaLaboralResponse): any {
     return {
@@ -970,7 +977,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Mapear estado para mostrar en español
+   * ✅ Mapear estado
    */
   private mapEstado(estado: string): string {
     const estadoMap: { [key: string]: string } = {
@@ -1017,7 +1024,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Formatear hora para mostrar
+   * ✅ Formatear hora
    */
   private formatearHora(isoString: string): string {
     return new Date(isoString).toLocaleTimeString('es-ES', {
@@ -1027,13 +1034,13 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   setupMobileTable(): void {
-    // Implementación futura para tabla responsiva
+    // Implementación futura
   }
 
   // ============ MÉTODOS PARA EL TEMPLATE ============
 
   /**
-   * ✅ Verificar si un campo del formulario tiene errores
+   * ✅ Verificar errores de campo
    */
   hasFieldError(fieldName: string, form: FormGroup): boolean {
     const field = form.get(fieldName);
@@ -1041,7 +1048,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Obtener mensaje de error para un campo específico
+   * ✅ Obtener mensaje de error
    */
   getFieldError(fieldName: string, form: FormGroup): string {
     const field = form.get(fieldName);
@@ -1065,7 +1072,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Obtener etiqueta del campo para mensajes de error
+   * ✅ Obtener etiqueta del campo
    */
   private getFieldLabel(fieldName: string): string {
     const labels: { [key: string]: string } = {
@@ -1097,7 +1104,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Obtener estado de trabajo actual para mostrar
+   * ✅ Obtener estado de trabajo actual
    */
   getCurrentWorkStatus(): string {
     if (!this.activeClockIn) return '';
@@ -1118,7 +1125,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Obtener clase CSS para el estado de trabajo
+   * ✅ Obtener clase CSS para el estado
    */
   getWorkStatusClass(): string {
     if (!this.activeClockIn) return '';
@@ -1158,7 +1165,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     if (!this.activeClockIn) return false;
     
     if (this.isInOvertimeMode) {
-      return this.overtimeHours >= 3; // Advertencia a partir de 3h extras
+      return this.overtimeHours >= 3;
     }
     
     return this.regularHours >= this.WARNING_HOURS;
@@ -1178,7 +1185,7 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Calcular tiempo transcurrido para mostrar
+   * ✅ Calcular tiempo transcurrido
    */
   getElapsedTime(): string {
     if (!this.activeClockIn) return '';
@@ -1262,14 +1269,14 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Refrescar registros recientes
+   * ✅ Refrescar registros
    */
   refreshRecentWorkHours(): void {
     this.loadRecentJornadas();
   }
 
   /**
-   * ✅ Formatear horas para mostrar
+   * ✅ Formatear horas
    */
   formatHours(hours: number): string {
     if (!hours || hours === 0) return '0h';
@@ -1370,12 +1377,9 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     const month = this.currentCalendarDate.getMonth();
     const today = new Date();
     
-    // Primer día del mes
     const firstDay = new Date(year, month, 1);
-    // Último día del mes
     const lastDay = new Date(year, month + 1, 0);
     
-    // Días a mostrar (incluyendo días del mes anterior y siguiente)
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
@@ -1420,7 +1424,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   private findWorkHoursForDate(date: Date): { hasWorkHours: boolean; workHours?: number } {
     const dateString = date.toISOString().split('T')[0];
     
-    // Buscar en estadísticas mensuales si están disponibles
     if (this.monthlyStats?.jornadas) {
       const jornada = this.monthlyStats.jornadas.find(j => j.fecha === dateString);
       if (jornada) {
@@ -1431,7 +1434,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       }
     }
     
-    // Buscar en registros recientes como fallback
     const workHour = this.recentWorkHours.find(wh => wh.fecha === dateString);
     if (workHour) {
       return {
@@ -1444,10 +1446,10 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Verificar si es día de pago (ejemplo: día 30 de cada mes)
+   * ✅ Verificar si es día de pago
    */
   private isPaymentDay(date: Date): boolean {
-    return date.getDate() === 30; // Ejemplo: día 30 es día de pago
+    return date.getDate() === 30;
   }
 
   /**
@@ -1466,7 +1468,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       return this.monthlyStats.total_horas;
     }
     
-    // Fallback: calcular desde registros recientes
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
@@ -1483,9 +1484,79 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
    */
   getPendingAmount(): number {
     const hoursWorked = this.getCurrentMonthHours();
-    const hourlyRate = 5000; // Ejemplo: $5000 por hora
+    const hourlyRate = 5000;
     return hoursWorked * hourlyRate;
   }
+
+  // ============ MÉTODOS DE FILTROS ============
+
+  /**
+   * ✅ Manejar cambios de filtros
+   */
+  onFiltersChanged(filters: any): void {
+    console.log('📋 Filtros aplicados:', filters);
+    this.activeFilters = filters;
+    this.applyFilters();
+  }
+
+  /**
+   * ✅ Aplicar filtros
+   */
+  private applyFilters(): void {
+    let filtered = [...this.recentWorkHours];
+
+    if (this.activeFilters.fechaDesde) {
+      filtered = filtered.filter(jornada => 
+        jornada.fecha >= this.activeFilters.fechaDesde
+      );
+    }
+
+    if (this.activeFilters.fechaHasta) {
+      filtered = filtered.filter(jornada => 
+        jornada.fecha <= this.activeFilters.fechaHasta
+      );
+    }
+
+    if (this.activeFilters.estado) {
+      filtered = filtered.filter(jornada => 
+        jornada.estado === this.activeFilters.estado
+      );
+    }
+
+    if (this.activeFilters.horasMin) {
+      const min = parseFloat(this.activeFilters.horasMin);
+      if (!isNaN(min)) {
+        filtered = filtered.filter(jornada => 
+          jornada.totalHoras >= min
+        );
+      }
+    }
+
+    if (this.activeFilters.horasMax) {
+      const max = parseFloat(this.activeFilters.horasMax);
+      if (!isNaN(max)) {
+        filtered = filtered.filter(jornada => 
+          jornada.totalHoras <= max
+        );
+      }
+    }
+
+    if (this.activeFilters.tieneExtras) {
+      if (this.activeFilters.tieneExtras === 'si') {
+        filtered = filtered.filter(jornada => 
+          jornada.horasExtras && jornada.horasExtras > 0
+        );
+      } else if (this.activeFilters.tieneExtras === 'no') {
+        filtered = filtered.filter(jornada => 
+          !jornada.horasExtras || jornada.horasExtras === 0
+        );
+      }
+    }
+
+    this.filteredWorkHours = filtered;
+  }
+
+  // ============ MÉTODO DE DEBUG ============
 
   debugBackendStatus(): void {
     if (!this.currentUser?.id) {
@@ -1500,7 +1571,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
     console.log('Usuario ID:', usuarioId);
     console.log('API URL:', `${environment.apiUrl}/jornadas-laborales`);
     
-    // Probar conexión con jornada activa
     this.jornadaLaboralService.obtenerJornadaActiva(usuarioId)
       .subscribe({
         next: (response) => {
@@ -1511,7 +1581,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         }
       });
     
-    // Probar conexión con jornadas
     this.jornadaLaboralService.obtenerJornadasUsuario(usuarioId, 5, 0)
       .subscribe({
         next: (response) => {
@@ -1522,7 +1591,6 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
         }
       });
     
-    // Probar conexión con estadísticas
     const mes = new Date().getMonth() + 1;
     const anio = new Date().getFullYear();
     
@@ -1537,115 +1605,26 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
       });
   }
 
-
-  // 5. AGREGAR método para limpiar errores persistentes
-clearPersistentErrors(): void {
-  console.log('🧹 Limpiando errores persistentes...');
-  
-  // Limpiar localStorage
-  localStorage.removeItem(this.JORNADA_STORAGE_KEY);
-  
-  // Resetear estado
-  this.clearJornadaState();
-  
-  // Limpiar arrays
-  this.recentWorkHours = [];
-  this.monthlyStats = null;
-  
-  // Limpiar mensajes
-  this.error = '';
-  this.success = false;
-  this.loading = false;
-  
-  // Recargar datos desde cero
-  setTimeout(() => {
-    this.checkForActiveJornada();
-    this.loadRecentJornadas();
-    this.loadMonthlyStats();
-  }, 500);
-}
-
-/**
-   * ✅ Manejar cambios de filtros
+  /**
+   * ✅ Limpiar errores persistentes
    */
-onFiltersChanged(filters: any): void {
-  console.log('📋 Filtros aplicados:', filters);
-  this.activeFilters = filters;
-  this.applyFilters();
+  clearPersistentErrors(): void {
+    console.log('🧹 Limpiando errores persistentes...');
+    
+    localStorage.removeItem(this.JORNADA_STORAGE_KEY);
+    this.clearJornadaState();
+    
+    this.recentWorkHours = [];
+    this.monthlyStats = null;
+    
+    this.error = '';
+    this.success = false;
+    this.loading = false;
+    
+    setTimeout(() => {
+      this.syncActiveJornadaState();
+      this.loadRecentJornadas();
+      this.loadMonthlyStats();
+    }, 500);
+  }
 }
-
-/**
- * ✅ Aplicar filtros a las jornadas
- */
-private applyFilters(): void {
-  let filtered = [...this.recentWorkHours];
-
-  console.log(`🔍 Aplicando filtros a ${filtered.length} jornadas`);
-
-  // Filtro por rango de fechas - DESDE
-  if (this.activeFilters.fechaDesde) {
-    filtered = filtered.filter(jornada => 
-      jornada.fecha >= this.activeFilters.fechaDesde
-    );
-    console.log(`  - Filtro fechaDesde: ${filtered.length} jornadas`);
-  }
-
-  // Filtro por rango de fechas - HASTA
-  if (this.activeFilters.fechaHasta) {
-    filtered = filtered.filter(jornada => 
-      jornada.fecha <= this.activeFilters.fechaHasta
-    );
-    console.log(`  - Filtro fechaHasta: ${filtered.length} jornadas`);
-  }
-
-  // Filtro por estado
-  if (this.activeFilters.estado) {
-    filtered = filtered.filter(jornada => 
-      jornada.estado === this.activeFilters.estado
-    );
-    console.log(`  - Filtro estado: ${filtered.length} jornadas`);
-  }
-
-  // Filtro por horas mínimas
-  if (this.activeFilters.horasMin) {
-    const min = parseFloat(this.activeFilters.horasMin);
-    if (!isNaN(min)) {
-      filtered = filtered.filter(jornada => 
-        jornada.totalHoras >= min
-      );
-      console.log(`  - Filtro horasMin (${min}): ${filtered.length} jornadas`);
-    }
-  }
-
-  // Filtro por horas máximas
-  if (this.activeFilters.horasMax) {
-    const max = parseFloat(this.activeFilters.horasMax);
-    if (!isNaN(max)) {
-      filtered = filtered.filter(jornada => 
-        jornada.totalHoras <= max
-      );
-      console.log(`  - Filtro horasMax (${max}): ${filtered.length} jornadas`);
-    }
-  }
-
-  // Filtro por horas extras
-  if (this.activeFilters.tieneExtras) {
-    if (this.activeFilters.tieneExtras === 'si') {
-      filtered = filtered.filter(jornada => 
-        jornada.horasExtras && jornada.horasExtras > 0
-      );
-    } else if (this.activeFilters.tieneExtras === 'no') {
-      filtered = filtered.filter(jornada => 
-        !jornada.horasExtras || jornada.horasExtras === 0
-      );
-    }
-    console.log(`  - Filtro tieneExtras: ${filtered.length} jornadas`);
-  }
-
-  this.filteredWorkHours = filtered;
-  console.log(`✅ Jornadas filtradas: ${this.filteredWorkHours.length} de ${this.recentWorkHours.length}`);
-}
-
-// ... resto de métodos existentes ...
-}
-

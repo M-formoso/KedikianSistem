@@ -1061,3 +1061,33 @@ textarea.form-control {
     padding: 0.4rem 0.8rem;
   }
 }
+
+
+/* work-hours.component.css - AGREGAR */
+
+.work-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e9ecef;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.work-status-header .btn-sm {
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+@media (max-width: 768px) {
+  .work-status-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .work-status-header .btn-sm {
+    width: 100%;
+  }
+}
