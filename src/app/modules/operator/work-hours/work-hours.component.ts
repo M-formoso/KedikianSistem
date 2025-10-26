@@ -583,50 +583,86 @@ export class WorkHoursComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * ✅ Confirmar horas extras
-   */
-  confirmOvertime(): void {
-    if (!this.activeClockIn) return;
-
-    this.showOvertimeDialog = false;
-    this.loading = true;
-
-    if (this.autoFinalizationTimer) {
-      clearTimeout(this.autoFinalizationTimer);
-      this.autoFinalizationTimer = null;
-    }
-
-    this.jornadaLaboralService.confirmarHorasExtras(
-      this.activeClockIn.jornadaId,
-      'Horas extras confirmadas por el usuario'
-    )
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-        this.loading = false;
-        
-        if (response.success && response.data) {
-          console.log('✅ Horas extras confirmadas');
-          
-          if (this.activeClockIn) {
-            this.activeClockIn.isActive = true;
-            this.activeClockIn.isOvertimeMode = true;
-            this.activeClockIn.overtimeStartTimestamp = new Date();
-          }
-          
-          this.processActiveJornada(response.data);
-          this.success = true;
-          setTimeout(() => { this.success = false; }, 3000);
-        } else {
-          this.error = response.message || 'Error al confirmar horas extras';
-        }
-      },
-      error: (error) => {
-        this.loading = false;
-        this.error = error.message || 'Error al confirmar horas extras';
-      }
-    });
+ /**
+ * ✅ Confirmar horas extras - CORREGIDO
+ */
+confirmOvertime(): void {
+  if (!this.activeClockIn) {
+    console.error('❌ No hay jornada activa');
+    return;
   }
+
+  console.log('✅ Confirmando horas extras para jornada:', this.activeClockIn.jornadaId);
+
+  this.showOvertimeDialog = false;
+  this.loading = true;
+  this.error = '';
+
+  // Limpiar timer de finalización automática
+  if (this.autoFinalizationTimer) {
+    clearTimeout(this.autoFinalizationTimer);
+    this.autoFinalizationTimer = null;
+  }
+
+  // ✅ CRÍTICO: Enviar solo el ID y las notas opcionales
+  this.jornadaLaboralService.confirmarHorasExtras(
+    this.activeClockIn.jornadaId,
+    'Horas extras confirmadas por el usuario'
+  )
+  .pipe(takeUntil(this.destroy$))
+  .subscribe({
+    next: (response) => {
+      this.loading = false;
+      
+      if (response.success && response.data) {
+        console.log('✅ Horas extras confirmadas exitosamente:', response.data);
+        
+        // ✅ Actualizar estado local inmediatamente
+        if (this.activeClockIn) {
+          this.activeClockIn.isActive = true;
+          this.activeClockIn.isOvertimeMode = true;
+          this.activeClockIn.overtimeStartTimestamp = new Date();
+          this.saveJornadaToStorage();
+        }
+        
+        // ✅ Procesar respuesta del backend
+        this.processActiveJornada(response.data);
+        
+        this.success = true;
+        this.error = '';
+        
+        setTimeout(() => { 
+          this.success = false; 
+        }, 3000);
+        
+        // ✅ Sincronizar después de 2 segundos para confirmar
+        setTimeout(() => {
+          this.syncActiveJornadaState();
+        }, 2000);
+        
+      } else {
+        console.error('❌ Respuesta sin éxito:', response);
+        this.error = response.message || 'Error al confirmar horas extras';
+      }
+    },
+    error: (error) => {
+      this.loading = false;
+      console.error('❌ Error al confirmar horas extras:', error);
+      
+      // Mostrar error detallado
+      if (error.message) {
+        this.error = error.message;
+      } else {
+        this.error = 'Error al confirmar horas extras. Intente nuevamente.';
+      }
+      
+      // Sincronizar estado para verificar qué pasó
+      setTimeout(() => {
+        this.syncActiveJornadaState();
+      }, 1000);
+    }
+  });
+}
 
   /**
    * ✅ Rechazar horas extras

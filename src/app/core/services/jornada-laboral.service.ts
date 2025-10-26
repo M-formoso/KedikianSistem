@@ -116,22 +116,29 @@ export class JornadaLaboralService {
   }
 
   // ✅ Confirmar horas extras
-  confirmarHorasExtras(jornadaId: number, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
-    const params = new HttpParams().set('notas_overtime', notas || '');
-    
-    return this.http.put<JornadaLaboralResponse>(
-      `${this.apiUrl}/confirmar-overtime/${jornadaId}`,
-      null,
-      { params }
-    ).pipe(
-      map(response => ({
-        success: true,
-        data: response,
-        message: 'Horas extras confirmadas'
-      })),
-      catchError(this.handleError.bind(this))
-    );
+confirmarHorasExtras(jornadaId: number, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
+  // ✅ CRÍTICO: Las notas van como query parameter
+  let params = new HttpParams();
+  
+  if (notas && notas.trim()) {
+    params = params.set('notas_overtime', notas.trim());
   }
+  
+  console.log('✅ Confirmando horas extras:', { jornadaId, notas, params: params.toString() });
+  
+  return this.http.put<JornadaLaboralResponse>(
+    `${this.apiUrl}/confirmar-overtime/${jornadaId}`,
+    {},  // ✅ Body vacío (el backend no lo necesita)
+    { params }  // ✅ Parámetros como query params
+  ).pipe(
+    map(response => ({
+      success: true,
+      data: response,
+      message: 'Horas extras confirmadas correctamente'
+    })),
+    catchError(this.handleError.bind(this))
+  );
+}
 
   // ✅ Rechazar horas extras
   rechazarHorasExtras(jornadaId: number, tiempoDescanso: number = 60, notas?: string): Observable<ApiResponse<JornadaLaboralResponse>> {
